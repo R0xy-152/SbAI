@@ -1,8 +1,24 @@
-﻿const form = document.querySelector("#player-form");
+const form = document.querySelector("#player-form");
 const input = document.querySelector("#player-message");
 const dialogueText = document.querySelector("#dialogue-text");
 const status = document.querySelector("#form-status");
 const characterSprite = document.querySelector("#character-sprite");
+const sendButton = form.querySelector("button[type='submit']");
+
+let sessionId = null;
+
+// TV-03: when served by the FastAPI backend, use a same-origin /api/chat URL;
+// when opened directly as a file, fall back to the local backend origin.
+const API_BASE = (() => {
+  if (
+    typeof window !== "undefined" &&
+    window.location &&
+    window.location.protocol === "file:"
+  ) {
+    return "http://localhost:8000";
+  }
+  return "";
+})();
 
 const animationClasses = {
   fade_in: "is-fading-in",
@@ -61,11 +77,27 @@ if (typeof window !== "undefined") {
   window.galPresentation = { apply: applyPresentationDirective };
 }
 
-function buildMockReply(message) {
-  return `我听见了：“${message}”。这是 TV-01 的本地模拟回复。`;
+async function sendMessage(message) {
+  const response = await fetch(`${API_BASE}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, session_id: sessionId }),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const data = await response.json();
+  sessionId = data.session_id;
+  return data;
 }
 
-form.addEventListener("submit", (event) => {
+function setWaiting(waiting) {
+  input.disabled = waiting;
+  sendButton.disabled = waiting;
+  sendButton.textContent = waiting ? "思考中…" : "发送";
+}
+
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = input.value.trim();
 
@@ -75,10 +107,20 @@ form.addEventListener("submit", (event) => {
     return;
   }
 
-  dialogueText.textContent = buildMockReply(message);
-  status.textContent = "已发送；已显示本地模拟回复。";
+  const submitted = message;
   input.value = "";
-  input.focus();
+  status.textContent = "已发送；正在等待角色回应…";
+  setWaiting(true);
+
+  try {
+    const data = await sendMessage(submitted);
+    dialogueText.textContent = data.dialogue;
+    status.textContent = "已收到角色回应。";
+  } catch (error) {
+    status.textContent = "发送失败，请重试。";
+    input.value = submitted; // restore the text so the player can retry
+  } finally {
+    setWaiting(false);
+    input.focus();
+  }
 });
-
-

@@ -1,0 +1,1 @@
+"""Gal backend application package."""

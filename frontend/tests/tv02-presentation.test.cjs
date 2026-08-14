@@ -12,7 +12,7 @@ const sprite = {
   addEventListener: (_event, listener) => listeners.push(listener),
   offsetWidth: 1,
 };
-const form = { addEventListener: () => {} };
+const form = { addEventListener: () => {}, querySelector: () => ({ textContent: "", disabled: false }) };
 
 global.window = {};
 global.document = {
