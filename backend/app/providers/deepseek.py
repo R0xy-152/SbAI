@@ -27,11 +27,17 @@ class DeepSeekProvider(LLMProvider):
         base_url: str = DEEPSEEK_API_URL,
         client: httpx.Client | None = None,
         timeout: float = 30.0,
+        temperature: float | None = 0.1,
     ) -> None:
         self._api_key = api_key if api_key is not None else os.environ.get("DEEPSEEK_API_KEY", "")
         self._base_url = base_url
         self._client = client if client is not None else httpx.Client()
         self._timeout = timeout
+        # Low temperature for consistent, in-persona roleplay (the reference
+        # template's 0.1). None = leave the API default. Note: DeepSeek's
+        # thinking mode may ignore temperature; it is still set for the
+        # non-thinking fallback path.
+        self._temperature = temperature
 
     def complete(
         self,
@@ -55,6 +61,8 @@ class DeepSeekProvider(LLMProvider):
         }
         if response_format is not None:
             payload["response_format"] = response_format
+        if self._temperature is not None:
+            payload["temperature"] = self._temperature
         if thinking is not None:
             # DeepSeek thinking mode is on by default (effort=high); a caller
             # may pass {"type": "disabled"} to turn it off for cheaper, faster

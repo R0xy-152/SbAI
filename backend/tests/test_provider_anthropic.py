@@ -63,6 +63,17 @@ def test_complete_parses_content_text():
     assert provider.complete(system="s", user="u") == "ok"
 
 
+def test_complete_sets_default_temperature():
+    # The reference template's low temperature (0.1) is the provider default.
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["temperature"] == 0.1
+        return _text_response("ok")
+
+    provider = _provider_with_transport(handler)
+    assert provider.complete(system="s", user="u") == "ok"
+
+
 def test_complete_accepts_injected_api_key_without_env(monkeypatch):
     # The env var is absent but an explicit key is passed.
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

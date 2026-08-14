@@ -25,11 +25,15 @@ class AnthropicProvider(LLMProvider):
         base_url: str = ANTHROPIC_API_URL,
         client: httpx.Client | None = None,
         timeout: float = 30.0,
+        temperature: float | None = 0.1,
     ) -> None:
         self._api_key = api_key if api_key is not None else os.environ.get("ANTHROPIC_API_KEY", "")
         self._base_url = base_url
         self._client = client if client is not None else httpx.Client()
         self._timeout = timeout
+        # Low temperature for consistent, in-persona roleplay (the reference
+        # template's 0.1). None = leave the API default.
+        self._temperature = temperature
 
     def complete(
         self,
@@ -53,6 +57,8 @@ class AnthropicProvider(LLMProvider):
             "system": system,
             "messages": [{"role": "user", "content": user}],
         }
+        if self._temperature is not None:
+            payload["temperature"] = self._temperature
         headers = {
             "x-api-key": self._api_key,
             "anthropic-version": ANTHROPIC_VERSION,

@@ -103,6 +103,33 @@ def test_complete_omits_thinking_when_none():
     assert provider.complete(system="s", user="u") == "{}"
 
 
+def test_complete_sets_default_temperature():
+    # The reference template's low temperature (0.1) for consistent roleplay
+    # is the provider default and must reach the request payload.
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["temperature"] == 0.1
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    provider = _provider_with_transport(handler)
+    assert provider.complete(system="s", user="u") == "ok"
+
+
+def test_complete_omits_temperature_when_none():
+    # temperature=None restores the API default and must not be sent.
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert "temperature" not in body
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    provider = DeepSeekProvider(
+        api_key="test-key",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        temperature=None,
+    )
+    assert provider.complete(system="s", user="u") == "ok"
+
+
 def test_complete_accepts_injected_api_key_without_env(monkeypatch):
     # The env var is absent but an explicit key is passed.
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
