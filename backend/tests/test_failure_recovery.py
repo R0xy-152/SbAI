@@ -93,6 +93,7 @@ class _FlakyProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         self.count += 1
         if self.count == self.fail_on_call:
@@ -121,6 +122,7 @@ class _EmptyDialogueProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         return json.dumps(
             {

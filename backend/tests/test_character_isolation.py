@@ -50,6 +50,7 @@ class _RecordingProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         self.calls.append(user)
         return _valid_json(f"{self.character_id} 的回复。", self.character_id)

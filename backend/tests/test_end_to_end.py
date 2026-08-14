@@ -66,6 +66,7 @@ class _E2EProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         self.calls.append((system, user, ""))
         if "剧情理解器" in system:

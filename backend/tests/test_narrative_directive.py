@@ -58,6 +58,7 @@ class _RecordingProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         self.users.append(user)
         return json.dumps(

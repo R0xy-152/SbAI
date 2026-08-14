@@ -60,7 +60,7 @@ class NarrativeInterpreter:
         raw = self._provider.complete(
             system=_system_prompt(state.current_scene, state.story_phase, eligible),
             user=player_message,
-            max_tokens=64,
+            max_tokens=512,
             response_format={"type": "json_object"},
         )
         return self._parse(raw, eligible)

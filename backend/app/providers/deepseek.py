@@ -7,6 +7,7 @@ DEEPSEEK_API_KEY environment variable and must never be committed to the repo.
 
 from __future__ import annotations
 
+import logging
 import os
 
 import httpx
@@ -14,7 +15,9 @@ import httpx
 from app.providers.base import LLMProvider, ProviderConfigError, ProviderError
 
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
-DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_MODEL = "deepseek-v4-flash"
+
+logger = logging.getLogger(__name__)
 
 
 class DeepSeekProvider(LLMProvider):
@@ -37,6 +40,7 @@ class DeepSeekProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         if not self._api_key:
             raise ProviderConfigError("DEEPSEEK_API_KEY is not set")
@@ -51,6 +55,11 @@ class DeepSeekProvider(LLMProvider):
         }
         if response_format is not None:
             payload["response_format"] = response_format
+        if thinking is not None:
+            # DeepSeek thinking mode is on by default (effort=high); a caller
+            # may pass {"type": "disabled"} to turn it off for cheaper, faster
+            # non-reasoning turns (docs 思考模式).
+            payload["thinking"] = thinking
         headers = {"Authorization": f"Bearer {self._api_key}"}
 
         try:
@@ -65,6 +74,15 @@ class DeepSeekProvider(LLMProvider):
             raise ProviderError(f"DeepSeek request failed: {exc}") from exc
 
         data = response.json()
+        # Context caching observability (docs 上下文硬盘缓存): surface how much
+        # of the input prefix hit the cache vs. was recomputed, so the hit rate
+        # of the fixed system prompt can be measured in the backend logs.
+        usage = data.get("usage") or {}
+        logger.info(
+            "DeepSeek cache tokens: hit=%s miss=%s",
+            usage.get("prompt_cache_hit_tokens", 0),
+            usage.get("prompt_cache_miss_tokens", 0),
+        )
         choices = data.get("choices") or []
         if not choices:
             raise ProviderError("DeepSeek response contains no choices")

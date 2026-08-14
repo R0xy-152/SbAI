@@ -23,6 +23,7 @@ class MockProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         if self._fail:
             raise ProviderError("mock provider failure (injected for tests)")

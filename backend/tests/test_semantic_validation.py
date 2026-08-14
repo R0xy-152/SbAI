@@ -102,6 +102,7 @@ class _FixedProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         self.calls += 1
         return self._raw

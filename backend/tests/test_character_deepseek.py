@@ -40,6 +40,7 @@ class _SequencedProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         output = self._outputs[min(self.calls, len(self._outputs) - 1)]
         self.users.append(user)

@@ -45,6 +45,7 @@ class _RecordingProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         self.calls.append(user)
         return _valid_json("好的。")
@@ -65,6 +66,7 @@ class _NameRecallingProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         match = re.search(r"Player：我叫(.+?)。", user)
         name = match.group(1) if match else "？？？"

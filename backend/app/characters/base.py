@@ -297,8 +297,12 @@ class GenerativeRuntime(CharacterRuntime):
         return self._provider.complete(
             system=self._system_prompt(),
             user=user,
-            max_tokens=512,
+            max_tokens=1024,
             response_format={"type": "json_object"},
+            # Casual roleplay dialogue does not need a chain-of-thought; turning
+            # off thinking keeps turns fast and cheap and avoids the reasoning
+            # budget eating into max_tokens (docs 思考模式).
+            thinking={"type": "disabled"},
         )
 
     def safe_fallback(self) -> CharacterResponse:

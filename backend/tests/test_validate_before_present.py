@@ -34,6 +34,7 @@ class _FixedProvider(LLMProvider):
         user: str,
         max_tokens: int = 256,
         response_format: dict | None = None,
+        thinking: dict | None = None,
     ) -> str:
         return self._text
 
