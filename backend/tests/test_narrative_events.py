@@ -213,6 +213,59 @@ def test_unknown_effect_kind_fails_closed():
     assert state.completed_events == set()
 
 
+def test_partially_invalid_event_commits_nothing():
+    # Regression (docs/03 §29): a valid effect followed by an invalid one must
+    # leave no partial state behind. Validate First, Apply Second — the invalid
+    # effect is caught before any of the valid ones mutate state.
+    event = NarrativeEvent(
+        event_id="EV_PARTIAL",
+        trigger_signals=frozenset({"S1"}),
+        effects=(
+            Effect(SET_FLAG, "x"),
+            Effect("INVALID_EFFECT", "y"),
+        ),
+    )
+    state = NarrativeState()
+    engine = NarrativeEngine([event])
+    decision = engine.evaluate(state, Interpretation("S1"))
+    assert decision.event_id == "EV_PARTIAL"
+    with pytest.raises(ValueError):
+        engine.commit(state, decision)
+    # The leading SET_FLAG must not have been applied, and nothing else changed.
+    assert "x" not in state.narrative_flags
+    assert state.narrative_flags == set()
+    assert state.current_scene == "binding_room"
+    assert state.story_phase == "prologue"
+    assert state.revealed_facts == set()
+    assert state.completed_events == set()
+    assert "EV_PARTIAL" not in state.completed_events
+
+
+def test_multiple_valid_effects_all_apply():
+    # A legal multi-effect event applies every effect and then marks completion,
+    # proving Validate First does not drop any effect in the happy path.
+    event = NarrativeEvent(
+        event_id="EV_MULTI",
+        trigger_signals=frozenset({"S1"}),
+        effects=(
+            Effect(SET_FLAG, "a"),
+            Effect(SET_FLAG, "b"),
+            Effect(SET_SCENE, "yard"),
+            Effect(SET_STORY_PHASE, "midgame"),
+            Effect(REVEAL_FACT, "clue"),
+        ),
+    )
+    state = NarrativeState()
+    engine = NarrativeEngine([event])
+    decision = engine.evaluate(state, Interpretation("S1"))
+    engine.commit(state, decision)
+    assert state.narrative_flags == {"a", "b"}
+    assert state.current_scene == "yard"
+    assert state.story_phase == "midgame"
+    assert "clue" in state.revealed_facts
+    assert state.completed_events == {"EV_MULTI"}
+
+
 # --- orchestrator wiring (Validate Before Commit, docs/03 §28) ---
 
 

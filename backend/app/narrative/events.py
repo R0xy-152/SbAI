@@ -23,6 +23,12 @@ REVEAL_FACT = "REVEAL_FACT"
 SET_SCENE = "SET_SCENE"
 SET_STORY_PHASE = "SET_STORY_PHASE"
 
+# The complete set of kinds commit() will accept. Anything outside this set
+# fails the whole event before any state is touched (docs/03 §29 atomicity).
+ALLOWED_EFFECT_KINDS = frozenset(
+    {SET_FLAG, CLEAR_FLAG, REVEAL_FACT, SET_SCENE, SET_STORY_PHASE}
+)
+
 ONCE = "once"
 REPEATABLE = "repeatable"
 
@@ -96,13 +102,24 @@ class NarrativeEngine:
         """Apply the committed event's effects atomically (docs/03 §29).
 
         Call only after the character's output succeeded (docs/03 §28).
+
+        Validate First, Apply Second: every effect kind is checked before any
+        state is mutated, so an invalid effect anywhere in the event leaves the
+        whole state unchanged (including completed_events).
         """
         if decision.kind != "event" or decision.event_id is None:
             return
         event = self._by_id[decision.event_id]
+        self._validate_effects(event)
         for effect in event.effects:
             self._apply(state, effect)
         state.completed_events.add(event.event_id)
+
+    @staticmethod
+    def _validate_effects(event: NarrativeEvent) -> None:
+        for effect in event.effects:
+            if effect.kind not in ALLOWED_EFFECT_KINDS:
+                raise ValueError(f"unknown effect kind: {effect.kind}")
 
     @staticmethod
     def _apply(state: NarrativeState, effect: Effect) -> None:
