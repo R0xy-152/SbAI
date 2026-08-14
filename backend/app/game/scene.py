@@ -11,6 +11,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# The scene a session starts in when no Narrative State exists yet (docs/03
+# §5.1). NarrativeState.current_scene defaults to the same value.
+DEFAULT_SCENE = "binding_room"
+
 
 @dataclass(frozen=True)
 class Scene:
@@ -20,3 +24,27 @@ class Scene:
     wall_code: str = "0317"
     # Legal non-visual perceptions (docs/04 §20.1), e.g. sounds she can hear.
     sounds: tuple[str, ...] = ()
+
+
+class SceneRegistry:
+    """Maps a scene_id to its Scene config (docs/02 §992-994 Content → Scene
+    Config; docs/03 §5.1).
+
+    The registry is static scene *configuration*, not per-session state: the
+    single authoritative scene source remains NarrativeState.current_scene, and
+    this registry only resolves that id into the concrete Scene facts the
+    Context Builder needs. Resolving an unknown id yields a neutral Scene with
+    no invented ground truth (fail safe — never leak visual facts into a scene
+    that was not defined).
+    """
+
+    def __init__(self, scenes: dict[str, Scene] | None = None) -> None:
+        scenes = dict(scenes or {})
+        scenes.setdefault(DEFAULT_SCENE, Scene(scene_id=DEFAULT_SCENE))
+        self._scenes = scenes
+
+    def resolve(self, scene_id: str) -> Scene:
+        """The Scene for `scene_id`, or a neutral Scene for an unknown id."""
+        return self._scenes.get(
+            scene_id, Scene(scene_id=scene_id, wall_code="", sounds=())
+        )

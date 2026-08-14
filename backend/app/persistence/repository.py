@@ -30,7 +30,6 @@ class PersistedSession:
 
     session_id: str
     messages: list[dict] = field(default_factory=list)
-    current_scene: str = "binding_room"
     current_character: str = "deepseek"
     narrative_state: NarrativeState = field(default_factory=NarrativeState)
     memories: dict[str, list[EpisodicMemory]] = field(default_factory=dict)
@@ -93,7 +92,6 @@ def _session_to_dict(session: PersistedSession) -> dict:
     return {
         "session_id": session.session_id,
         "messages": session.messages,
-        "current_scene": session.current_scene,
         "current_character": session.current_character,
         "narrative": {
             "current_scene": state.current_scene,
@@ -115,7 +113,6 @@ def _session_from_dict(data: dict) -> PersistedSession:
     return PersistedSession(
         session_id=data["session_id"],
         messages=list(data["messages"]),
-        current_scene=data["current_scene"],
         current_character=data["current_character"],
         narrative_state=NarrativeState(
             current_scene=narrative["current_scene"],

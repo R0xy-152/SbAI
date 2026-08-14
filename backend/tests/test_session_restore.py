@@ -137,8 +137,8 @@ def test_refresh_restores_everything_and_continues(tmp_path):
     assert len(restored_session.messages) >= 6  # 3 turns × (player + character)
     assert any("我很怕黑" in m["content"] for m in restored_session.messages)
 
-    # Current Scene correct.
-    assert orchestrator_b._scene.scene_id == "binding_room"
+    # Current Scene correct (the single authoritative source, docs/03 §5.1).
+    assert orchestrator_b._narrative_states[session_id].current_scene == "binding_room"
 
     # Narrative Flag correct + Completed Event correct (docs/06 §20).
     state = orchestrator_b._narrative_states[session_id]
@@ -218,7 +218,7 @@ def test_snapshot_file_contains_full_history(tmp_path):
     data = json.loads((tmp_path / "sessions" / f"{session.session_id}.json").read_text(encoding="utf-8"))
     assert len(data["messages"]) == 4
     assert data["messages"][0]["content"] == "第一句"
-    assert data["current_scene"] == "binding_room"
+    assert data["narrative"]["current_scene"] == "binding_room"
     assert data["current_character"] == "deepseek"
 
 
@@ -262,7 +262,6 @@ def test_repository_round_trip_serialization(tmp_path):
     persisted = PersistedSession(
         session_id="s-1",
         messages=[{"role": "player", "content": "你好"}],
-        current_scene="yard",
         current_character="claude",
         narrative_state=NarrativeState(
             current_scene="yard",
@@ -285,9 +284,9 @@ def test_repository_round_trip_serialization(tmp_path):
     assert loaded is not None
     assert loaded.session_id == "s-1"
     assert loaded.messages == persisted.messages
-    assert loaded.current_scene == "yard"
     assert loaded.current_character == "claude"
     assert loaded.narrative_state == persisted.narrative_state
+    assert loaded.narrative_state.current_scene == "yard"
     assert loaded.memories["deepseek"][0] == persisted.memories["deepseek"][0]
 
 

@@ -14,7 +14,7 @@ import json
 from app.characters.deepseek import DeepSeekRuntime
 from app.game.context import build_deepseek_context
 from app.game.orchestrator import GameOrchestrator
-from app.game.scene import Scene
+from app.game.scene import Scene, SceneRegistry
 from app.game.state.session import SessionStore
 from app.providers.base import LLMProvider
 
@@ -78,7 +78,7 @@ def test_wall_code_never_reaches_provider_input():
     orchestrator = GameOrchestrator(
         sessions,
         {"deepseek": DeepSeekRuntime(provider)},
-        scene=_scene_with_visual_and_audio(),
+        scenes=SceneRegistry({"binding_room": _scene_with_visual_and_audio()}),
     )
     orchestrator.handle_turn(None, "墙上的数字是多少？")
     # Legal non-visual context IS passed to the model...
@@ -96,7 +96,7 @@ def test_player_described_info_is_used_and_not_corrected():
     orchestrator = GameOrchestrator(
         sessions,
         {"deepseek": DeepSeekRuntime(provider)},
-        scene=_scene_with_visual_and_audio(),
+        scenes=SceneRegistry({"binding_room": _scene_with_visual_and_audio()}),
     )
     first = orchestrator.handle_turn(None, "墙上写着9999。")
     orchestrator.handle_turn(first.session_id, "我刚才说墙上写什么？")
@@ -114,7 +114,7 @@ def test_context_never_contains_scene_ground_truth_across_turns():
     orchestrator = GameOrchestrator(
         sessions,
         {"deepseek": DeepSeekRuntime(provider)},
-        scene=_scene_with_visual_and_audio(),
+        scenes=SceneRegistry({"binding_room": _scene_with_visual_and_audio()}),
     )
     session_id = orchestrator.handle_turn(None, "这里是什么地方？").session_id
     for question in ["门在哪？", "墙上有字吗？", "我们怎么出去？"]:

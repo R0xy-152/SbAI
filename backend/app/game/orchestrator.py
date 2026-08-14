@@ -16,7 +16,7 @@ from app.characters.base import CharacterRequest, CharacterResponse, CharacterRu
 from app.game.context import CONTEXT_BUILDERS
 from app.game.memory import MemoryStore, format_memories
 from app.game.state.session import GameSession, SessionStore
-from app.game.scene import Scene
+from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.state import NarrativeState
@@ -51,7 +51,7 @@ class GameOrchestrator:
         sessions: SessionStore,
         runtimes: dict[str, CharacterRuntime],
         default_character: str = "deepseek",
-        scene: Scene | None = None,
+        scenes: SceneRegistry | None = None,
         interpreter: NarrativeInterpreter | None = None,
         events: list[NarrativeEvent] = (),
         repository: SessionRepository | None = None,
@@ -59,12 +59,12 @@ class GameOrchestrator:
         self._sessions = sessions
         self._runtimes = runtimes
         self._default_character = default_character
-        # TV-08: the backend owns the current Scene (docs/03 §5.1). The
-        # default is the binding-room validation fixture, which carries a
-        # visual ground truth (wall_code=0317) that DeepSeek must never
-        # receive (docs/04 §20). The Scene itself never reaches a character —
-        # only the Context Builder's filtered output does.
-        self._scene = scene if scene is not None else Scene(scene_id="binding_room")
+        # TV-08: the backend owns the current Scene (docs/03 §5.1). The single
+        # authoritative scene source is NarrativeState.current_scene, resolved
+        # per session through a SceneRegistry of static scene config. The Scene
+        # itself never reaches a character — only the Context Builder's
+        # filtered output does.
+        self._scenes = scenes if scenes is not None else SceneRegistry()
         # TV-11: the narrative pipeline is optional. When an interpreter is
         # given, each turn runs Interpreter → Event Evaluation → character
         # output → State Commit (docs/03 §28); without one (tests that do not
@@ -111,9 +111,13 @@ class GameOrchestrator:
         runtime = self._runtimes[character_id]
         # TV-12: the Context Builder is the permission boundary for Narrative
         # State too (docs/04 §15-17). Without an interpreter there is no
-        # narrative state, so the character receives no narrative context.
+        # narrative state, so the character receives no narrative context and
+        # the scene falls back to the default.
         narrative_state = self._narrative_states.get(session.session_id)
-        context = CONTEXT_BUILDERS[character_id](self._scene, narrative_state)
+        scene = self._scenes.resolve(
+            narrative_state.current_scene if narrative_state is not None else DEFAULT_SCENE
+        )
+        context = CONTEXT_BUILDERS[character_id](scene, narrative_state)
         # TV-13: deterministic memory selection (docs/05 §37-38) — only this
         # character's memories, importance/recency ordered, LIMIT N.
         memories = self._memory_store(session.session_id).retrieve(
@@ -211,10 +215,13 @@ class GameOrchestrator:
         return self._sessions.get_or_create(session_id)
 
     def _restore_session(self, persisted: PersistedSession) -> GameSession:
-        """Bring a persisted snapshot back into this process (docs/02 §21)."""
+        """Bring a persisted snapshot back into this process (docs/02 §21).
+
+        The scene is restored as part of `persisted.narrative_state` — its
+        current_scene is the single authoritative source — so no separate
+        shared Scene is stored on the orchestrator.
+        """
         session = self._sessions.restore(persisted.session_id, persisted.messages)
-        if persisted.current_scene:
-            self._scene = Scene(scene_id=persisted.current_scene)
         self._narrative_states[session.session_id] = persisted.narrative_state
         self._memory_stores[session.session_id] = MemoryStore.from_snapshot(
             persisted.memories
@@ -234,7 +241,6 @@ class GameOrchestrator:
         return PersistedSession(
             session_id=session_id,
             messages=list(session.messages),
-            current_scene=self._scene.scene_id,
             current_character=self._session_characters.get(
                 session_id, self._default_character
             ),

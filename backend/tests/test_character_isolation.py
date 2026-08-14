@@ -15,7 +15,7 @@ from app.characters.claude import CLAUDE_PERSONA_SYSTEM, ClaudeRuntime
 from app.characters.deepseek import DEEPSEEK_PERSONA_SYSTEM, DeepSeekRuntime
 from app.game.context import build_claude_context, build_deepseek_context
 from app.game.orchestrator import GameOrchestrator
-from app.game.scene import Scene
+from app.game.scene import Scene, SceneRegistry
 from app.game.state.session import SessionStore
 from app.providers.base import LLMProvider
 from app.providers.mock import MockProvider
@@ -58,10 +58,11 @@ class _RecordingProvider(LLMProvider):
 def _orchestrator(
     ds: LLMProvider, cl: LLMProvider, scene: Scene | None = None
 ) -> GameOrchestrator:
+    scenes = SceneRegistry({scene.scene_id: scene}) if scene is not None else None
     return GameOrchestrator(
         SessionStore(),
         {"deepseek": DeepSeekRuntime(ds), "claude": ClaudeRuntime(cl)},
-        scene=scene,
+        scenes=scenes,
     )
 
 
