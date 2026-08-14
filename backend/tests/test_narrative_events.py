@@ -10,6 +10,8 @@ priority — first match wins (§31).
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
@@ -56,6 +58,14 @@ class _FixedInterpreter:
 
     def interpret(self, state: NarrativeState, player_message: str) -> Interpretation:
         return Interpretation(self._signal)
+
+
+class _FailingInterpreter:
+    """Stands in for a NarrativeInterpreter whose provider call fails with a
+    recoverable ProviderError (e.g. timeout)."""
+
+    def interpret(self, state: NarrativeState, player_message: str) -> Interpretation:
+        raise ProviderError("timeout (injected)")
 
 
 def _orchestrator(runtime: CharacterRuntime, interpreter=None) -> tuple[GameOrchestrator, str]:
@@ -286,6 +296,38 @@ def test_failed_character_output_leaves_state_untouched():
     state = orchestrator._narrative_states[session_id]
     assert state.narrative_flags == set()
     assert state.completed_events == set()
+
+
+def test_interpreter_failure_degrades_to_noop_and_character_still_replies(caplog):
+    # docs/03 §21-22, §28: a recoverable interpreter failure (provider timeout)
+    # must not fail the whole turn. It degrades to noop — no signal, no event,
+    # no state change — while the character still answers normally.
+    orchestrator, session_id = _orchestrator(
+        _StubRuntime(), interpreter=_FailingInterpreter()
+    )
+    with caplog.at_level(logging.WARNING):
+        turn = orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
+    assert turn.response.dialogue == "……"
+    assert turn.presentation == ()
+    state = orchestrator._narrative_states[session_id]
+    assert state.narrative_flags == set()
+    assert state.completed_events == set()
+    # The recoverable failure was logged, not silently swallowed.
+    assert "noop" in caplog.text
+
+
+def test_interpreter_non_provider_error_still_propagates():
+    # Only recoverable ProviderError is caught; an unexpected programming bug
+    # (docs/03 §22 "normal result" does not cover it) must still surface.
+    class _BrokenInterpreter:
+        def interpret(self, state: NarrativeState, player_message: str) -> Interpretation:
+            raise ValueError("programming bug")
+
+    orchestrator, session_id = _orchestrator(
+        _StubRuntime(), interpreter=_BrokenInterpreter()
+    )
+    with pytest.raises(ValueError):
+        orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
 
 
 def test_orchestrator_repeat_input_is_idempotent():

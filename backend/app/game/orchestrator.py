@@ -9,6 +9,7 @@ restored into a fresh process, so a refresh continues the same game.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
@@ -20,6 +21,9 @@ from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEv
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.state import NarrativeState
 from app.persistence.repository import PersistedSession, SessionRepository
+from app.providers.base import ProviderError
+
+logger = logging.getLogger(__name__)
 
 # docs/05 §8: Recent Conversation is a window of the last 10-20 rounds of
 # messages, not the whole session history. 20 messages = 10 rounds.
@@ -270,10 +274,21 @@ class GameOrchestrator:
         """Interpret the message and select a candidate event (no commit yet).
 
         Without an interpreter the pipeline is skipped entirely and the
-        decision is always noop.
+        decision is always noop. A recoverable interpreter failure (provider
+        timeout / HTTP / empty content) degrades the turn to noop: no signal,
+        no event, no state change — but the character still answers (docs/03
+        §21-22, §28). Only ProviderError is caught; an unexpected exception
+        still propagates.
         """
         if self._interpreter is None:
             return NarrativeDecision(kind="noop")
         state = self._state_for(session_id)
-        interpretation = self._interpreter.interpret(state, message)
+        try:
+            interpretation = self._interpreter.interpret(state, message)
+        except ProviderError as exc:
+            logger.warning(
+                "narrative interpreter failed (%s); degrading turn to noop",
+                exc,
+            )
+            return NarrativeDecision(kind="noop")
         return self._engine.evaluate(state, interpretation)
