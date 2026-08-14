@@ -16,6 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.chat import router as chat_router
+from app.characters.base import CharacterRuntime
+from app.characters.claude import ClaudeRuntime
 from app.characters.deepseek import DeepSeekRuntime
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
@@ -53,7 +55,12 @@ def create_app() -> FastAPI:
 
     sessions = SessionStore()
     provider = build_provider()
-    runtimes: dict[str, DeepSeekRuntime] = {"deepseek": DeepSeekRuntime(provider)}
+    # TV-09: both MVP generative characters share the configured provider
+    # (docs/04 §62); each keeps its own persona and Context Builder.
+    runtimes: dict[str, CharacterRuntime] = {
+        "deepseek": DeepSeekRuntime(provider),
+        "claude": ClaudeRuntime(provider),
+    }
     app.state.orchestrator = GameOrchestrator(sessions, runtimes)
     app.include_router(chat_router)
 

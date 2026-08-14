@@ -39,9 +39,23 @@ def build_deepseek_context(scene: Scene) -> CharacterContext:
     return CharacterContext(environment_info="\n".join(lines))
 
 
+def build_claude_context(scene: Scene) -> CharacterContext:
+    """Claude's authorized narrative context (docs/04 §35-39, docs/05 §28).
+
+    Claude is not blind: unlike DeepSeek, she may know the scene's visual
+    ground truth. She also perceives the same legal non-visual sounds.
+    """
+    lines: list[str] = []
+    if scene.sounds:
+        lines.append("你听见：" + "、".join(scene.sounds))
+    lines.append(f"房间的墙上写着一个数字：{scene.wall_code}")
+    return CharacterContext(environment_info="\n".join(lines))
+
+
 # Character-specific Context Builders (docs/04 §15). One entry per generative
 # character; each character's permission boundary is enforced here, not in
-# the persona prompt. TV-09 adds Claude's builder alongside DeepSeek's.
+# the persona prompt.
 CONTEXT_BUILDERS: dict[str, Callable[[Scene], CharacterContext]] = {
     "deepseek": build_deepseek_context,
+    "claude": build_claude_context,
 }

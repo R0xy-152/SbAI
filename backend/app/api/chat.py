@@ -19,6 +19,10 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=500)
     session_id: str | None = None
+    # TV-09: explicit character selection (docs/04 §61: natural-language
+    # speaker detection is an Orchestrator/Narrative decision, deferred).
+    # Defaults to the orchestrator's default character.
+    character_id: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -42,11 +46,15 @@ def chat(
         raise HTTPException(status_code=400, detail="message must not be empty")
 
     try:
-        result = orchestrator.handle_turn(payload.session_id, message)
+        result = orchestrator.handle_turn(
+            payload.session_id, message, character_id=payload.character_id
+        )
     except ProviderError as exc:
         # docs/04 §55: a provider failure is a recoverable error, not a reason
         # to fabricate a reply. The player can retry.
         raise HTTPException(status_code=503, detail="character provider unavailable") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return ChatResponse(
         session_id=result.session_id,

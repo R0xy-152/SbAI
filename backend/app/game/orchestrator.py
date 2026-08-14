@@ -44,26 +44,38 @@ class GameOrchestrator:
         # only the Context Builder's filtered output does.
         self._scene = scene if scene is not None else Scene(scene_id="binding_room")
 
-    def handle_turn(self, session_id: str | None, message: str) -> TurnResult:
+    def handle_turn(
+        self,
+        session_id: str | None,
+        message: str,
+        character_id: str | None = None,
+    ) -> TurnResult:
+        character_id = character_id or self._default_character
+        if character_id not in self._runtimes:
+            raise ValueError(f"unknown character: {character_id}")
+
         session = self._sessions.get_or_create(session_id)
+        # TV-09: player messages record who they were addressed to, so each
+        # character only hears its own thread (docs/04 §59-60, docs/05 §21-22).
         self._sessions.append_message(
-            session.session_id, {"role": "player", "content": message}
+            session.session_id,
+            {"role": "player", "content": message, "character_id": character_id},
         )
 
-        # TV-04: the current responding character is fixed to the default.
-        # Character selection from natural language is an Orchestrator /
-        # Narrative decision (docs/04 §61), deferred to later TV items.
-        runtime = self._runtimes[self._default_character]
-        context = CONTEXT_BUILDERS[self._default_character](self._scene)
+        runtime = self._runtimes[character_id]
+        context = CONTEXT_BUILDERS[character_id](self._scene)
         response = runtime.respond(
             CharacterRequest(
-                character_id=self._default_character,
+                character_id=character_id,
                 player_message=message,
                 # TV-07: short-term context = the last window of prior messages
-                # (docs/05 §8), excluding the current player message.
-                recent_conversation=session.messages[:-1][-RECENT_WINDOW_MESSAGES:],
+                # (docs/05 §8), excluding the current player message; TV-09:
+                # filtered to what this character actually heard.
+                recent_conversation=self._heard_messages(
+                    session.messages[:-1], character_id
+                )[-RECENT_WINDOW_MESSAGES:],
                 # TV-08: authorized, visual-filtered environment context
-                # (docs/04 §15, §20).
+                # (docs/04 §15, §20) built per character.
                 environment_info=context.environment_info,
             )
         )
@@ -81,3 +93,18 @@ class GameOrchestrator:
             response=response,
             message_count=session.player_turn_count(),
         )
+
+    def _heard_messages(self, messages: list[dict], character_id: str) -> list[dict]:
+        """The messages a character is entitled to hear (TV-09).
+
+        A message is audible to a character when it is that character's own
+        reply, or a player message addressed to that character. A player
+        privately talking to one character is not heard by the others;
+        co-presence audibility ("同场默认可听见") is a later refinement
+        (docs/05 §21-22).
+        """
+        return [
+            message
+            for message in messages
+            if message.get("character_id") == character_id
+        ]
