@@ -3,7 +3,11 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.characters.deepseek import DeepSeekRuntime
+from app.game.orchestrator import GameOrchestrator
+from app.game.state.session import SessionStore
 from app.main import create_app
+from app.providers.mock import MockProvider
 
 
 @pytest.fixture()
@@ -93,3 +97,36 @@ def test_ten_natural_inputs_via_api_all_usable(client, message):
     body = response.json()
     assert body["character_id"] == "deepseek"
     assert body["dialogue"].strip()
+
+
+def test_provider_failure_returns_503(monkeypatch):
+    """docs/04 §55: provider failure is a recoverable error, surfaced as 503 so
+    the player can retry — never a fabricated reply."""
+    monkeypatch.setenv("GAL_PROVIDER", "mock")
+    app = create_app()
+    app.state.orchestrator = GameOrchestrator(
+        SessionStore(),
+        {"deepseek": DeepSeekRuntime(MockProvider(fail=True))},
+    )
+    with TestClient(app) as test_client:
+        response = test_client.post("/api/chat", json={"message": "你好"})
+    assert response.status_code == 503
+
+
+def test_invalid_model_output_never_reaches_player(monkeypatch):
+    """TV-05: a model that emits invalid (non-JSON) output must not leak the
+    raw text to the player. After repair fails, the safe fallback line is
+    returned instead."""
+    monkeypatch.setenv("GAL_PROVIDER", "mock")
+    app = create_app()
+    app.state.orchestrator = GameOrchestrator(
+        SessionStore(),
+        {"deepseek": DeepSeekRuntime(MockProvider(malformed=True))},
+    )
+    with TestClient(app) as test_client:
+        response = test_client.post("/api/chat", json={"message": "你好"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["character_id"] == "deepseek"
+    assert body["dialogue"] == "……等一下，我脑子有点卡住了。"
+

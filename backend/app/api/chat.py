@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.game.orchestrator import GameOrchestrator
+from app.providers.base import ProviderError
 
 router = APIRouter()
 
@@ -40,7 +41,13 @@ def chat(
     if not message:
         raise HTTPException(status_code=400, detail="message must not be empty")
 
-    result = orchestrator.handle_turn(payload.session_id, message)
+    try:
+        result = orchestrator.handle_turn(payload.session_id, message)
+    except ProviderError as exc:
+        # docs/04 §55: a provider failure is a recoverable error, not a reason
+        # to fabricate a reply. The player can retry.
+        raise HTTPException(status_code=503, detail="character provider unavailable") from exc
+
     return ChatResponse(
         session_id=result.session_id,
         character_id=result.response.character_id,

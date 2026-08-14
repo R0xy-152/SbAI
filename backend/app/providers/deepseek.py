@@ -30,7 +30,14 @@ class DeepSeekProvider(LLMProvider):
         self._client = client if client is not None else httpx.Client()
         self._timeout = timeout
 
-    def complete(self, *, system: str, user: str, max_tokens: int = 256) -> str:
+    def complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        max_tokens: int = 256,
+        response_format: dict | None = None,
+    ) -> str:
         if not self._api_key:
             raise ProviderConfigError("DEEPSEEK_API_KEY is not set")
 
@@ -42,6 +49,8 @@ class DeepSeekProvider(LLMProvider):
             ],
             "max_tokens": max_tokens,
         }
+        if response_format is not None:
+            payload["response_format"] = response_format
         headers = {"Authorization": f"Bearer {self._api_key}"}
 
         try:

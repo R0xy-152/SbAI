@@ -26,5 +26,17 @@ class LLMProvider(ABC):
     """
 
     @abstractmethod
-    def complete(self, *, system: str, user: str, max_tokens: int = 256) -> str:
-        """Return the assistant reply text; raise ProviderError on failure."""
+    def complete(
+        self,
+        *,
+        system: str,
+        user: str,
+        max_tokens: int = 256,
+        response_format: dict | None = None,
+    ) -> str:
+        """Return the assistant reply text; raise ProviderError on failure.
+
+        response_format is an optional provider-level hint (for example
+        {"type": "json_object"} for structured-output APIs). The mock provider
+        ignores it; a provider that does not support it may raise.
+        """
