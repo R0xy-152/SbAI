@@ -24,24 +24,41 @@ from app.game.state.session import SessionStore
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.poc import build_poc_events
 from app.persistence.repository import JsonSessionRepository
-from app.providers.base import LLMProvider
+from app.providers.anthropic import AnthropicProvider
+from app.providers.base import LLMProvider, ProviderConfigError
 from app.providers.deepseek import DeepSeekProvider
 from app.providers.mock import MockProvider
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def build_provider() -> LLMProvider:
-    """Pick a provider: GAL_PROVIDER=mock|deepseek, defaulting to deepseek
-    when a key is present and mock otherwise (so the app runs keyless)."""
-    mode = os.environ.get("GAL_PROVIDER", "auto")
-    if mode == "mock":
-        return MockProvider()
-    if mode == "deepseek":
-        return DeepSeekProvider()
+def build_provider(character_id: str) -> LLMProvider:
+    """Pick one character's provider (docs/02 §18: Character Runtime and model
+    provider are decoupled).
+
+    GAL_PROVIDER=mock forces the deterministic mock for every character.
+    Otherwise every generative character defaults to the shared DeepSeek
+    adapter (MVP: DeepSeek and Claude both speak through DeepSeek). A character
+    can be explicitly switched to Anthropic via <CHARACTER>_PROVIDER=anthropic
+    (e.g. CLAUDE_PROVIDER=anthropic); that explicit opt-in fails loudly when
+    ANTHROPIC_API_KEY is missing, so a misconfiguration never silently falls
+    back to the wrong provider. With no DEEPSEEK_API_KEY the shared adapter
+    degrades to a mock, so the app still runs keyless (docs/06 §5)."""
+    if os.environ.get("GAL_PROVIDER", "auto") == "mock":
+        return MockProvider(character_id=character_id)
+
+    provider = os.environ.get(f"{character_id.upper()}_PROVIDER", "deepseek")
+    if provider == "anthropic":
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            raise ProviderConfigError(
+                f"{character_id.upper()}_PROVIDER=anthropic but "
+                "ANTHROPIC_API_KEY is not set"
+            )
+        return AnthropicProvider()
+
     if os.environ.get("DEEPSEEK_API_KEY"):
         return DeepSeekProvider()
-    return MockProvider()
+    return MockProvider(character_id=character_id)
 
 
 def create_app() -> FastAPI:
@@ -57,17 +74,21 @@ def create_app() -> FastAPI:
     )
 
     sessions = SessionStore()
-    provider = build_provider()
-    # TV-09: both MVP generative characters share the configured provider
-    # (docs/04 §62); each keeps its own persona and Context Builder.
+    deepseek_provider = build_provider("deepseek")
+    claude_provider = build_provider("claude")
+    # Each generative character binds its own provider through the shared
+    # LLMProvider interface (docs/02 §18). MVP default is the shared DeepSeek
+    # adapter; Anthropic is an explicit opt-in (see build_provider). Each keeps
+    # its own persona and Context Builder (docs/04 §62).
     runtimes: dict[str, CharacterRuntime] = {
-        "deepseek": DeepSeekRuntime(provider),
-        "claude": ClaudeRuntime(provider),
+        "deepseek": DeepSeekRuntime(deepseek_provider),
+        "claude": ClaudeRuntime(claude_provider),
     }
     # TV-11: the narrative pipeline (Interpreter → Event Evaluation → Commit)
     # is wired in for the running app. The POC events are validation fixtures
-    # (docs/06 §10), not production plot. With a mock provider the interpreter
-    # fails closed to noop, so the app still runs keyless.
+    # (docs/06 §10), not production plot. The interpreter keeps the DeepSeek
+    # adapter; with a mock provider it fails closed to noop, so the app still
+    # runs keyless.
     # TV-14: the JSON repository is the Session Restore fixture (docs/02 §22
     # Repository pattern; PostgreSQL is the target backend). Runtime session
     # data lives under backend/data/, which is gitignored.
@@ -75,9 +96,12 @@ def create_app() -> FastAPI:
     app.state.orchestrator = GameOrchestrator(
         sessions,
         runtimes,
-        interpreter=NarrativeInterpreter(provider),
+        interpreter=NarrativeInterpreter(deepseek_provider),
         events=build_poc_events(),
         repository=JsonSessionRepository(data_dir),
+        # Presence Gate (docs/03 §13.6): Claude is only interactable after the
+        # Narrative Event commits `claude_has_appeared`. DeepSeek is ungated.
+        availability={"claude": "claude_has_appeared"},
     )
     app.include_router(chat_router)
 

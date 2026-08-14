@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.game.orchestrator import GameOrchestrator
+from app.game.orchestrator import CharacterUnavailable, GameOrchestrator
 from app.providers.base import ProviderError
 
 router = APIRouter()
@@ -71,6 +71,10 @@ def chat(
         # docs/04 §55: a provider failure is a recoverable error, not a reason
         # to fabricate a reply. The player can retry.
         raise HTTPException(status_code=503, detail="character provider unavailable") from exc
+    except CharacterUnavailable as exc:
+        # Presence Gate (docs/03 §13.6): the character is not interactable yet.
+        # 403 (not 400) — the request is well-formed but not currently permitted.
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

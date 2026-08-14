@@ -43,6 +43,18 @@ RECENT_WINDOW_MESSAGES = 20
 MEMORY_RETRIEVAL_LIMIT = 5
 
 
+class CharacterUnavailable(Exception):
+    """The requested character is not yet interactable (Presence Gate).
+
+    Which characters the player may talk to is a deterministic backend fact
+    (docs/03 §13.6 / §28): the orchestrator resolves it outside the Narrative
+    Runtime from ``availability`` and the session's Narrative State, never
+    trusting the Frontend. Deliberately *not* a ``ValueError`` subclass so the
+    API layer can map it to 403 independently of the ``ValueError`` → 400
+    mapping.
+    """
+
+
 @dataclass
 class TurnResult:
     session_id: str
@@ -66,6 +78,11 @@ class GameOrchestrator:
         interpreter: NarrativeInterpreter | None = None,
         events: list[NarrativeEvent] = (),
         repository: SessionRepository | None = None,
+        # Presence Gate (docs/03 §13.6): character_id → narrative flag that
+        # must be present in NarrativeState before the player may talk to that
+        # character. None / empty = gate disabled (existing direct-construction
+        # tests keep their pre-gate behaviour). Only the real app wires it.
+        availability: dict[str, str] | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -92,6 +109,8 @@ class GameOrchestrator:
         # with one, every successful turn saves a snapshot and a known
         # session_id is restored into a fresh process (Session Restore).
         self._repository = repository
+        # Presence Gate map (docs/03 §13.6): empty means the gate is off.
+        self._availability = availability if availability is not None else {}
 
     def handle_turn(
         self,
@@ -107,6 +126,11 @@ class GameOrchestrator:
             requested=character_id,
             last=session.current_character or None,
         )
+        # Presence Gate (docs/03 §13.6): after the character is resolved, before
+        # any state mutation, message recording or runtime call. An unavailable
+        # character is rejected Fail Closed — no current_character, no history,
+        # no state change.
+        self._assert_available(session.session_id, character_id)
         session.current_character = character_id
 
         # TV-11: evaluate the narrative signal into a candidate event BEFORE
@@ -255,6 +279,26 @@ class GameOrchestrator:
             if persisted is not None:
                 return self._restore_session(persisted)
         return self._sessions.get_or_create(session_id)
+
+    def _assert_available(self, session_id: str, character_id: str) -> None:
+        """Presence Gate (docs/03 §13.6): reject a not-yet-interactable character.
+
+        Only characters listed in ``availability`` are gated; the required flag
+        must be present in the session's Narrative State. A session with no
+        state yet (fresh or not restored) has no flags, so a gated character is
+        rejected until the flag is committed by a Narrative Event.
+        """
+        if not self._availability:
+            return
+        required = self._availability.get(character_id)
+        if required is None:
+            return
+        state = self._state.get(session_id)
+        flags = state.narrative_flags if state is not None else set()
+        if required not in flags:
+            raise CharacterUnavailable(
+                f"character {character_id} is not available yet"
+            )
 
     def _restore_session(self, persisted: PersistedSession) -> GameSession:
         """Bring a persisted snapshot back into this process (docs/02 §21).

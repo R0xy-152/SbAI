@@ -12,9 +12,15 @@ from app.providers.base import LLMProvider, ProviderError
 
 
 class MockProvider(LLMProvider):
-    def __init__(self, fail: bool = False, malformed: bool = False) -> None:
+    def __init__(
+        self,
+        fail: bool = False,
+        malformed: bool = False,
+        character_id: str = "deepseek",
+    ) -> None:
         self._fail = fail
         self._malformed = malformed
+        self._character_id = character_id
 
     def complete(
         self,
@@ -34,7 +40,7 @@ class MockProvider(LLMProvider):
         # produce, so the schema-validation path is exercised without a key.
         return json.dumps(
             {
-                "character_id": "deepseek",
+                "character_id": self._character_id,
                 "dialogue": f"这是 DeepSeek 的本地模拟回复：你说“{user}”。",
                 "emotion": "neutral",
                 "animation_proposal": "none",
