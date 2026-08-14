@@ -39,6 +39,10 @@ class ChatResponse(BaseModel):
     presentation: list[str] = []
 
 
+class OpeningRequest(BaseModel):
+    session_id: str | None = None
+
+
 class HistoryMessage(BaseModel):
     role: str
     character_id: str | None = None
@@ -87,6 +91,25 @@ def chat(
         animation=result.response.animation_proposal,
         # Each committed event's directive is one string, e.g. "SHOW_CHARACTER
         # claude" (docs/03 §13.6), so the Frontend can parse kind + target.
+        presentation=[" ".join(result.presentation)] if result.presentation else [],
+    )
+
+
+@router.post("/api/chat/opening", response_model=ChatResponse)
+def opening(
+    payload: OpeningRequest,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+) -> ChatResponse:
+    """The session's active opening line (docs/01 §4), spoken without player
+    input. Idempotent: an already-opened session returns an empty dialogue."""
+    result = orchestrator.open_turn(payload.session_id)
+    return ChatResponse(
+        session_id=result.session_id,
+        character_id=result.response.character_id,
+        dialogue=result.response.dialogue,
+        message_count=result.message_count,
+        emotion=result.response.emotion,
+        animation=result.response.animation_proposal,
         presentation=[" ".join(result.presentation)] if result.presentation else [],
     )
 

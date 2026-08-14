@@ -33,6 +33,10 @@ class PersistedSession:
     current_character: str = "deepseek"
     narrative_state: NarrativeState = field(default_factory=NarrativeState)
     memories: dict[str, list[EpisodicMemory]] = field(default_factory=dict)
+    # Script nodes already consumed (once semantics). Empty on snapshots written
+    # before the script layer existed, so a restored session never re-fires its
+    # opening line.
+    consumed_script_nodes: set[str] = field(default_factory=set)
 
 
 class SessionRepository(ABC):
@@ -105,6 +109,7 @@ def _session_to_dict(session: PersistedSession) -> dict:
             owner: [_memory_to_dict(memory) for memory in memories]
             for owner, memories in session.memories.items()
         },
+        "consumed_script_nodes": sorted(session.consumed_script_nodes),
     }
 
 
@@ -126,6 +131,9 @@ def _session_from_dict(data: dict) -> PersistedSession:
             owner: [_memory_from_dict(memory) for memory in memories]
             for owner, memories in data["memories"].items()
         },
+        # Backward compatible: snapshots written before the script layer lack
+        # this key, so an absent value means "nothing consumed yet".
+        consumed_script_nodes=set(data.get("consumed_script_nodes", [])),
     )
 
 

@@ -33,6 +33,7 @@ from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.state import NarrativeState
 from app.persistence.repository import PersistedSession, SessionRepository
 from app.providers.base import ProviderError
+from app.script.service import ScriptService
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,10 @@ class GameOrchestrator:
         # character. None / empty = gate disabled (existing direct-construction
         # tests keep their pre-gate behaviour). Only the real app wires it.
         availability: dict[str, str] | None = None,
+        # Script layer (docs/03 §37): when given, resolves which authored line
+        # (if any) a turn must speak instead of the LLM. None keeps the
+        # pre-script behaviour for existing direct-construction tests.
+        script: ScriptService | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -111,6 +116,7 @@ class GameOrchestrator:
         self._repository = repository
         # Presence Gate map (docs/03 §13.6): empty means the gate is off.
         self._availability = availability if availability is not None else {}
+        self._script = script
 
     def handle_turn(
         self,
@@ -154,32 +160,52 @@ class GameOrchestrator:
         memories = self._memory.store_for(session.session_id).retrieve(
             character_id, limit=MEMORY_RETRIEVAL_LIMIT
         )
-        response = runtime.respond(
-            CharacterRequest(
-                character_id=character_id,
-                player_message=message,
-                # TV-07: short-term context = the last window of prior messages
-                # (docs/05 §8), excluding the current player message — which is
-                # not yet recorded (it is committed only after the turn
-                # succeeds, so a failed turn never pollutes the window); TV-09:
-                # filtered to what this character actually heard.
-                recent_conversation=self._heard_messages(
-                    session.messages, character_id
-                )[-RECENT_WINDOW_MESSAGES:],
-                # TV-08: authorized, visual-filtered environment context
-                # (docs/04 §15, §20) built per character.
-                environment_info=context.environment_info,
-                # TV-12: the authorized narrative context (relevant flags/facts,
-                # docs/04 §8) rendered by the same permission boundary.
-                narrative_context=context.narrative_context,
-                # TV-13: the selected long-term memories the character may use.
-                memory_context=format_memories(memories),
-                # Narrative Directive (docs/03 §24): the selected event's
-                # per-turn story goal, handed to the character when this turn
-                # carries plot purpose. Empty on ordinary turns.
-                narrative_directive=decision.directive,
+        # Script layer (docs/03 §37): a turn at a scripted beat speaks its
+        # authored line instead of the LLM. The state change that beat depends
+        # on (the Narrative Event) still commits below, exactly as on an
+        # ordinary turn. A node whose speaker is not this turn's character was
+        # already skipped by ScriptService.resolve.
+        scripted = (
+            self._script.resolve(
+                session.session_id, character_id, narrative_state, decision
             )
+            if self._script is not None
+            else None
         )
+        if scripted is not None:
+            response = CharacterResponse(
+                character_id=scripted.speaker,
+                dialogue=scripted.line.dialogue,
+                emotion=scripted.line.emotion,
+                animation_proposal=scripted.line.animation,
+            )
+        else:
+            response = runtime.respond(
+                CharacterRequest(
+                    character_id=character_id,
+                    player_message=message,
+                    # TV-07: short-term context = the last window of prior messages
+                    # (docs/05 §8), excluding the current player message — which is
+                    # not yet recorded (it is committed only after the turn
+                    # succeeds, so a failed turn never pollutes the window); TV-09:
+                    # filtered to what this character actually heard.
+                    recent_conversation=self._heard_messages(
+                        session.messages, character_id
+                    )[-RECENT_WINDOW_MESSAGES:],
+                    # TV-08: authorized, visual-filtered environment context
+                    # (docs/04 §15, §20) built per character.
+                    environment_info=context.environment_info,
+                    # TV-12: the authorized narrative context (relevant flags/facts,
+                    # docs/04 §8) rendered by the same permission boundary.
+                    narrative_context=context.narrative_context,
+                    # TV-13: the selected long-term memories the character may use.
+                    memory_context=format_memories(memories),
+                    # Narrative Directive (docs/03 §24): the selected event's
+                    # per-turn story goal, handed to the character when this turn
+                    # carries plot purpose. Empty on ordinary turns.
+                    narrative_directive=decision.directive,
+                )
+            )
         # Semantic Validation Gate (docs/04 §49-51): a well-formed but
         # impermissible response (wrong character, unauthorized fact, visual
         # leak, disallowed action) is rejected before it can touch history,
@@ -234,6 +260,13 @@ class GameOrchestrator:
             },
         )
 
+        # A once script node is consumed only when its line was actually
+        # presented (validate-before-commit also applies to the script table,
+        # docs/03 §28): a rejected line must not burn the node. Consume before
+        # persisting so the snapshot records it.
+        if approved and scripted is not None:
+            self._script.consume(session.session_id, scripted.node_id)
+
         # TV-14: only a completed turn is persisted, so a failure never writes
         # half a turn into the snapshot (validate-before-commit also applies
         # to persistence).
@@ -249,6 +282,65 @@ class GameOrchestrator:
                 if approved and decision.kind == "event"
                 else ()
             ),
+        )
+
+    def open_turn(self, session_id: str | None) -> TurnResult:
+        """Speak the active opening line (docs/01 §4), without player input.
+
+        The opening is a scripted beat: it fires once per session and is
+        persisted, so a refresh never repeats it. Idempotent — a session that
+        already opened returns an empty reply and never re-appends.
+        """
+        session = self._resolve_session(session_id)
+        opening = self._script.opening_node() if self._script is not None else None
+        if opening is None:
+            return self._empty_turn(session)
+        if self._script.is_consumed(session.session_id, opening.node_id) or session.messages:
+            return self._empty_turn(session)
+        response = CharacterResponse(
+            character_id=opening.speaker,
+            dialogue=opening.line.dialogue,
+            emotion=opening.line.emotion,
+            animation_proposal=opening.line.animation,
+        )
+        # Authored lines still pass the Semantic Validation Gate (docs/04 §51)
+        # as defense-in-depth; a mis-authored line falls back like any reply.
+        narrative_state = self._state.get(session.session_id)
+        scene = self._scenes.resolve(
+            narrative_state.current_scene if narrative_state is not None else DEFAULT_SCENE
+        )
+        try:
+            validate_response(response, character_id=opening.speaker, scene=scene)
+        except ResponseRejected as exc:
+            logger.warning("opening line rejected (%s); using fallback", exc)
+            response = self._characters.get(opening.speaker).safe_fallback()
+        self._sessions.append_message(
+            session.session_id,
+            {
+                "role": "character",
+                "character_id": response.character_id,
+                "content": response.dialogue,
+            },
+        )
+        self._script.consume(session.session_id, opening.node_id)
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session.session_id))
+        return TurnResult(
+            session_id=session.session_id,
+            response=response,
+            message_count=session.player_turn_count(),
+        )
+
+    def _empty_turn(self, session: GameSession) -> TurnResult:
+        """A no-op turn result with an empty reply (already-opened session)."""
+        return TurnResult(
+            session_id=session.session_id,
+            response=CharacterResponse(
+                character_id=session.current_character
+                or self._characters.default_character,
+                dialogue="",
+            ),
+            message_count=session.player_turn_count(),
         )
 
     def get_history(self, session_id: str) -> list[dict]:
@@ -315,6 +407,10 @@ class GameOrchestrator:
         )
         self._state.restore(session.session_id, persisted.narrative_state)
         self._memory.restore(session.session_id, persisted.memories)
+        if self._script is not None:
+            self._script.restore(
+                session.session_id, persisted.consumed_script_nodes
+            )
         return session
 
     def _snapshot(self, session_id: str) -> PersistedSession:
@@ -333,6 +429,11 @@ class GameOrchestrator:
             or self._characters.default_character,
             narrative_state=state,
             memories=store.snapshot() if store is not None else {},
+            consumed_script_nodes=(
+                self._script.snapshot(session_id)
+                if self._script is not None
+                else set()
+            ),
         )
 
     def _heard_messages(self, messages: list[dict], character_id: str) -> list[dict]:

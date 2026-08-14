@@ -1,0 +1,96 @@
+const assert = require("node:assert/strict");
+
+// TV-17: the active opening line (docs/01 §4). On load the frontend asks the
+// backend for the opening once and renders the returned line — no player input
+// needed. The backend is idempotent; an empty dialogue means "already opened".
+
+const classes = new Set();
+const sprite = {
+  dataset: { character: "deepseek", expression: "normal" },
+  src: "",
+  classList: {
+    add: (...names) => names.forEach((name) => classes.add(name)),
+    remove: (...names) => names.forEach((name) => classes.delete(name)),
+    contains: (name) => classes.has(name),
+  },
+  addEventListener: () => {},
+  offsetWidth: 1,
+};
+
+const sendButton = { textContent: "发送", disabled: false };
+const form = {
+  addEventListener: (_event, handler) => { global.submitHandler = handler; },
+  querySelector: () => sendButton,
+};
+const input = { value: "", disabled: false, focus: () => {} };
+const dialogue = { textContent: "" };
+const status = { textContent: "" };
+const characterName = { textContent: "" };
+
+const historyToggle = { textContent: "查看历史" };
+historyToggle.addEventListener = () => {};
+const historyPanel = { hidden: true };
+const historyList = {
+  children: [],
+  replaceChildren: () => { historyList.children = []; },
+  appendChild: (item) => historyList.children.push(item),
+};
+
+const stored = {};
+global.localStorage = {
+  getItem: (key) => stored[key] || null,
+  setItem: (key, value) => { stored[key] = value; },
+};
+global.window = {};
+global.document = {
+  querySelector: (selector) => ({
+    "#player-form": form,
+    "#player-message": input,
+    "#dialogue-text": dialogue,
+    "#form-status": status,
+    "#character-sprite": sprite,
+    "#character-name": characterName,
+    "#history-toggle": historyToggle,
+    "#history-panel": historyPanel,
+    "#history-list": historyList,
+  })[selector],
+  createElement: () => ({ textContent: "" }),
+};
+
+let captured = null;
+global.fetch = async (url, options) => {
+  captured = { url, options };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => ({
+      session_id: "sess-1",
+      character_id: "deepseek",
+      dialogue: "……你醒了。别怕，我们先弄清楚这里发生了什么。",
+      message_count: 0,
+      emotion: "neutral",
+      animation: "none",
+      presentation: [],
+    }),
+  };
+};
+
+require("../app.js");
+
+(async () => {
+  // Let the auto-invoked openOpening() finish its fetch + render.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(captured.url, "/api/chat/opening");
+  assert.equal(captured.options.method, "POST");
+  assert.equal(JSON.parse(captured.options.body).session_id, null);
+  assert.equal(dialogue.textContent, "……你醒了。别怕，我们先弄清楚这里发生了什么。");
+  assert.equal(characterName.textContent, "DeepSeek");
+  assert.equal(sprite.dataset.character, "deepseek");
+  assert.equal(stored["gal_session_id"], "sess-1");
+
+  console.log("TV-17 scripted opening (frontend): PASS");
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

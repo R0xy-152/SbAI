@@ -28,6 +28,8 @@ from app.providers.anthropic import AnthropicProvider
 from app.providers.base import LLMProvider, ProviderConfigError
 from app.providers.deepseek import DeepSeekProvider
 from app.providers.mock import MockProvider
+from app.script.fixture import build_script_nodes
+from app.script.service import ScriptService
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -102,6 +104,10 @@ def create_app() -> FastAPI:
         # Presence Gate (docs/03 §13.6): Claude is only interactable after the
         # Narrative Event commits `claude_has_appeared`. DeepSeek is ungated.
         availability={"claude": "claude_has_appeared"},
+        # Script layer (docs/03 §37): the deterministic authored lines — the
+        # active opening (docs/01 §4) and per-event beat lines. Fixture ≠
+        # Production (docs/06 §10); the wording is a placeholder.
+        script=ScriptService(build_script_nodes()),
     )
     app.include_router(chat_router)
 

@@ -305,3 +305,39 @@ form.addEventListener("submit", async (event) => {
     input.focus();
   }
 });
+
+// TV-17: the active opening line (docs/01 §4) — spoken by the backend without
+// player input. On load the frontend asks for it once; the backend is
+// idempotent, so a restored session returns an empty dialogue and nothing is
+// re-rendered. The static line in index.html stays as a no-backend placeholder.
+async function openOpening() {
+  if (typeof fetch !== "function") return; // DOM-stub tests have no fetch
+  try {
+    const response = await fetch(`${API_BASE}/api/chat/opening`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    sessionId = data.session_id;
+    writeSessionId(sessionId);
+    if (!data.dialogue) return; // already opened: keep the current stage
+    applyPresentation(data.presentation);
+    setSpeaker(data.character_id);
+    setCharacter(data.character_id);
+    window.galPresentation.apply({
+      character: characterSprite.dataset.character,
+      expression: data.emotion,
+    });
+    window.galPresentation.apply({
+      character: characterSprite.dataset.character,
+      animation: data.animation,
+    });
+    dialogueText.textContent = data.dialogue;
+  } catch (_error) {
+    // No backend yet: the static opening line in index.html stays in place.
+  }
+}
+
+openOpening();
