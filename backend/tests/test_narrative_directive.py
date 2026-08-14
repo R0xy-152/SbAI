@@ -188,7 +188,7 @@ def test_directive_does_not_modify_state():
         events=[event],
     )
     orchestrator.handle_turn(session_id, "测试")
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert runtime.requests[0].narrative_directive == "本轮需要让 Claude 出现。"
     # The directive reached the character but moved no narrative content.
     assert state.completed_events == {"EV_DIRECTIVE_ONLY"}  # event id is tracked

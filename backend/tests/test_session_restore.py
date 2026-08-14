@@ -138,10 +138,10 @@ def test_refresh_restores_everything_and_continues(tmp_path):
     assert any("我很怕黑" in m["content"] for m in restored_session.messages)
 
     # Current Scene correct (the single authoritative source, docs/03 §5.1).
-    assert orchestrator_b._narrative_states[session_id].current_scene == "binding_room"
+    assert orchestrator_b._state.state_for(session_id).current_scene == "binding_room"
 
     # Narrative Flag correct + Completed Event correct (docs/06 §20).
-    state = orchestrator_b._narrative_states[session_id]
+    state = orchestrator_b._state.state_for(session_id)
     assert "claude_has_appeared" in state.narrative_flags
     assert "EV_POC_CLAUDE_APPEARS" in state.completed_events
 
@@ -149,7 +149,7 @@ def test_refresh_restores_everything_and_continues(tmp_path):
     # and grows nothing (idempotency, docs/03 §30).
     before_flags = set(state.narrative_flags)
     orchestrator_b.handle_turn(session_id, "到底是谁抓的我们？")
-    state_after = orchestrator_b._narrative_states[session_id]
+    state_after = orchestrator_b._state.state_for(session_id)
     assert state_after.completed_events == {"EV_POC_CLAUDE_APPEARS"}
     assert state_after.narrative_flags == before_flags
 
@@ -302,7 +302,7 @@ def test_restored_memory_store_keeps_ordering_and_ids(tmp_path):
     orchestrator_b.handle_turn(session_id, "恢复")  # restores the store
 
     # New memories continue the id counter instead of colliding.
-    store = orchestrator_b._memory_stores[session_id]
+    store = orchestrator_b._memory.store_for(session_id)
     assert [m.memory_id for m in store.retrieve("deepseek")] == ["mem-1"]
     new = store.propose("deepseek", MemoryProposal("likes", "Player喜欢甜食"))
     assert new is not None

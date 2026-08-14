@@ -156,11 +156,11 @@ def test_rejected_response_never_enters_history_memory_state():
     assert "墙上的密码" not in " ".join(m["content"] for m in history)
 
     # The memory proposal (Player怕黑) was not written.
-    assert orchestrator._memory_store(session_id).retrieve("deepseek") == []
+    assert orchestrator._memory.store_for(session_id).retrieve("deepseek") == []
 
     # The selected event did not commit: no flag, no completed event, and no
     # presentation directive reaches the frontend.
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert "claude_has_appeared" not in state.narrative_flags
     assert state.completed_events == set()
     assert result.presentation == ()

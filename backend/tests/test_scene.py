@@ -97,7 +97,7 @@ def test_set_scene_changes_next_turn_context():
     assert "0317" not in runtime.environments[1]
 
     # The authoritative scene moved too.
-    assert orchestrator._narrative_states[session_id].current_scene == "yard"
+    assert orchestrator._state.state_for(session_id).current_scene == "yard"
 
 
 def test_two_sessions_hold_different_scenes():
@@ -115,8 +115,8 @@ def test_two_sessions_hold_different_scenes():
     # A is in the yard; B is still in the binding room.
     assert "9999" in runtime.environments[2]
     assert "0317" in runtime.environments[3]
-    assert orchestrator._narrative_states[session_a].current_scene == "yard"
-    assert orchestrator._narrative_states[session_b].current_scene == "binding_room"
+    assert orchestrator._state.state_for(session_a).current_scene == "yard"
+    assert orchestrator._state.state_for(session_b).current_scene == "binding_room"
 
 
 def test_restore_recovers_changed_scene(tmp_path):
@@ -126,12 +126,12 @@ def test_restore_recovers_changed_scene(tmp_path):
     runtime_a = _RecordingRuntime()
     orchestrator_a = _orchestrator(runtime_a, [SIG_GO_YARD], _registry(), repo=repo)
     session_id = orchestrator_a.handle_turn(None, "我们去院子里吧").session_id
-    assert orchestrator_a._narrative_states[session_id].current_scene == "yard"
+    assert orchestrator_a._state.state_for(session_id).current_scene == "yard"
 
     runtime_b = _RecordingRuntime()
     orchestrator_b = _orchestrator(runtime_b, ["noop"], _registry(), repo=repo)
     orchestrator_b.handle_turn(session_id, "恢复后继续")
 
-    assert orchestrator_b._narrative_states[session_id].current_scene == "yard"
+    assert orchestrator_b._state.state_for(session_id).current_scene == "yard"
     assert "9999" in runtime_b.environments[0]
     assert "0317" not in runtime_b.environments[0]

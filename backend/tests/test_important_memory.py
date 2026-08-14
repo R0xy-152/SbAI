@@ -98,7 +98,7 @@ def test_orchestrator_writes_then_recalls_memory():
     orchestrator, session_id = _orchestrator({"deepseek": runtime})
 
     orchestrator.handle_turn(session_id, "我很怕黑。")
-    assert len(orchestrator._memory_stores[session_id].retrieve("deepseek")) == 1
+    assert len(orchestrator._memory.store_for(session_id).retrieve("deepseek")) == 1
 
     runtime.proposals = []
     orchestrator.handle_turn(session_id, "随便聊聊。")
@@ -141,7 +141,7 @@ def test_memory_does_not_leak_to_claude():
     orchestrator.handle_turn(session_id, "你听说过我的事吗？", character_id="claude")
     assert claude.requests[0].memory_context == ""
     # DeepSeek still has it in her own scope.
-    assert len(orchestrator._memory_stores[session_id].retrieve("deepseek")) == 1
+    assert len(orchestrator._memory.store_for(session_id).retrieve("deepseek")) == 1
 
 
 def test_failed_output_does_not_write_memory():
@@ -156,4 +156,4 @@ def test_failed_output_does_not_write_memory():
     orchestrator, session_id = _orchestrator({"deepseek": runtime})
     with pytest.raises(ProviderError):
         orchestrator.handle_turn(session_id, "我很怕黑。")
-    assert orchestrator._memory_stores[session_id].retrieve("deepseek") == []
+    assert orchestrator._memory.store_for(session_id).retrieve("deepseek") == []

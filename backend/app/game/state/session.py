@@ -19,6 +19,10 @@ class GameSession:
 
     session_id: str
     messages: list[dict] = field(default_factory=list)
+    # The last character that spoke in this session (docs/02 §21
+    # current_character). "" means none yet, so the runtime registry falls back
+    # to its configured default character.
+    current_character: str = ""
 
     def player_turn_count(self) -> int:
         return sum(1 for message in self.messages if message["role"] == "player")
@@ -51,7 +55,9 @@ class SessionStore:
         with self._lock:
             return self._sessions.get(session_id)
 
-    def restore(self, session_id: str, messages: list[dict]) -> GameSession:
+    def restore(
+        self, session_id: str, messages: list[dict], current_character: str = ""
+    ) -> GameSession:
         """Seed a previously persisted session (TV-14 Session Restore).
 
         Keeps the id the client already knows, so a refresh can continue the
@@ -62,6 +68,7 @@ class SessionStore:
             if session is None:
                 session = GameSession(session_id=session_id, messages=list(messages))
                 self._sessions[session_id] = session
+            session.current_character = current_character
             return session
 
     def append_message(self, session_id: str, message: dict) -> None:

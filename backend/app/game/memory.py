@@ -145,6 +145,36 @@ class MemoryStore:
         return store
 
 
+class MemoryService:
+    """Owns the per-session MemoryStores (docs/05 §17, §57).
+
+    The Game Orchestrator no longer holds the per-session MemoryStore map. Each
+    session's store is fully isolated, created on first use, and seeded back
+    from a persisted snapshot on Session Restore (docs/02 §21).
+    """
+
+    def __init__(self) -> None:
+        self._stores: dict[str, MemoryStore] = {}
+
+    def store_for(self, session_id: str) -> MemoryStore:
+        """The session's store, created on first use."""
+        store = self._stores.get(session_id)
+        if store is None:
+            store = MemoryStore()
+            self._stores[session_id] = store
+        return store
+
+    def get(self, session_id: str) -> MemoryStore | None:
+        """Non-mutating lookup (snapshot building needs it)."""
+        return self._stores.get(session_id)
+
+    def restore(
+        self, session_id: str, memories: dict[str, list[EpisodicMemory]]
+    ) -> None:
+        """Seed a persisted store (TV-14 Session Restore)."""
+        self._stores[session_id] = MemoryStore.from_snapshot(memories)
+
+
 def format_memories(memories: list[EpisodicMemory]) -> str:
     """Render the selected memories as the character's memory_context
     (docs/04 §12, docs/05 §37): the historical info it may use this turn."""

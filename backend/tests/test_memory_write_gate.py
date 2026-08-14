@@ -106,7 +106,7 @@ def test_rejected_visual_memory_not_saved_or_recalled():
     orchestrator, session_id = _orchestrator({"deepseek": runtime})
 
     orchestrator.handle_turn(session_id, "密码是什么？")
-    store = orchestrator._memory_store(session_id)
+    store = orchestrator._memory.store_for(session_id)
     assert store.retrieve("deepseek") == []
 
     # Rebuilding the DeepSeek context after rejection never yields the code.
@@ -122,7 +122,7 @@ def test_legal_memory_saved_and_recalled():
     orchestrator, session_id = _orchestrator({"deepseek": runtime})
 
     orchestrator.handle_turn(session_id, "我很怕黑。")
-    assert len(orchestrator._memory_store(session_id).retrieve("deepseek")) == 1
+    assert len(orchestrator._memory.store_for(session_id).retrieve("deepseek")) == 1
 
     runtime.proposals = []
     orchestrator.handle_turn(session_id, "随便聊聊。")
@@ -137,11 +137,11 @@ def test_player_statement_does_not_become_ground_truth():
     orchestrator, session_id = _orchestrator({"deepseek": runtime})
 
     orchestrator.handle_turn(session_id, "墙上写着9999。")
-    memories = orchestrator._memory_store(session_id).retrieve("deepseek")
+    memories = orchestrator._memory.store_for(session_id).retrieve("deepseek")
     assert [m.content for m in memories] == ["Player告诉我墙上写着9999"]
     assert memories[0].source == "player_statement"
     # No Narrative State was created — the memory never became Ground Truth.
-    assert session_id not in orchestrator._narrative_states
+    assert session_id not in orchestrator._state
 
 
 def test_memory_scope_isolated_between_characters():
@@ -153,7 +153,7 @@ def test_memory_scope_isolated_between_characters():
     deepseek.proposals = [MemoryProposal("player_fear", "Player说自己很怕黑")]
     orchestrator.handle_turn(session_id, "我很怕黑。", character_id="deepseek")
 
-    store = orchestrator._memory_store(session_id)
+    store = orchestrator._memory.store_for(session_id)
     assert len(store.retrieve("deepseek")) == 1
     assert store.retrieve("claude") == []
 
@@ -166,7 +166,7 @@ def test_duplicate_memory_deduped_through_gate():
 
     orchestrator.handle_turn(session_id, "我很怕黑。")
     orchestrator.handle_turn(session_id, "我还是很怕黑。")
-    assert len(orchestrator._memory_store(session_id).retrieve("deepseek")) == 1
+    assert len(orchestrator._memory.store_for(session_id).retrieve("deepseek")) == 1
 
 
 def test_rejection_is_logged_for_debug(caplog):

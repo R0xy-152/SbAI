@@ -283,7 +283,7 @@ def test_orchestrator_commits_after_character_output():
     orchestrator, session_id = _orchestrator(_StubRuntime(), _FixedInterpreter(signals.SIG_ASK_CAPTOR))
     result = orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
     assert result.response.dialogue == "……"
-    state = orchestrator._narrative_states[result.session_id]
+    state = orchestrator._state.state_for(result.session_id)
     assert "claude_has_appeared" in state.narrative_flags
     assert EV_POC_CLAUDE_APPEARS in state.completed_events
 
@@ -293,7 +293,7 @@ def test_failed_character_output_leaves_state_untouched():
     orchestrator, session_id = _orchestrator(_FailingRuntime(), _FixedInterpreter(signals.SIG_ASK_CAPTOR))
     with pytest.raises(ProviderError):
         orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert state.narrative_flags == set()
     assert state.completed_events == set()
 
@@ -309,7 +309,7 @@ def test_interpreter_failure_degrades_to_noop_and_character_still_replies(caplog
         turn = orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
     assert turn.response.dialogue == "……"
     assert turn.presentation == ()
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert state.narrative_flags == set()
     assert state.completed_events == set()
     # The recoverable failure was logged, not silently swallowed.
@@ -334,14 +334,14 @@ def test_orchestrator_repeat_input_is_idempotent():
     orchestrator, session_id = _orchestrator(_StubRuntime(), _FixedInterpreter(signals.SIG_ASK_CAPTOR))
     orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
     orchestrator.handle_turn(session_id, "是谁把我们抓来的？")  # identical repeat
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert state.completed_events == {EV_POC_CLAUDE_APPEARS}
 
 
 def test_orchestrator_noop_signal_does_not_commit():
     orchestrator, session_id = _orchestrator(_StubRuntime(), _FixedInterpreter(signals.OUTCOME_NOOP))
     orchestrator.handle_turn(session_id, "你饿吗？")
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert state.narrative_flags == set()
     assert state.completed_events == set()
 
@@ -350,4 +350,4 @@ def test_orchestrator_without_interpreter_skips_pipeline():
     # Existing (pre-TV-11) orchestrator users get noop decisions and no state.
     orchestrator = GameOrchestrator(SessionStore(), {"deepseek": _StubRuntime()})
     orchestrator.handle_turn(None, "是谁把我们抓来的？")
-    assert orchestrator._narrative_states == {}
+    assert orchestrator._state.is_empty()

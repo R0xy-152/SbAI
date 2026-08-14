@@ -165,7 +165,7 @@ def test_case_a_timeout_does_not_commit_and_retry_continues():
         orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
 
     # Game State不被错误提交 / Completed Event不被提前写入.
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert state.narrative_flags == set()
     assert state.completed_events == set()
 
@@ -174,7 +174,7 @@ def test_case_a_timeout_does_not_commit_and_retry_continues():
     assert turn.session_id == session_id
     # The failed attempt recorded no player message, so this is turn 1.
     assert turn.message_count == 1
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert "claude_has_appeared" in state.narrative_flags
     assert "EV_POC_CLAUDE_APPEARS" in state.completed_events
 
@@ -239,7 +239,7 @@ def test_case_a_recovery_then_persist_then_restore(tmp_path):
         repository=repo,
     )
     fresh.handle_turn(session_id, "随便聊聊")
-    restored = fresh._narrative_states[session_id]
+    restored = fresh._state.state_for(session_id)
     assert restored.completed_events == {"EV_POC_CLAUDE_APPEARS"}
 
 
@@ -255,12 +255,12 @@ def test_case_b_invalid_output_falls_back_clean():
     assert turn.response.dialogue == DeepSeekRuntime.fallback_lines[0]
 
     # Invalid内容不进入正式Memory / history.
-    assert orchestrator._memory_stores[session_id].retrieve("deepseek") == []
+    assert orchestrator._memory.store_for(session_id).retrieve("deepseek") == []
     messages = orchestrator._sessions.get(session_id).messages
     assert not any("没听清" in m.get("content", "") for m in messages)
 
     # No narrative state was committed (noop signal; nothing leaked).
-    state = orchestrator._narrative_states[session_id]
+    state = orchestrator._state.state_for(session_id)
     assert state.narrative_flags == set()
     assert state.completed_events == set()
 
@@ -280,7 +280,7 @@ def test_case_c_empty_dialogue_falls_back_clean():
 
     turn = orchestrator.handle_turn(session_id, "你好")
     assert turn.response.dialogue == DeepSeekRuntime.fallback_lines[0]
-    assert orchestrator._memory_stores[session_id].retrieve("deepseek") == []
+    assert orchestrator._memory.store_for(session_id).retrieve("deepseek") == []
 
     next_turn = orchestrator.handle_turn(session_id, "继续")
     assert next_turn.message_count == 2
@@ -295,7 +295,7 @@ def test_case_c_empty_provider_content_is_recoverable():
     orchestrator, session_id = _orchestrator(runtime)
     with pytest.raises(ProviderError):
         orchestrator.handle_turn(session_id, "你好")
-    assert orchestrator._narrative_states[session_id].completed_events == set()
+    assert orchestrator._state.state_for(session_id).completed_events == set()
 
 
 # ---- API level: recoverable feedback + retry continues the same session ----

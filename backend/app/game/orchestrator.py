@@ -1,10 +1,13 @@
 """Game Orchestrator (docs/02 §13-14).
 
-Coordinates one player interaction: resolve the session, determine the current
-character runtime, call it, and persist the messages. It does not contain
-persona prompts or provider HTTP details. When a SessionRepository is given
-(TV-14), each successful turn saves a snapshot and a known session_id is
-restored into a fresh process, so a refresh continues the same game.
+Coordinates one player interaction: load the session, determine the current
+character runtime, call it, validate, commit, and persist. It does not contain
+persona prompts, provider HTTP details, or any per-session storage of its own —
+Narrative State, Important Memory and the current character live in services
+(StateService / SessionStore / MemoryService) and the runtime map lives in a
+CharacterRuntimeRegistry. When a SessionRepository is given (TV-14), each
+successful turn saves a snapshot and a known session_id is restored into a
+fresh process, so a refresh continues the same game.
 """
 
 from __future__ import annotations
@@ -13,13 +16,15 @@ import logging
 from dataclasses import dataclass
 
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
+from app.characters.registry import CharacterRuntimeRegistry
 from app.game.context import CONTEXT_BUILDERS
 from app.game.memory import (
     MemoryRejected,
-    MemoryStore,
+    MemoryService,
     format_memories,
     validate_memory_proposal,
 )
+from app.game.state.service import StateService
 from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.game.validation import ResponseRejected, validate_response
@@ -63,8 +68,9 @@ class GameOrchestrator:
         repository: SessionRepository | None = None,
     ) -> None:
         self._sessions = sessions
-        self._runtimes = runtimes
-        self._default_character = default_character
+        # Character Runtime Registry owns the runtime map and the default
+        # character; the orchestrator asks it who speaks this turn (docs/04 §61-62).
+        self._characters = CharacterRuntimeRegistry(runtimes, default_character)
         # TV-08: the backend owns the current Scene (docs/03 §5.1). The single
         # authoritative scene source is NarrativeState.current_scene, resolved
         # per session through a SceneRegistry of static scene config. The Scene
@@ -77,12 +83,10 @@ class GameOrchestrator:
         # exercise narrative) the decision is always noop and no state is kept.
         self._interpreter: NarrativeInterpreter | None = interpreter
         self._engine = NarrativeEngine(list(events))
-        self._narrative_states: dict[str, NarrativeState] = {}
-        # TV-13: per-session Important Memory scopes (docs/05 §17, §57).
-        self._memory_stores: dict[str, MemoryStore] = {}
-        # TV-14: the last character that spoke in each session (docs/02 §21
-        # current_character) — used when the client sends no character_id.
-        self._session_characters: dict[str, str] = {}
+        # State / Memory are owned by services (docs/02 §21), not by the
+        # orchestrator: it coordinates, it does not store per-session state.
+        self._state = StateService()
+        self._memory = MemoryService()
         # TV-14: optional persistence. Without a repository the orchestrator
         # is exactly the pre-TV-14 in-memory engine (existing tests unchanged);
         # with one, every successful turn saves a snapshot and a known
@@ -99,14 +103,11 @@ class GameOrchestrator:
         # (Session Restore); an unknown id behaves exactly as before — a fresh
         # session is minted, never trusting a stale client id.
         session = self._resolve_session(session_id)
-        character_id = (
-            character_id
-            or self._session_characters.get(session.session_id)
-            or self._default_character
+        character_id = self._characters.resolve(
+            requested=character_id,
+            last=session.current_character or None,
         )
-        if character_id not in self._runtimes:
-            raise ValueError(f"unknown character: {character_id}")
-        self._session_characters[session.session_id] = character_id
+        session.current_character = character_id
 
         # TV-11: evaluate the narrative signal into a candidate event BEFORE
         # the character speaks, but commit it only AFTER the character's
@@ -114,19 +115,19 @@ class GameOrchestrator:
         # character output leaves state untouched, so the player can retry.
         decision = self._narrative_decision(session.session_id, message)
 
-        runtime = self._runtimes[character_id]
+        runtime = self._characters.get(character_id)
         # TV-12: the Context Builder is the permission boundary for Narrative
         # State too (docs/04 §15-17). Without an interpreter there is no
         # narrative state, so the character receives no narrative context and
         # the scene falls back to the default.
-        narrative_state = self._narrative_states.get(session.session_id)
+        narrative_state = self._state.get(session.session_id)
         scene = self._scenes.resolve(
             narrative_state.current_scene if narrative_state is not None else DEFAULT_SCENE
         )
         context = CONTEXT_BUILDERS[character_id](scene, narrative_state)
         # TV-13: deterministic memory selection (docs/05 §37-38) — only this
         # character's memories, importance/recency ordered, LIMIT N.
-        memories = self._memory_store(session.session_id).retrieve(
+        memories = self._memory.store_for(session.session_id).retrieve(
             character_id, limit=MEMORY_RETRIEVAL_LIMIT
         )
         response = runtime.respond(
@@ -171,7 +172,7 @@ class GameOrchestrator:
         # The character output succeeded, so its memory proposals may pass the
         # Write Gate (docs/05 §34) and a selected event may commit atomically
         # (docs/03 §28-29). A rejected response proposes and commits nothing.
-        memory_store = self._memory_store(session.session_id)
+        memory_store = self._memory.store_for(session.session_id)
         if approved:
             for proposal in response.memory_proposals:
                 # Memory Write Gate (docs/05 §34-35): a proposal is a Proposal,
@@ -189,7 +190,7 @@ class GameOrchestrator:
                     continue
                 memory_store.propose(character_id, proposal)
         if approved and decision.kind == "event":
-            self._engine.commit(self._state_for(session.session_id), decision)
+            self._engine.commit(self._state.state_for(session.session_id), decision)
         # Only a completed turn records messages: the player message and the
         # character reply enter history together, after the character output
         # succeeded, so a failed turn (provider timeout, invalid output) leaves
@@ -258,16 +259,18 @@ class GameOrchestrator:
     def _restore_session(self, persisted: PersistedSession) -> GameSession:
         """Bring a persisted snapshot back into this process (docs/02 §21).
 
-        The scene is restored as part of `persisted.narrative_state` — its
+        Each service seeds its own slice from the snapshot: the SessionStore
+        restores the messages and current character, the StateService the
+        narrative state, the MemoryService the per-character memories. The
+        scene is restored as part of `persisted.narrative_state` — its
         current_scene is the single authoritative source — so no separate
         shared Scene is stored on the orchestrator.
         """
-        session = self._sessions.restore(persisted.session_id, persisted.messages)
-        self._narrative_states[session.session_id] = persisted.narrative_state
-        self._memory_stores[session.session_id] = MemoryStore.from_snapshot(
-            persisted.memories
+        session = self._sessions.restore(
+            persisted.session_id, persisted.messages, persisted.current_character
         )
-        self._session_characters[session.session_id] = persisted.current_character
+        self._state.restore(session.session_id, persisted.narrative_state)
+        self._memory.restore(session.session_id, persisted.memories)
         return session
 
     def _snapshot(self, session_id: str) -> PersistedSession:
@@ -275,16 +278,15 @@ class GameOrchestrator:
         session = self._sessions.get(session_id)
         if session is None:
             raise KeyError(f"unknown session: {session_id}")
-        state = self._narrative_states.get(session_id)
+        state = self._state.get(session_id)
         if state is None:
             state = NarrativeState()
-        store = self._memory_stores.get(session_id)
+        store = self._memory.get(session_id)
         return PersistedSession(
             session_id=session_id,
             messages=list(session.messages),
-            current_character=self._session_characters.get(
-                session_id, self._default_character
-            ),
+            current_character=session.current_character
+            or self._characters.default_character,
             narrative_state=state,
             memories=store.snapshot() if store is not None else {},
         )
@@ -304,23 +306,6 @@ class GameOrchestrator:
             if message.get("character_id") == character_id
         ]
 
-    def _state_for(self, session_id: str) -> NarrativeState:
-        """Per-session Narrative State (docs/03 §5), created on first use."""
-        state = self._narrative_states.get(session_id)
-        if state is None:
-            state = NarrativeState()
-            self._narrative_states[session_id] = state
-        return state
-
-    def _memory_store(self, session_id: str) -> MemoryStore:
-        """Per-session Important Memory scope (docs/05 §17, §57), created on
-        first use."""
-        store = self._memory_stores.get(session_id)
-        if store is None:
-            store = MemoryStore()
-            self._memory_stores[session_id] = store
-        return store
-
     def _narrative_decision(
         self, session_id: str, message: str
     ) -> NarrativeDecision:
@@ -335,7 +320,7 @@ class GameOrchestrator:
         """
         if self._interpreter is None:
             return NarrativeDecision(kind="noop")
-        state = self._state_for(session_id)
+        state = self._state.state_for(session_id)
         try:
             interpretation = self._interpreter.interpret(state, message)
         except ProviderError as exc:
