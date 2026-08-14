@@ -193,6 +193,12 @@ class CharacterRuntime(ABC):
     def respond(self, request: CharacterRequest) -> CharacterResponse:
         """Produce the character's reply for this request."""
 
+    def safe_fallback(self) -> CharacterResponse:
+        """A story-neutral reply used when a produced reply cannot be
+        presented (docs/04 §54). Generative runtimes override this with
+        per-character lines; the base returns a minimal neutral line."""
+        return CharacterResponse(character_id=self.character_id, dialogue="……")
+
 
 STRUCTURED_OUTPUT_INSTRUCTIONS = (
     "\n\n输出格式（必须严格遵守）：\n"
@@ -295,7 +301,7 @@ class GenerativeRuntime(CharacterRuntime):
             response_format={"type": "json_object"},
         )
 
-    def _safe_fallback(self) -> CharacterResponse:
+    def safe_fallback(self) -> CharacterResponse:
         return CharacterResponse(
             character_id=self.character_id,
             dialogue=self.fallback_lines[0],
@@ -317,4 +323,4 @@ class GenerativeRuntime(CharacterRuntime):
         try:
             return parse_character_response(raw, self.character_id)
         except CharacterResponseValidationError:
-            return self._safe_fallback()
+            return self.safe_fallback()

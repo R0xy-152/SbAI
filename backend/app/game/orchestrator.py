@@ -17,6 +17,7 @@ from app.game.context import CONTEXT_BUILDERS
 from app.game.memory import MemoryStore, format_memories
 from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
+from app.game.validation import ResponseRejected, validate_response
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.state import NarrativeState
@@ -149,13 +150,27 @@ class GameOrchestrator:
                 narrative_directive=decision.directive,
             )
         )
+        # Semantic Validation Gate (docs/04 §49-51): a well-formed but
+        # impermissible response (wrong character, unauthorized fact, visual
+        # leak, disallowed action) is rejected before it can touch history,
+        # memory, state or the frontend, and replaced with a safe neutral line.
+        try:
+            validate_response(response, character_id=character_id, scene=scene)
+            approved = True
+        except ResponseRejected as exc:
+            logger.warning(
+                "character response rejected (%s); using safe fallback", exc
+            )
+            response = runtime.safe_fallback()
+            approved = False
         # The character output succeeded, so its memory proposals may pass the
         # Write Gate (docs/05 §34) and a selected event may commit atomically
-        # (docs/03 §28-29). A failed output changes neither.
+        # (docs/03 §28-29). A rejected response proposes and commits nothing.
         memory_store = self._memory_store(session.session_id)
-        for proposal in response.memory_proposals:
-            memory_store.propose(character_id, proposal)
-        if decision.kind == "event":
+        if approved:
+            for proposal in response.memory_proposals:
+                memory_store.propose(character_id, proposal)
+        if approved and decision.kind == "event":
             self._engine.commit(self._state_for(session.session_id), decision)
         # Only a completed turn records messages: the player message and the
         # character reply enter history together, after the character output
@@ -186,7 +201,11 @@ class GameOrchestrator:
             session_id=session.session_id,
             response=response,
             message_count=session.player_turn_count(),
-            presentation=decision.presentation if decision.kind == "event" else (),
+            presentation=(
+                decision.presentation
+                if approved and decision.kind == "event"
+                else ()
+            ),
         )
 
     def get_history(self, session_id: str) -> list[dict]:
