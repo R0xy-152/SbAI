@@ -24,6 +24,10 @@ class CharacterRequest:
     # (docs/06 §18). Provided by the Narrative Runtime through the Context
     # Builder; the character never loads raw State itself.
     narrative_context: str = ""
+    # Memory context (docs/04 §12): the historical interactions the character
+    # may use this turn, selected by the Memory system (docs/05 §37-38). The
+    # runtime consumes the result; it never decides storage or retrieval.
+    memory_context: str = ""
 
 
 @dataclass
@@ -249,11 +253,13 @@ class GenerativeRuntime(CharacterRuntime):
 
     def _build_user_message(self, request: CharacterRequest) -> str:
         """Compose the user turn: the authorized narrative context (docs/04 §8),
-        authorized environment context (docs/04 §20), the recent conversation
-        (docs/05 §7), and the current player message."""
+        authorized environment context (docs/04 §20), selected memories
+        (docs/04 §12), the recent conversation (docs/05 §7), and the current
+        player message."""
         if (
             not request.narrative_context
             and not request.environment_info
+            and not request.memory_context
             and not request.recent_conversation
         ):
             return request.player_message
@@ -262,6 +268,8 @@ class GenerativeRuntime(CharacterRuntime):
             parts.append("当前剧情：\n" + request.narrative_context)
         if request.environment_info:
             parts.append("当前环境：\n" + request.environment_info)
+        if request.memory_context:
+            parts.append("回忆：\n" + request.memory_context)
         if request.recent_conversation:
             parts.append("近期对话：\n" + format_conversation(request.recent_conversation))
         parts.append(f"Player 现在说：{request.player_message}")

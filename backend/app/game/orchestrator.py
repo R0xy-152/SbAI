@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
 from app.game.context import CONTEXT_BUILDERS
+from app.game.memory import MemoryStore, format_memories
 from app.game.state.session import SessionStore
 from app.game.scene import Scene
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
@@ -20,6 +21,8 @@ from app.narrative.state import NarrativeState
 # docs/05 §8: Recent Conversation is a window of the last 10-20 rounds of
 # messages, not the whole session history. 20 messages = 10 rounds.
 RECENT_WINDOW_MESSAGES = 20
+# docs/05 §38: deterministic retrieval LIMIT N — never all memories.
+MEMORY_RETRIEVAL_LIMIT = 5
 
 
 @dataclass
@@ -55,6 +58,8 @@ class GameOrchestrator:
         self._interpreter: NarrativeInterpreter | None = interpreter
         self._engine = NarrativeEngine(list(events))
         self._narrative_states: dict[str, NarrativeState] = {}
+        # TV-13: per-session Important Memory scopes (docs/05 §17, §57).
+        self._memory_stores: dict[str, MemoryStore] = {}
 
     def handle_turn(
         self,
@@ -86,6 +91,11 @@ class GameOrchestrator:
         # narrative state, so the character receives no narrative context.
         narrative_state = self._narrative_states.get(session.session_id)
         context = CONTEXT_BUILDERS[character_id](self._scene, narrative_state)
+        # TV-13: deterministic memory selection (docs/05 §37-38) — only this
+        # character's memories, importance/recency ordered, LIMIT N.
+        memories = self._memory_store(session.session_id).retrieve(
+            character_id, limit=MEMORY_RETRIEVAL_LIMIT
+        )
         response = runtime.respond(
             CharacterRequest(
                 character_id=character_id,
@@ -102,10 +112,16 @@ class GameOrchestrator:
                 # TV-12: the authorized narrative context (relevant flags/facts,
                 # docs/04 §8) rendered by the same permission boundary.
                 narrative_context=context.narrative_context,
+                # TV-13: the selected long-term memories the character may use.
+                memory_context=format_memories(memories),
             )
         )
-        # The character output succeeded, so a selected event may now commit
-        # its effects atomically (docs/03 §28-29).
+        # The character output succeeded, so its memory proposals may pass the
+        # Write Gate (docs/05 §34) and a selected event may commit atomically
+        # (docs/03 §28-29). A failed output changes neither.
+        memory_store = self._memory_store(session.session_id)
+        for proposal in response.memory_proposals:
+            memory_store.propose(character_id, proposal)
         if decision.kind == "event":
             self._engine.commit(self._state_for(session.session_id), decision)
         self._sessions.append_message(
@@ -145,6 +161,15 @@ class GameOrchestrator:
             state = NarrativeState()
             self._narrative_states[session_id] = state
         return state
+
+    def _memory_store(self, session_id: str) -> MemoryStore:
+        """Per-session Important Memory scope (docs/05 §17, §57), created on
+        first use."""
+        store = self._memory_stores.get(session_id)
+        if store is None:
+            store = MemoryStore()
+            self._memory_stores[session_id] = store
+        return store
 
     def _narrative_decision(
         self, session_id: str, message: str
