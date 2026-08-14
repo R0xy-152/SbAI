@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 文档是真相源（Docs-first）
 
-`/docs` 是项目的事实来源，**代码若与文档冲突，以文档为准，停下实现并先修正文档**。按任务范围只读取相关文档，不要默认读完全部：
+`/docs` 是项目的事实来源，**代码若与文档冲突，以文档为准，停下实现并先修正文档**。写文档时尽量使用中文。按任务范围只读取相关文档，不要默认读完全部：
 
 - `docs/00 — Project Scope.md` — 项目边界 / 冻结设定，最高优先级
 - `docs/01 — MVP Requirements.md` — 当前阶段需求 / 验收标准
