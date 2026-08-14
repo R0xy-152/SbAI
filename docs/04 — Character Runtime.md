@@ -202,6 +202,8 @@ temporary_status
 
 Character State不等于Memory。
 
+当前已实现的首个 `character_state` 字段是**二维心情 mood**（`positive` 积极值 / `excitement` 激动值，均 ∈[-1,1]），由 `CharacterStateService` 按 session + character 持久化，逐轮随模型输出演化并回灌下一轮提示词（去人机感）。与命名表情 `emotion` 的区别见 §42.1。
+
 ---
 
 # 10. character_knowledge
@@ -1012,11 +1014,15 @@ Claude只能基于她被授权的Knowledge进行推理。
   "animation_proposal": "shake",
   "memory_proposals": [],
   "action_proposals": [],
-  "fact_refs": []
+  "fact_refs": [],
+  "reasoning": "我看不见，需要先问清楚环境，而不是乱猜。",
+  "mood": { "positive": -0.2, "excitement": 0.1 }
 }
 ```
 
 正式字段允许在实现阶段做小幅调整。
+
+`reasoning` 与 `mood` 属于「容错可选」字段：Schema 校验不因缺失/非法而拒绝（缺失→默认空 / None，越界→clamp），但提示词里要求模型必须输出。二者只进模型上下文与内部状态，不进前端。
 
 ---
 
@@ -1058,6 +1064,19 @@ Frontend根据名称映射具体立绘。
 ```
 
 之类的渲染参数。
+
+---
+
+# 42.1 emotion 与 mood 的区别
+
+```text
+emotion = 命名表情（给 Frontend 立绘，一次性展示）
+mood    = 持久二维心情（内部状态，逐轮演化并回灌提示词）
+```
+
+`emotion` 属于 §42 的 Named Emotion，只用于这一轮的表情展示，不跨轮保留。
+
+`mood` 是 §9 `character_state` 的首个落地字段（`positive` 积极值 / `excitement` 激动值，均 ∈[-1,1]），由 `CharacterStateService` 按 session + character 持久化，随每轮通过校验的回复演化，并在下一轮提示词中回灌（去人机感）。它不进前端。
 
 ---
 
@@ -1166,6 +1185,14 @@ Narrative Validation
 ```
 
 通过后才能进入正式游戏。
+
+---
+
+# 47.1 思考模式与 reasoning（逻辑链拷打）
+
+生成式角色默认开启 API 思考模式（DeepSeek 不传 `thinking={"type":"disabled"}`，交由服务端默认开启），并在结构化输出里要求输出 `reasoning` 字段——「你为什么要这样回复（1-2 句，结合人设与当前语境）」。目的是强迫模型在回话前先过一遍逻辑链，减少空泛/人机感回复。
+
+`reasoning` 只作为内部约束与调试信息，绝不进入 Frontend 或正式 History。
 
 ---
 
