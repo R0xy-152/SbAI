@@ -24,6 +24,7 @@ from app.game.memory import (
     format_memories,
     validate_memory_proposal,
 )
+from app.game.state.character_state import CharacterStateService
 from app.game.state.service import StateService
 from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
@@ -109,6 +110,9 @@ class GameOrchestrator:
         # orchestrator: it coordinates, it does not store per-session state.
         self._state = StateService()
         self._memory = MemoryService()
+        # Per-character persistent state (docs/04 §9): the two-axis mood the
+        # model proposes and the orchestrator commits/restores per session.
+        self._character_state = CharacterStateService()
         # TV-14: optional persistence. Without a repository the orchestrator
         # is exactly the pre-TV-14 in-memory engine (existing tests unchanged);
         # with one, every successful turn saves a snapshot and a known
@@ -204,6 +208,12 @@ class GameOrchestrator:
                     # per-turn story goal, handed to the character when this turn
                     # carries plot purpose. Empty on ordinary turns.
                     narrative_directive=decision.directive,
+                    # Current Character State (docs/04 §9): the character's
+                    # persistent mood, seeded into the prompt so replies stay
+                    # emotionally continuous.
+                    mood=self._character_state.mood_for(
+                        session.session_id, character_id
+                    ),
                 )
             )
         # Semantic Validation Gate (docs/04 §49-51): a well-formed but
@@ -239,6 +249,13 @@ class GameOrchestrator:
                     )
                     continue
                 memory_store.propose(character_id, proposal)
+        if approved and response.next_mood is not None:
+            # Validate-Before-Commit (docs/04 §51): the model's mood is a
+            # proposal that lands only after the reply passes validation, so a
+            # rejected reply never changes the character's persistent state.
+            self._character_state.commit_mood(
+                session.session_id, character_id, response.next_mood
+            )
         if approved and decision.kind == "event":
             self._engine.commit(self._state.state_for(session.session_id), decision)
         # Only a completed turn records messages: the player message and the
@@ -411,6 +428,7 @@ class GameOrchestrator:
             self._script.restore(
                 session.session_id, persisted.consumed_script_nodes
             )
+        self._character_state.restore(session.session_id, persisted.character_states)
         return session
 
     def _snapshot(self, session_id: str) -> PersistedSession:
@@ -434,6 +452,7 @@ class GameOrchestrator:
                 if self._script is not None
                 else set()
             ),
+            character_states=self._character_state.snapshot(session_id),
         )
 
     def _heard_messages(self, messages: list[dict], character_id: str) -> list[dict]:

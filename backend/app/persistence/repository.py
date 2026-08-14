@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.characters.base import CharacterMood
 from app.game.memory import EpisodicMemory
 from app.narrative.state import NarrativeState
 
@@ -37,6 +38,9 @@ class PersistedSession:
     # before the script layer existed, so a restored session never re-fires its
     # opening line.
     consumed_script_nodes: set[str] = field(default_factory=set)
+    # Per-character persistent mood (docs/04 §9, CharacterStateService), keyed
+    # by character_id. Empty on snapshots written before this state existed.
+    character_states: dict[str, CharacterMood] = field(default_factory=dict)
 
 
 class SessionRepository(ABC):
@@ -110,6 +114,10 @@ def _session_to_dict(session: PersistedSession) -> dict:
             for owner, memories in session.memories.items()
         },
         "consumed_script_nodes": sorted(session.consumed_script_nodes),
+        "character_states": {
+            owner: _mood_to_dict(mood)
+            for owner, mood in session.character_states.items()
+        },
     }
 
 
@@ -134,6 +142,12 @@ def _session_from_dict(data: dict) -> PersistedSession:
         # Backward compatible: snapshots written before the script layer lack
         # this key, so an absent value means "nothing consumed yet".
         consumed_script_nodes=set(data.get("consumed_script_nodes", [])),
+        # Backward compatible: snapshots written before the mood state existed
+        # lack this key, so an absent value means "no mood committed yet".
+        character_states={
+            owner: _mood_from_dict(mood)
+            for owner, mood in data.get("character_states", {}).items()
+        },
     )
 
 
@@ -158,4 +172,15 @@ def _memory_from_dict(data: dict) -> EpisodicMemory:
         memory_type=data["memory_type"],
         importance=data["importance"],
         created_at=data["created_at"],
+    )
+
+
+def _mood_to_dict(mood: CharacterMood) -> dict:
+    return {"positive": mood.positive, "excitement": mood.excitement}
+
+
+def _mood_from_dict(data: dict) -> CharacterMood:
+    return CharacterMood(
+        positive=float(data["positive"]),
+        excitement=float(data["excitement"]),
     )
