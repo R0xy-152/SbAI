@@ -82,3 +82,15 @@ def test_http_error_raises_provider_error():
     provider = _provider_with_transport(handler)
     with pytest.raises(ProviderError):
         provider.complete(system="s", user="u")
+
+
+def test_timeout_raises_provider_error():
+    # docs/06 §21 Case A: a provider timeout is a recoverable failure.
+    # httpx.TimeoutException is an HTTPError, so the adapter's single except
+    # clause must surface it as ProviderError — never crash the request.
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("timeout after 30s")
+
+    provider = _provider_with_transport(handler)
+    with pytest.raises(ProviderError):
+        provider.complete(system="s", user="u")
