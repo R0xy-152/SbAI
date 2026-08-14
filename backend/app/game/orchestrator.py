@@ -2,7 +2,9 @@
 
 Coordinates one player interaction: resolve the session, determine the current
 character runtime, call it, and persist the messages. It does not contain
-persona prompts or provider HTTP details.
+persona prompts or provider HTTP details. When a SessionRepository is given
+(TV-14), each successful turn saves a snapshot and a known session_id is
+restored into a fresh process, so a refresh continues the same game.
 """
 
 from __future__ import annotations
@@ -12,11 +14,12 @@ from dataclasses import dataclass
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
 from app.game.context import CONTEXT_BUILDERS
 from app.game.memory import MemoryStore, format_memories
-from app.game.state.session import SessionStore
+from app.game.state.session import GameSession, SessionStore
 from app.game.scene import Scene
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.state import NarrativeState
+from app.persistence.repository import PersistedSession, SessionRepository
 
 # docs/05 §8: Recent Conversation is a window of the last 10-20 rounds of
 # messages, not the whole session history. 20 messages = 10 rounds.
@@ -41,6 +44,7 @@ class GameOrchestrator:
         scene: Scene | None = None,
         interpreter: NarrativeInterpreter | None = None,
         events: list[NarrativeEvent] = (),
+        repository: SessionRepository | None = None,
     ) -> None:
         self._sessions = sessions
         self._runtimes = runtimes
@@ -60,6 +64,14 @@ class GameOrchestrator:
         self._narrative_states: dict[str, NarrativeState] = {}
         # TV-13: per-session Important Memory scopes (docs/05 §17, §57).
         self._memory_stores: dict[str, MemoryStore] = {}
+        # TV-14: the last character that spoke in each session (docs/02 §21
+        # current_character) — used when the client sends no character_id.
+        self._session_characters: dict[str, str] = {}
+        # TV-14: optional persistence. Without a repository the orchestrator
+        # is exactly the pre-TV-14 in-memory engine (existing tests unchanged);
+        # with one, every successful turn saves a snapshot and a known
+        # session_id is restored into a fresh process (Session Restore).
+        self._repository = repository
 
     def handle_turn(
         self,
@@ -67,11 +79,18 @@ class GameOrchestrator:
         message: str,
         character_id: str | None = None,
     ) -> TurnResult:
-        character_id = character_id or self._default_character
+        # TV-14: a known persisted session_id is restored into this process
+        # (Session Restore); an unknown id behaves exactly as before — a fresh
+        # session is minted, never trusting a stale client id.
+        session = self._resolve_session(session_id)
+        character_id = (
+            character_id
+            or self._session_characters.get(session.session_id)
+            or self._default_character
+        )
         if character_id not in self._runtimes:
             raise ValueError(f"unknown character: {character_id}")
-
-        session = self._sessions.get_or_create(session_id)
+        self._session_characters[session.session_id] = character_id
         # TV-09: player messages record who they were addressed to, so each
         # character only hears its own thread (docs/04 §59-60, docs/05 §21-22).
         self._sessions.append_message(
@@ -133,10 +152,61 @@ class GameOrchestrator:
             },
         )
 
+        # TV-14: only a completed turn is persisted, so a failure never writes
+        # half a turn into the snapshot (validate-before-commit also applies
+        # to persistence).
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session.session_id))
+
         return TurnResult(
             session_id=session.session_id,
             response=response,
             message_count=session.player_turn_count(),
+        )
+
+    def _resolve_session(self, session_id: str | None) -> GameSession:
+        """Restore a persisted session, or fall back to the in-memory store.
+
+        A session_id that the repository knows is restored into this process
+        (Session Restore); any other id flows to `get_or_create`, which mints
+        a fresh session for unknown ids exactly as before TV-14.
+        """
+        if session_id is not None and self._repository is not None:
+            persisted = self._repository.load(session_id)
+            if persisted is not None:
+                return self._restore_session(persisted)
+        return self._sessions.get_or_create(session_id)
+
+    def _restore_session(self, persisted: PersistedSession) -> GameSession:
+        """Bring a persisted snapshot back into this process (docs/02 §21)."""
+        session = self._sessions.restore(persisted.session_id, persisted.messages)
+        if persisted.current_scene:
+            self._scene = Scene(scene_id=persisted.current_scene)
+        self._narrative_states[session.session_id] = persisted.narrative_state
+        self._memory_stores[session.session_id] = MemoryStore.from_snapshot(
+            persisted.memories
+        )
+        self._session_characters[session.session_id] = persisted.current_character
+        return session
+
+    def _snapshot(self, session_id: str) -> PersistedSession:
+        """Capture the current session for the repository (TV-14)."""
+        session = self._sessions.get(session_id)
+        if session is None:
+            raise KeyError(f"unknown session: {session_id}")
+        state = self._narrative_states.get(session_id)
+        if state is None:
+            state = NarrativeState()
+        store = self._memory_stores.get(session_id)
+        return PersistedSession(
+            session_id=session_id,
+            messages=list(session.messages),
+            current_scene=self._scene.scene_id,
+            current_character=self._session_characters.get(
+                session_id, self._default_character
+            ),
+            narrative_state=state,
+            memories=store.snapshot() if store is not None else {},
         )
 
     def _heard_messages(self, messages: list[dict], character_id: str) -> list[dict]:

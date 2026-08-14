@@ -78,6 +78,27 @@ class MemoryStore:
         ordered = sorted(memories, key=lambda m: (-m.importance, -m.created_at))
         return ordered[:limit]
 
+    def snapshot(self) -> dict[str, list[EpisodicMemory]]:
+        """The full store content, for persistence (TV-14)."""
+        return {owner: list(memories) for owner, memories in self._memories.items()}
+
+    @classmethod
+    def from_snapshot(
+        cls, memories: dict[str, list[EpisodicMemory]]
+    ) -> MemoryStore:
+        """Rebuild a store from a persisted snapshot (TV-14 Session Restore).
+
+        The id counter is rebuilt from the latest created_at so restored
+        memories keep monotonic ids and ordering.
+        """
+        store = cls()
+        store._memories = {owner: list(mems) for owner, mems in memories.items()}
+        store._counter = max(
+            (memory.created_at for mems in store._memories.values() for memory in mems),
+            default=0,
+        )
+        return store
+
 
 def format_memories(memories: list[EpisodicMemory]) -> str:
     """Render the selected memories as the character's memory_context

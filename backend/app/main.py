@@ -23,6 +23,7 @@ from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.poc import build_poc_events
+from app.persistence.repository import JsonSessionRepository
 from app.providers.base import LLMProvider
 from app.providers.deepseek import DeepSeekProvider
 from app.providers.mock import MockProvider
@@ -67,11 +68,16 @@ def create_app() -> FastAPI:
     # is wired in for the running app. The POC events are validation fixtures
     # (docs/06 §10), not production plot. With a mock provider the interpreter
     # fails closed to noop, so the app still runs keyless.
+    # TV-14: the JSON repository is the Session Restore fixture (docs/02 §22
+    # Repository pattern; PostgreSQL is the target backend). Runtime session
+    # data lives under backend/data/, which is gitignored.
+    data_dir = REPO_ROOT / "backend" / "data" / "sessions"
     app.state.orchestrator = GameOrchestrator(
         sessions,
         runtimes,
         interpreter=NarrativeInterpreter(provider),
         events=build_poc_events(),
+        repository=JsonSessionRepository(data_dir),
     )
     app.include_router(chat_router)
 

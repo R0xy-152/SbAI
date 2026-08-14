@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 当前阶段是**轻量技术验证（Lightweight Tech Validation）**，目标是打通一条 Vertical Slice 链路（Gal UI → 自然语言输入 → 生成式角色 → 角色隔离 → 确定性 Narrative State → 对话驱动剧情 → Session 恢复），共 TV-01 ~ TV-16 十六项，按依赖顺序执行。
 
-**已经完成**：TV-01（Gal UI Shell，PASS）、TV-02（Basic Presentation Action，PASS_WITH_LIMITATION）、TV-03（Backend Round Trip，PASS）、TV-04（DeepSeek Provider + 真实模型链路，PASS）、TV-05（Structured Character Response，PASS）、TV-06（Validate Before Present，PASS）、TV-07（Short-term Context，PASS）、TV-08（DeepSeek Blindness，PASS）、TV-09（Second Character Isolation，PASS）、TV-10（Narrative Signal，PASS）、TV-11（Deterministic Narrative Event，PASS）、TV-12（State-dependent Response，PASS）、TV-13（Important Memory，PASS）。当前工作起点是 TV-14（Session Restore）。每项 TV 的验证记录在 `validation-results/TV-xx/result.md`。
+**已经完成**：TV-01（Gal UI Shell，PASS）、TV-02（Basic Presentation Action，PASS_WITH_LIMITATION）、TV-03（Backend Round Trip，PASS）、TV-04（DeepSeek Provider + 真实模型链路，PASS）、TV-05（Structured Character Response，PASS）、TV-06（Validate Before Present，PASS）、TV-07（Short-term Context，PASS）、TV-08（DeepSeek Blindness，PASS）、TV-09（Second Character Isolation，PASS）、TV-10（Narrative Signal，PASS）、TV-11（Deterministic Narrative Event，PASS）、TV-12（State-dependent Response，PASS）、TV-13（Important Memory，PASS）、TV-14（Session Restore，PASS）。当前工作起点是 TV-15（Failure Recovery）。每项 TV 的验证记录在 `validation-results/TV-xx/result.md`。
 
 ## 文档是真相源（Docs-first）
 
@@ -55,7 +55,7 @@ Provider 选择由环境变量 `GAL_PROVIDER` 控制：`mock | deepseek | auto`�
 
 **目标架构**（见 `docs/02`，尚未实现）：Browser → Next.js Web Client → FastAPI Backend（Game Orchestrator → Narrative / Character / Memory / State）→ PostgreSQL，Docker Compose 部署。Backend 是 Authoritative Game State，Frontend 只是 Presentation Layer。
 
-**当前实际**：`frontend/` 有静态 UI（Gal UI Shell + 已接入 `/api/chat` 的聊天框）。`backend/` 已有 FastAPI 骨架：`POST /api/chat`（见 `backend/app/api/chat.py`）→ `GameOrchestrator.handle_turn`（`backend/app/game/orchestrator.py`，解析 session、记 player message、调角色 Runtime、记 character message）→ `DeepSeekRuntime`（`backend/app/characters/deepseek.py`，Persona prompt）→ `LLMProvider`（`backend/app/providers/`，`mock` 确定性 mock / `deepseek` 真实模型）。`SessionStore` 非持久化（有意为之，TV-14 才接持久化）。无 Docker/PostgreSQL。TV-05 起 Character Response 变成结构化 JSON（emotion/animation_proposal 等），带 Schema 校验 + Repair + Safe Fallback。
+**当前实际**：`frontend/` 有静态 UI（Gal UI Shell + 已接入 `/api/chat` 的聊天框）。`backend/` 已有 FastAPI 骨架：`POST /api/chat`（见 `backend/app/api/chat.py`）→ `GameOrchestrator.handle_turn`（`backend/app/game/orchestrator.py`，解析 session、记 player message、调角色 Runtime、记 character message）→ `DeepSeekRuntime`（`backend/app/characters/deepseek.py`，Persona prompt）→ `LLMProvider`（`backend/app/providers/`，`mock` 确定性 mock / `deepseek` 真实模型）。`SessionStore` 是内存消息日志；TV-14 起由 `backend/app/persistence/repository.py` 的 `JsonSessionRepository` 做会话持久化（docs/02 §22 Repository 边界；PostgreSQL 是目标后端，当前 JSON 文件为 TV-14 fixture），成功回合后保存快照、已知 session_id 恢复，快照存于 `backend/data/sessions/`（已 gitignore）。前端把 `session_id` 存 localStorage，刷新后恢复同一会话。无 Docker/PostgreSQL。TV-05 起 Character Response 变成结构化 JSON（emotion/animation_proposal 等），带 Schema 校验 + Repair + Safe Fallback。
 
 关键架构原则（后续实现必须遵守）：
 

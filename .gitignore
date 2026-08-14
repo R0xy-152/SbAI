@@ -3,6 +3,8 @@ backend/.venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+# TV-14: runtime session snapshots (Session Restore data) — never committed
+backend/data/
 
 # Node
 node_modules/

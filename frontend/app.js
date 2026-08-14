@@ -5,7 +5,29 @@ const status = document.querySelector("#form-status");
 const characterSprite = document.querySelector("#character-sprite");
 const sendButton = form.querySelector("button[type='submit']");
 
-let sessionId = null;
+// TV-14: the session id is kept across a page refresh so the backend can
+// restore the same game (Session Restore). localStorage is guarded because
+// the Node DOM-stub tests have no browser storage.
+function readSessionId() {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    return localStorage.getItem("gal_session_id") || null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeSessionId(id) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem("gal_session_id", id);
+  } catch (_error) {
+    // storage unavailable (e.g. private mode): the session still works for
+    // this page load, it just does not survive a refresh.
+  }
+}
+
+let sessionId = readSessionId();
 
 // TV-03: when served by the FastAPI backend, use a same-origin /api/chat URL;
 // when opened directly as a file, fall back to the local backend origin.
@@ -88,6 +110,7 @@ async function sendMessage(message) {
   }
   const data = await response.json();
   sessionId = data.session_id;
+  writeSessionId(sessionId);
   return data;
 }
 
