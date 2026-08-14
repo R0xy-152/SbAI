@@ -52,6 +52,32 @@ body { margin: 0; min-width: 320px; }
   object-position: bottom center;
   filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .5));
 }
+.character-sprite[data-expression="alert"] {
+  filter: brightness(1.12) saturate(1.25) drop-shadow(0 0 20px rgba(141, 222, 255, .7));
+  transform: scale(1.015);
+}
+
+.character-sprite.is-hidden { visibility: hidden; }
+.character-sprite.is-fading-in { animation: character-fade-in 420ms ease-out both; }
+.character-sprite.is-fading-out { animation: character-fade-out 420ms ease-in both; }
+.character-sprite.is-shaking { animation: character-shake 460ms ease-in-out; }
+
+@keyframes character-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes character-fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(10px); }
+}
+
+@keyframes character-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-12px); }
+  40%, 80% { transform: translateX(12px); }
+}
+
 .dialogue-panel {
   width: min(1080px, calc(100% - 2rem));
   justify-self: center;
@@ -119,5 +145,4 @@ body { margin: 0; min-width: 320px; }
   .player-input { gap: .5rem; }
   .player-input button { min-width: 4.2rem; }
 }
-
 
