@@ -224,9 +224,10 @@ def test_full_vertical_slice_survives_refresh(tmp_path):
         assert messages[0]["role"] == "player"
         assert messages[0]["content"] == "你好，这里是哪里？"
         assert messages[-1]["role"] == "character"
-        # 顺序保留：最后一个 player 消息是重试后的 "你在吗？".
+        # 顺序保留：最后一个 player 消息是重试后的 "你在吗？"；失败的那次不进入
+        # History，所以 "你在吗？" 只出现一次。
         player_contents = [m["content"] for m in messages if m["role"] == "player"]
-        assert player_contents.count("你在吗？") == 2
+        assert player_contents.count("你在吗？") == 1
 
         # docs/06 §24 assertions across recorded provider calls.
         deepseek_calls = [user for system, user, _ in provider.calls if "角色 DeepSeek" in system]

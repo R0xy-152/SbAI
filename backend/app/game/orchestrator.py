@@ -101,12 +101,6 @@ class GameOrchestrator:
         if character_id not in self._runtimes:
             raise ValueError(f"unknown character: {character_id}")
         self._session_characters[session.session_id] = character_id
-        # TV-09: player messages record who they were addressed to, so each
-        # character only hears its own thread (docs/04 §59-60, docs/05 §21-22).
-        self._sessions.append_message(
-            session.session_id,
-            {"role": "player", "content": message, "character_id": character_id},
-        )
 
         # TV-11: evaluate the narrative signal into a candidate event BEFORE
         # the character speaks, but commit it only AFTER the character's
@@ -130,10 +124,12 @@ class GameOrchestrator:
                 character_id=character_id,
                 player_message=message,
                 # TV-07: short-term context = the last window of prior messages
-                # (docs/05 §8), excluding the current player message; TV-09:
+                # (docs/05 §8), excluding the current player message — which is
+                # not yet recorded (it is committed only after the turn
+                # succeeds, so a failed turn never pollutes the window); TV-09:
                 # filtered to what this character actually heard.
                 recent_conversation=self._heard_messages(
-                    session.messages[:-1], character_id
+                    session.messages, character_id
                 )[-RECENT_WINDOW_MESSAGES:],
                 # TV-08: authorized, visual-filtered environment context
                 # (docs/04 §15, §20) built per character.
@@ -153,6 +149,16 @@ class GameOrchestrator:
             memory_store.propose(character_id, proposal)
         if decision.kind == "event":
             self._engine.commit(self._state_for(session.session_id), decision)
+        # Only a completed turn records messages: the player message and the
+        # character reply enter history together, after the character output
+        # succeeded, so a failed turn (provider timeout, invalid output) leaves
+        # history untouched and a retry never duplicates the player message
+        # (docs/05 §8). TV-09: the player message records who it was addressed
+        # to, so each character only hears its own thread (docs/04 §59-60).
+        self._sessions.append_message(
+            session.session_id,
+            {"role": "player", "content": message, "character_id": character_id},
+        )
         self._sessions.append_message(
             session.session_id,
             {

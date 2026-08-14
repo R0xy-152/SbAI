@@ -61,6 +61,24 @@ class _FlakyRuntime(CharacterRuntime):
         return CharacterResponse(character_id="deepseek", dialogue="……")
 
 
+class _RecordingFlakyRuntime(CharacterRuntime):
+    """Fails on the second respond call, and records each recent conversation
+    so a test can assert what short-term context the character actually saw."""
+
+    character_id = "deepseek"
+
+    def __init__(self) -> None:
+        self.count = 0
+        self.recent: list[list[dict]] = []
+
+    def respond(self, request: CharacterRequest) -> CharacterResponse:
+        self.count += 1
+        self.recent.append(request.recent_conversation)
+        if self.count == 2:
+            raise ProviderError("timeout (injected)")
+        return CharacterResponse(character_id="deepseek", dialogue="……")
+
+
 class _FlakyProvider(LLMProvider):
     """Answers valid structured output except on the `fail_on_call`-th call."""
 
@@ -154,10 +172,44 @@ def test_case_a_timeout_does_not_commit_and_retry_continues():
     # Retry后Session可以继续: the same turn now fires the event correctly.
     turn = orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
     assert turn.session_id == session_id
-    assert turn.message_count == 2
+    # The failed attempt recorded no player message, so this is turn 1.
+    assert turn.message_count == 1
     state = orchestrator._narrative_states[session_id]
     assert "claude_has_appeared" in state.narrative_flags
     assert "EV_POC_CLAUDE_APPEARS" in state.completed_events
+
+
+def test_failed_turn_records_nothing_and_retry_does_not_duplicate():
+    # A failed turn must leave no player or character message in history, so a
+    # retry records the player message exactly once (docs/05 §8).
+    orchestrator, session_id = _orchestrator(
+        _FlakyRuntime(fail_on_turn=1), signal=signals.SIG_ASK_CAPTOR
+    )
+    with pytest.raises(ProviderError):
+        orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
+    # The failed turn wrote nothing into the history.
+    assert orchestrator._sessions.get(session_id).messages == []
+
+    turn = orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
+    assert turn.message_count == 1
+    messages = orchestrator._sessions.get(session_id).messages
+    assert [m["role"] for m in messages] == ["player", "character"]
+    assert messages[0]["content"] == "是谁把我们抓来的？"
+
+
+def test_failed_player_message_not_in_recent_context():
+    # The failed player message must not leak into a later turn's short-term
+    # context (docs/05 §8): the window only carries committed turns.
+    runtime = _RecordingFlakyRuntime()
+    orchestrator, session_id = _orchestrator(runtime)
+    orchestrator.handle_turn(session_id, "成功的第一句")
+    with pytest.raises(ProviderError):
+        orchestrator.handle_turn(session_id, "失败的这句")
+    orchestrator.handle_turn(session_id, "成功的第三句")
+
+    recent_contents = [m["content"] for m in runtime.recent[-1]]
+    assert "成功的第一句" in recent_contents
+    assert "失败的这句" not in recent_contents
 
 
 def test_case_a_recovery_then_persist_then_restore(tmp_path):
@@ -172,7 +224,8 @@ def test_case_a_recovery_then_persist_then_restore(tmp_path):
     assert repo.load(session_id) is None  # the failed turn wrote nothing
 
     turn = orchestrator.handle_turn(session_id, "是谁把我们抓来的？")
-    assert turn.message_count == 2
+    # The failed attempt recorded no player message, so this is turn 1.
+    assert turn.message_count == 1
     persisted = repo.load(session_id)
     assert persisted is not None
     assert "EV_POC_CLAUDE_APPEARS" in persisted.narrative_state.completed_events
@@ -273,4 +326,6 @@ def test_api_503_then_retry_continues_same_session(monkeypatch):
         assert third.status_code == 200
         body = third.json()
         assert body["session_id"] == session_id
-        assert body["message_count"] == 3
+        # The failed mid-session turn recorded no player message, so only the
+        # first and the successful retry count: "你好" + "第二句" = 2.
+        assert body["message_count"] == 2
