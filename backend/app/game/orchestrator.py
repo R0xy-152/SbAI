@@ -33,6 +33,12 @@ class TurnResult:
     session_id: str
     response: CharacterResponse
     message_count: int
+    # TV-16: the committed event's story-semantic Presentation Directives
+    # (docs/03 §13.6), e.g. ("SHOW_CHARACTER", "claude") — surfaced so the
+    # Frontend can render "Claude appears". Empty on noop turns. These are
+    # deterministic backend facts, separate from the model's animation
+    # proposal.
+    presentation: tuple[str, ...] = ()
 
 
 class GameOrchestrator:
@@ -162,7 +168,24 @@ class GameOrchestrator:
             session_id=session.session_id,
             response=response,
             message_count=session.player_turn_count(),
+            presentation=decision.presentation if decision.kind == "event" else (),
         )
+
+    def get_history(self, session_id: str) -> list[dict]:
+        """The session's messages in order, for the Frontend History view
+        (docs/01 §18, docs/02 §7). Non-mutating: a known persisted session is
+        read from the repository; otherwise the in-memory store. Unknown ids
+        are an error — never a fresh mint (docs/06 §24: UI must not invent
+        state).
+        """
+        if session_id and self._repository is not None:
+            persisted = self._repository.load(session_id)
+            if persisted is not None:
+                return list(persisted.messages)
+        session = self._sessions.get(session_id)
+        if session is None:
+            raise ValueError(f"unknown session: {session_id}")
+        return list(session.messages)
 
     def _resolve_session(self, session_id: str | None) -> GameSession:
         """Restore a persisted session, or fall back to the in-memory store.

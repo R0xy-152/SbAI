@@ -13,6 +13,14 @@ const sprite = {
   offsetWidth: 1,
 };
 const form = { addEventListener: () => {}, querySelector: () => ({ textContent: "", disabled: false }) };
+const characterName = { textContent: "" };
+const historyPanel = { hidden: true };
+const historyList = { replaceChildren: () => {}, appendChild: () => {} };
+const historyToggle = { addEventListener: () => {}, textContent: "查看历史" };
+const switchButton = () => ({
+  addEventListener: () => {},
+  classList: { toggle: () => {} },
+});
 
 global.window = {};
 global.document = {
@@ -22,6 +30,12 @@ global.document = {
     "#dialogue-text": { textContent: "" },
     "#form-status": { textContent: "" },
     "#character-sprite": sprite,
+    "#character-name": characterName,
+    "#history-toggle": historyToggle,
+    "#history-panel": historyPanel,
+    "#history-list": historyList,
+    "#switch-deepseek": switchButton(),
+    "#switch-claude": switchButton(),
   })[selector],
 };
 

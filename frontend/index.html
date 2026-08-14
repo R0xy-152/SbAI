@@ -27,10 +27,25 @@
       </section>
 
       <section class="dialogue-panel" aria-live="polite" aria-atomic="true">
-        <p class="character-name">DeepSeek</p>
+        <p id="character-name" class="character-name">DeepSeek</p>
         <p id="dialogue-text" class="dialogue-text">
           ……你醒了。别怕，我们先弄清楚这里发生了什么。
         </p>
+      </section>
+
+      <div class="toolbar">
+        <div class="character-switcher" role="group" aria-label="切换对话角色">
+          <button type="button" id="switch-deepseek" class="character-switch is-active">
+            DeepSeek
+          </button>
+          <button type="button" id="switch-claude" class="character-switch">Claude</button>
+        </div>
+        <button type="button" id="history-toggle" class="history-toggle">查看历史</button>
+      </div>
+
+      <section id="history-panel" class="history-panel" hidden>
+        <h2 class="history-title">对话历史</h2>
+        <ol id="history-list" class="history-list"></ol>
       </section>
 
       <form id="player-form" class="player-input" novalidate>

@@ -8,6 +8,14 @@ const input = { value: "这里是什么地方？", disabled: false, focus: () =>
 const sendButton = { textContent: "发送", disabled: false };
 const dialogue = { textContent: "" };
 const status = { textContent: "" };
+const characterName = { textContent: "" };
+const historyPanel = { hidden: true };
+const historyList = { replaceChildren: () => {}, appendChild: () => {} };
+const historyToggle = { addEventListener: () => {}, textContent: "查看历史" };
+const switchButton = () => ({
+  addEventListener: () => {},
+  classList: { toggle: () => {} },
+});
 const sprite = {
   dataset: {},
   classList: { add: () => {}, remove: () => {}, contains: () => false },
@@ -23,6 +31,12 @@ global.document = {
     "#dialogue-text": dialogue,
     "#form-status": status,
     "#character-sprite": sprite,
+    "#character-name": characterName,
+    "#history-toggle": historyToggle,
+    "#history-panel": historyPanel,
+    "#history-list": historyList,
+    "#switch-deepseek": switchButton(),
+    "#switch-claude": switchButton(),
   })[selector],
 };
 

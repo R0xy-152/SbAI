@@ -12,7 +12,7 @@ body { margin: 0; min-width: 320px; }
   min-height: 100dvh;
   position: relative;
   display: grid;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: 1fr auto auto auto auto auto;
   overflow: hidden;
   isolation: isolate;
 }
@@ -92,6 +92,66 @@ body { margin: 0; min-width: 320px; }
 
 .character-name { margin: 0 0 .45rem; color: #a9e8ff; font-weight: 700; letter-spacing: .05em; }
 .dialogue-text { margin: 0; color: #f4f8ff; font-size: clamp(1rem, 2.2vw, 1.15rem); line-height: 1.7; }
+
+.toolbar {
+  width: min(1080px, calc(100% - 2rem));
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .5rem;
+}
+
+.character-switcher { display: flex; gap: .4rem; }
+
+.character-switch,
+.history-toggle {
+  border: 1px solid rgba(211, 234, 255, .55);
+  border-radius: 999px;
+  padding: .35rem .9rem;
+  color: #d7effa;
+  background: rgba(7, 12, 24, .8);
+  font: inherit;
+  font-size: .85rem;
+  cursor: pointer;
+}
+
+.character-switch:hover,
+.history-toggle:hover { background: rgba(30, 48, 78, .85); }
+
+.character-switch.is-active {
+  color: #06121b;
+  background: #87d6f4;
+  border-color: #87d6f4;
+}
+
+.history-toggle { margin-left: auto; }
+
+.history-panel {
+  width: min(1080px, calc(100% - 2rem));
+  justify-self: center;
+  max-height: 34dvh;
+  overflow: auto;
+  margin-bottom: .5rem;
+  padding: .9rem 1.1rem;
+  border: 1px solid rgba(211, 234, 255, .45);
+  border-radius: 6px;
+  background: rgba(7, 12, 24, .9);
+}
+
+.history-title {
+  margin: 0 0 .5rem;
+  color: #a9e8ff;
+  font-size: .95rem;
+}
+
+.history-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #e8f2fb;
+  font-size: .9rem;
+  line-height: 1.65;
+}
 
 .player-input {
   width: min(1080px, calc(100% - 2rem));

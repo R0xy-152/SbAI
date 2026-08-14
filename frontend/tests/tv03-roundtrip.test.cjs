@@ -8,6 +8,14 @@ const form = {
 const input = { value: "", disabled: false, focus: () => {} };
 const dialogue = { textContent: "" };
 const status = { textContent: "" };
+const characterName = { textContent: "" };
+const historyPanel = { hidden: true };
+const historyList = { replaceChildren: () => {}, appendChild: () => {} };
+const historyToggle = { addEventListener: () => {}, textContent: "查看历史" };
+const switchButton = () => ({
+  addEventListener: () => {},
+  classList: { toggle: () => {} },
+});
 const sprite = {
   dataset: {},
   classList: { add: () => {}, remove: () => {}, contains: () => false },
@@ -23,6 +31,12 @@ global.document = {
     "#dialogue-text": dialogue,
     "#form-status": status,
     "#character-sprite": sprite,
+    "#character-name": characterName,
+    "#history-toggle": historyToggle,
+    "#history-panel": historyPanel,
+    "#history-list": historyList,
+    "#switch-deepseek": switchButton(),
+    "#switch-claude": switchButton(),
   })[selector],
 };
 
@@ -61,6 +75,7 @@ function submit(text) {
   assert.deepEqual(JSON.parse(captured.options.body), {
     message: "你好",
     session_id: null,
+    character_id: null,
   });
 
   // 2. The second request sends the stored session id.

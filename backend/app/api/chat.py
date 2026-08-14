@@ -30,6 +30,24 @@ class ChatResponse(BaseModel):
     character_id: str
     dialogue: str
     message_count: int
+    # TV-16: the speaking character's presentation, surfaced so the Frontend
+    # can act on it (docs/02 §7: 根据Backend结果切换表情 / 播放允许的动画).
+    emotion: str = "neutral"
+    animation: str = "none"
+    # TV-16: story-semantic directives from a committed narrative event
+    # (docs/03 §13.6), e.g. ["SHOW_CHARACTER claude"]; empty on noop turns.
+    presentation: list[str] = []
+
+
+class HistoryMessage(BaseModel):
+    role: str
+    character_id: str | None = None
+    content: str
+
+
+class HistoryResponse(BaseModel):
+    session_id: str
+    messages: list[HistoryMessage]
 
 
 def get_orchestrator(request: Request) -> GameOrchestrator:
@@ -61,4 +79,27 @@ def chat(
         character_id=result.response.character_id,
         dialogue=result.response.dialogue,
         message_count=result.message_count,
+        emotion=result.response.emotion,
+        animation=result.response.animation_proposal,
+        # Each committed event's directive is one string, e.g. "SHOW_CHARACTER
+        # claude" (docs/03 §13.6), so the Frontend can parse kind + target.
+        presentation=[" ".join(result.presentation)] if result.presentation else [],
+    )
+
+
+@router.get("/api/chat/history", response_model=HistoryResponse)
+def history(
+    session_id: str,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+) -> HistoryResponse:
+    """The current session's dialogue, for the Frontend History view
+    (docs/01 §18: 说话角色 / 对话文本 / 顺序). An unknown id is a 404, never
+    a fresh session."""
+    try:
+        messages = orchestrator.get_history(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return HistoryResponse(
+        session_id=session_id,
+        messages=[HistoryMessage(**message) for message in messages],
     )

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 900" role="img" aria-labelledby="title desc">
+  <title id="title">Claude placeholder portrait</title>
+  <desc id="desc">A temporary violet-haired visual novel character portrait.</desc>
+  <defs>
+    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e6dcff"/><stop offset="1" stop-color="#5c3fa0"/></linearGradient>
+    <linearGradient id="coat" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#3a2a63"/><stop offset="1" stop-color="#1a1233"/></linearGradient>
+  </defs>
+  <ellipse cx="250" cy="858" rx="211" ry="35" fill="#0b0718" fill-opacity=".55"/>
+  <path d="M110 880c9-202 70-304 140-304s132 102 140 304" fill="url(#coat)"/>
+  <path d="M142 600c22-61 53-90 108-90s92 31 108 90l-32 88H174z" fill="#f3edff"/>
+  <path d="M160 258c0-126 55-193 90-193s90 67 90 193v152c0 105-41 164-90 164s-90-59-90-164z" fill="#ffe8de"/>
+  <path d="M144 324c-13-194 48-285 113-285 78 0 125 86 105 292-30-56-65-76-107-77-42 1-75 24-111 70z" fill="url(#hair)"/>
+  <path d="M145 258c-29 88-17 221 29 283l24-98-3-167zM356 242c27 94 15 228-29 299l-21-96 5-171z" fill="#8f6fd6"/>
+  <ellipse cx="214" cy="351" rx="13" ry="9" fill="#3b2a63"/><ellipse cx="287" cy="351" rx="13" ry="9" fill="#3b2a63"/>
+  <path d="M228 428q22 14 44 0" fill="none" stroke="#8d5aa8" stroke-width="6" stroke-linecap="round"/>
+  <path d="M206 495h88l-44 76z" fill="#a98ee6"/>
+</svg>
