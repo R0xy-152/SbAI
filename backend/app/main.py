@@ -21,6 +21,8 @@ from app.characters.claude import ClaudeRuntime
 from app.characters.deepseek import DeepSeekRuntime
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
+from app.narrative.interpreter import NarrativeInterpreter
+from app.narrative.poc import build_poc_events
 from app.providers.base import LLMProvider
 from app.providers.deepseek import DeepSeekProvider
 from app.providers.mock import MockProvider
@@ -61,7 +63,16 @@ def create_app() -> FastAPI:
         "deepseek": DeepSeekRuntime(provider),
         "claude": ClaudeRuntime(provider),
     }
-    app.state.orchestrator = GameOrchestrator(sessions, runtimes)
+    # TV-11: the narrative pipeline (Interpreter → Event Evaluation → Commit)
+    # is wired in for the running app. The POC events are validation fixtures
+    # (docs/06 §10), not production plot. With a mock provider the interpreter
+    # fails closed to noop, so the app still runs keyless.
+    app.state.orchestrator = GameOrchestrator(
+        sessions,
+        runtimes,
+        interpreter=NarrativeInterpreter(provider),
+        events=build_poc_events(),
+    )
     app.include_router(chat_router)
 
     # Serve the static frontend from the repo root so the game can be validated

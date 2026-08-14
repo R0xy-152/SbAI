@@ -13,6 +13,9 @@ from app.characters.base import CharacterRequest, CharacterResponse, CharacterRu
 from app.game.context import CONTEXT_BUILDERS
 from app.game.state.session import SessionStore
 from app.game.scene import Scene
+from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
+from app.narrative.interpreter import NarrativeInterpreter
+from app.narrative.state import NarrativeState
 
 # docs/05 §8: Recent Conversation is a window of the last 10-20 rounds of
 # messages, not the whole session history. 20 messages = 10 rounds.
@@ -33,6 +36,8 @@ class GameOrchestrator:
         runtimes: dict[str, CharacterRuntime],
         default_character: str = "deepseek",
         scene: Scene | None = None,
+        interpreter: NarrativeInterpreter | None = None,
+        events: list[NarrativeEvent] = (),
     ) -> None:
         self._sessions = sessions
         self._runtimes = runtimes
@@ -43,6 +48,13 @@ class GameOrchestrator:
         # receive (docs/04 §20). The Scene itself never reaches a character —
         # only the Context Builder's filtered output does.
         self._scene = scene if scene is not None else Scene(scene_id="binding_room")
+        # TV-11: the narrative pipeline is optional. When an interpreter is
+        # given, each turn runs Interpreter → Event Evaluation → character
+        # output → State Commit (docs/03 §28); without one (tests that do not
+        # exercise narrative) the decision is always noop and no state is kept.
+        self._interpreter: NarrativeInterpreter | None = interpreter
+        self._engine = NarrativeEngine(list(events))
+        self._narrative_states: dict[str, NarrativeState] = {}
 
     def handle_turn(
         self,
@@ -62,6 +74,12 @@ class GameOrchestrator:
             {"role": "player", "content": message, "character_id": character_id},
         )
 
+        # TV-11: evaluate the narrative signal into a candidate event BEFORE
+        # the character speaks, but commit it only AFTER the character's
+        # output succeeds (Validate Before Commit, docs/03 §28). A failed
+        # character output leaves state untouched, so the player can retry.
+        decision = self._narrative_decision(session.session_id, message)
+
         runtime = self._runtimes[character_id]
         context = CONTEXT_BUILDERS[character_id](self._scene)
         response = runtime.respond(
@@ -79,6 +97,10 @@ class GameOrchestrator:
                 environment_info=context.environment_info,
             )
         )
+        # The character output succeeded, so a selected event may now commit
+        # its effects atomically (docs/03 §28-29).
+        if decision.kind == "event":
+            self._engine.commit(self._state_for(session.session_id), decision)
         self._sessions.append_message(
             session.session_id,
             {
@@ -108,3 +130,25 @@ class GameOrchestrator:
             for message in messages
             if message.get("character_id") == character_id
         ]
+
+    def _state_for(self, session_id: str) -> NarrativeState:
+        """Per-session Narrative State (docs/03 §5), created on first use."""
+        state = self._narrative_states.get(session_id)
+        if state is None:
+            state = NarrativeState()
+            self._narrative_states[session_id] = state
+        return state
+
+    def _narrative_decision(
+        self, session_id: str, message: str
+    ) -> NarrativeDecision:
+        """Interpret the message and select a candidate event (no commit yet).
+
+        Without an interpreter the pipeline is skipped entirely and the
+        decision is always noop.
+        """
+        if self._interpreter is None:
+            return NarrativeDecision(kind="noop")
+        state = self._state_for(session_id)
+        interpretation = self._interpreter.interpret(state, message)
+        return self._engine.evaluate(state, interpretation)
