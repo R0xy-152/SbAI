@@ -118,6 +118,15 @@ def test_malformed_proposals_are_rejected():
         _parse(payload)
 
 
+def test_memory_proposal_value_field_is_rejected():
+    # docs/04 §44 defines memory_proposal with `content`; the model has been
+    # observed emitting `value` instead. The schema stays strict per docs.
+    payload = _valid_output()
+    payload["memory_proposals"] = [{"type": "name", "value": "阿明"}]
+    with pytest.raises(CharacterResponseValidationError):
+        _parse(payload)
+
+
 def test_action_proposal_with_target_parses():
     payload = _valid_output()
     payload["action_proposals"] = [

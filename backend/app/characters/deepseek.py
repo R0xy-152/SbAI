@@ -51,14 +51,12 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
     "- animation_proposal：必须且只能是 none、shake、strong_shake、fade_in、fade_out 之一。\n"
     "- memory_proposals：只有 Player 明确提到值得长期记住的信息"
     "（如名字、喜好、害怕的事物）时才填入，否则为空数组。\n"
+    "  元素必须是 {\"type\": \"类别\", \"content\": \"一句话说明\"}，"
+    "例如 {\"type\": \"player_name\", \"content\": \"Player说自己叫阿明\"}；"
+    "content 必须是一句完整的话，不要使用 value 等其它字段名。\n"
     "- action_proposals：当前阶段通常为空数组。\n"
     "- fact_refs：当前阶段为空数组。\n"
     "7 个字段都必须出现。"
-)
-
-REPAIR_PROMPT = (
-    "\n\n[系统提示] 你上一次的输出没有通过格式校验。"
-    "请重新输出：只输出一个符合上述全部字段要求的 JSON 对象，不要有任何多余文字。"
 )
 
 
@@ -73,6 +71,18 @@ class DeepSeekRuntime(CharacterRuntime):
 
     def _system_prompt(self) -> str:
         return DEEPSEEK_PERSONA_SYSTEM + STRUCTURED_OUTPUT_INSTRUCTIONS
+
+    def _build_user_message(self, request: CharacterRequest) -> str:
+        """Compose the user turn: the recent conversation (TV-07, docs/05 §7)
+        plus the current player message."""
+        if not request.recent_conversation:
+            return request.player_message
+        transcript = format_conversation(request.recent_conversation)
+        return (
+            "近期对话：\n"
+            f"{transcript}\n"
+            f"\nPlayer 现在说：{request.player_message}"
+        )
 
     def _call(self, user: str) -> str:
         return self._provider.complete(
@@ -89,17 +99,35 @@ class DeepSeekRuntime(CharacterRuntime):
         )
 
     def respond(self, request: CharacterRequest) -> CharacterResponse:
-        # TV-04: only the current message is sent; multi-turn recent context
-        # arrives with TV-07 (Short-term Context).
-        raw = self._call(request.player_message)
+        user = self._build_user_message(request)
+        raw = self._call(user)
         try:
             return parse_character_response(raw, self.character_id)
-        except CharacterResponseValidationError:
-            pass
-
-        # docs/04 §53: first failure → one repair attempt, then safe fallback.
-        raw = self._call(request.player_message + REPAIR_PROMPT)
+        except CharacterResponseValidationError as exc:
+            # docs/04 §53: first failure → one targeted repair attempt that
+            # tells the model exactly what failed, then safe fallback.
+            repair_user = (
+                f"{user}\n\n[系统提示] 你上一次的输出没有通过格式校验：{exc}。"
+                "请重新输出：只输出一个符合全部字段要求的 JSON 对象，不要有任何多余文字。"
+            )
+        raw = self._call(repair_user)
         try:
             return parse_character_response(raw, self.character_id)
         except CharacterResponseValidationError:
             return self._safe_fallback()
+
+
+def format_conversation(recent: list[dict]) -> str:
+    """Render the recent messages into the transcript the model sees
+    (docs/05 §7: player messages, character messages, and (later) audible
+    messages from other characters)."""
+    lines = []
+    for message in recent:
+        role = message.get("role")
+        content = message.get("content", "")
+        if role == "player":
+            lines.append(f"Player：{content}")
+        elif role == "character":
+            speaker = message.get("character_id", "DeepSeek")
+            lines.append(f"{speaker}：{content}")
+    return "\n".join(lines)

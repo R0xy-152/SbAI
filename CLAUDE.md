@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 当前阶段是**轻量技术验证（Lightweight Tech Validation）**，目标是打通一条 Vertical Slice 链路（Gal UI → 自然语言输入 → 生成式角色 → 角色隔离 → 确定性 Narrative State → 对话驱动剧情 → Session 恢复），共 TV-01 ~ TV-16 十六项，按依赖顺序执行。
 
-**已经完成**：TV-01（Gal UI Shell，PASS）、TV-02（Basic Presentation Action，PASS_WITH_LIMITATION）、TV-03（Backend Round Trip，PASS）、TV-04（DeepSeek Provider + 真实模型链路，PASS）、TV-05（Structured Character Response，PASS）、TV-06（Validate Before Present，PASS）。当前工作起点是 TV-07（Short-term Context）。每项 TV 的验证记录在 `validation-results/TV-xx/result.md`。
+**已经完成**：TV-01（Gal UI Shell，PASS）、TV-02（Basic Presentation Action，PASS_WITH_LIMITATION）、TV-03（Backend Round Trip，PASS）、TV-04（DeepSeek Provider + 真实模型链路，PASS）、TV-05（Structured Character Response，PASS）、TV-06（Validate Before Present，PASS）、TV-07（Short-term Context，PASS）。当前工作起点是 TV-08（DeepSeek Blindness）。每项 TV 的验证记录在 `validation-results/TV-xx/result.md`。
 
 ## 文档是真相源（Docs-first）
 

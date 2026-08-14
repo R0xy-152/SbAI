@@ -31,6 +31,7 @@ class _SequencedProvider(LLMProvider):
     def __init__(self, outputs: list[str]) -> None:
         self._outputs = list(outputs)
         self.calls = 0
+        self.users: list[str] = []
 
     def complete(
         self,
@@ -41,6 +42,7 @@ class _SequencedProvider(LLMProvider):
         response_format: dict | None = None,
     ) -> str:
         output = self._outputs[min(self.calls, len(self._outputs) - 1)]
+        self.users.append(user)
         self.calls += 1
         return output
 
@@ -128,3 +130,17 @@ def test_character_id_mismatch_falls_back():
     )
     assert response.character_id == "deepseek"
     assert response.dialogue == "……等一下，我脑子有点卡住了。"
+
+
+def test_repair_feedback_names_the_specific_validation_error():
+    # docs/04 §53: Repair should tell the model what actually failed. The
+    # first output has an invalid emotion; the repair prompt must say so.
+    bad = _valid_json().replace('"emotion": "neutral"', '"emotion": "sad"')
+    provider = _SequencedProvider([bad, _valid_json("修复后的回复。")])
+    runtime = DeepSeekRuntime(provider)
+    response = runtime.respond(
+        CharacterRequest(character_id="deepseek", player_message="你好")
+    )
+    assert response.dialogue == "修复后的回复。"
+    assert provider.calls == 2
+    assert "emotion" in provider.users[1]  # feedback names the failing field

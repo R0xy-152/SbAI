@@ -12,6 +12,10 @@ from dataclasses import dataclass
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
 from app.game.state.session import SessionStore
 
+# docs/05 §8: Recent Conversation is a window of the last 10-20 rounds of
+# messages, not the whole session history. 20 messages = 10 rounds.
+RECENT_WINDOW_MESSAGES = 20
+
 
 @dataclass
 class TurnResult:
@@ -45,6 +49,9 @@ class GameOrchestrator:
             CharacterRequest(
                 character_id=self._default_character,
                 player_message=message,
+                # TV-07: short-term context = the last window of prior messages
+                # (docs/05 §8), excluding the current player message.
+                recent_conversation=session.messages[:-1][-RECENT_WINDOW_MESSAGES:],
             )
         )
         self._sessions.append_message(
