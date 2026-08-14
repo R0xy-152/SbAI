@@ -81,7 +81,11 @@ class GameOrchestrator:
         decision = self._narrative_decision(session.session_id, message)
 
         runtime = self._runtimes[character_id]
-        context = CONTEXT_BUILDERS[character_id](self._scene)
+        # TV-12: the Context Builder is the permission boundary for Narrative
+        # State too (docs/04 §15-17). Without an interpreter there is no
+        # narrative state, so the character receives no narrative context.
+        narrative_state = self._narrative_states.get(session.session_id)
+        context = CONTEXT_BUILDERS[character_id](self._scene, narrative_state)
         response = runtime.respond(
             CharacterRequest(
                 character_id=character_id,
@@ -95,6 +99,9 @@ class GameOrchestrator:
                 # TV-08: authorized, visual-filtered environment context
                 # (docs/04 §15, §20) built per character.
                 environment_info=context.environment_info,
+                # TV-12: the authorized narrative context (relevant flags/facts,
+                # docs/04 §8) rendered by the same permission boundary.
+                narrative_context=context.narrative_context,
             )
         )
         # The character output succeeded, so a selected event may now commit

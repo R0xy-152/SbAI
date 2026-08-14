@@ -19,6 +19,11 @@ class CharacterRequest:
     # Authorized narrative context built by the character's Context Builder
     # (docs/04 §15-17): already filtered to what this character may know.
     environment_info: str = ""
+    # Authorized Narrative Context (docs/04 §8): the minimal story context —
+    # relevant flags/facts the character is entitled to for this turn
+    # (docs/06 §18). Provided by the Narrative Runtime through the Context
+    # Builder; the character never loads raw State itself.
+    narrative_context: str = ""
 
 
 @dataclass
@@ -243,11 +248,18 @@ class GenerativeRuntime(CharacterRuntime):
         return self.persona_system + STRUCTURED_OUTPUT_INSTRUCTIONS
 
     def _build_user_message(self, request: CharacterRequest) -> str:
-        """Compose the user turn: authorized environment context (docs/04 §20),
-        the recent conversation (docs/05 §7), and the current player message."""
-        if not request.environment_info and not request.recent_conversation:
+        """Compose the user turn: the authorized narrative context (docs/04 §8),
+        authorized environment context (docs/04 §20), the recent conversation
+        (docs/05 §7), and the current player message."""
+        if (
+            not request.narrative_context
+            and not request.environment_info
+            and not request.recent_conversation
+        ):
             return request.player_message
         parts: list[str] = []
+        if request.narrative_context:
+            parts.append("当前剧情：\n" + request.narrative_context)
         if request.environment_info:
             parts.append("当前环境：\n" + request.environment_info)
         if request.recent_conversation:
