@@ -38,6 +38,8 @@ class MockProvider(LLMProvider):
             return "抱歉，我刚刚没听清，你能再说一遍吗？"
         # TV-05: the mock mirrors the structured output the real model must
         # produce, so the schema-validation path is exercised without a key.
+        # It also emits the optional reasoning / mood fields (docs/04 §9, §47)
+        # so their tolerant parse path is covered by every existing test.
         return json.dumps(
             {
                 "character_id": self._character_id,
@@ -47,6 +49,8 @@ class MockProvider(LLMProvider):
                 "memory_proposals": [],
                 "action_proposals": [],
                 "fact_refs": [],
+                "reasoning": "这是本地模拟的推理说明。",
+                "mood": {"positive": 0.2, "excitement": -0.1},
             },
             ensure_ascii=False,
         )

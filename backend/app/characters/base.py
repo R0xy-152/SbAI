@@ -34,6 +34,11 @@ class CharacterRequest:
     # this turn carries story purpose. It never prescribes exact lines and
     # never mutates Game State. Empty on ordinary turns.
     narrative_directive: str = ""
+    # Current Character State (docs/04 §9): the character's persistent mood this
+    # turn, seeded by the CharacterStateService and injected into the prompt as
+    # the "current character state" layer (docs/04 §18.3). None when the state
+    # is not tracked (e.g. scripted lines, or no mood committed yet).
+    mood: CharacterMood | None = None
 
 
 @dataclass
@@ -63,6 +68,48 @@ ALLOWED_ANIMATIONS = frozenset({"none", "shake", "strong_shake", "fade_in", "fad
 
 
 @dataclass
+class CharacterMood:
+    """Per-character persistent two-axis mood (docs/04 §9: `character_state`).
+
+    ``positive`` (积极值) and ``excitement`` (激动值) are each in [-1, 1]. Unlike
+    the named ``emotion`` — a per-turn presentation label that selects a sprite
+    (docs/04 §42) — the mood is an *internal* state that evolves turn over turn
+    and is fed back into the next prompt to remove the "AI 人机感" (the reference
+    template's core trick). It never reaches the Frontend.
+    """
+
+    positive: float = 0.0
+    excitement: float = 0.0
+
+    @staticmethod
+    def _clamp(value: float) -> float:
+        return max(-1.0, min(1.0, value))
+
+    def clamped(self) -> "CharacterMood":
+        return CharacterMood(
+            positive=self._clamp(self.positive),
+            excitement=self._clamp(self.excitement),
+        )
+
+    @staticmethod
+    def from_dict(data) -> "CharacterMood | None":
+        """Parse the model's `mood` output, clamping to [-1, 1].
+
+        Returns None when the value is absent or not two numbers, so a bad mood
+        never rejects the whole reply — the caller simply keeps the previous
+        mood (tolerant schema, docs/04 §48).
+        """
+        if not isinstance(data, dict):
+            return None
+        try:
+            positive = float(data.get("positive"))
+            excitement = float(data.get("excitement"))
+        except (TypeError, ValueError):
+            return None
+        return CharacterMood(positive=positive, excitement=excitement).clamped()
+
+
+@dataclass
 class CharacterResponse:
     """Validated output every runtime must produce (docs/04 §40).
 
@@ -78,6 +125,14 @@ class CharacterResponse:
     memory_proposals: list[MemoryProposal] = field(default_factory=list)
     action_proposals: list[ActionProposal] = field(default_factory=list)
     fact_refs: list[str] = field(default_factory=list)
+    # The model's own "why I replied this way" (docs/04 §47, the reference
+    # template's "逻辑链拷打" reason field). Internal only: it is never copied
+    # into the API response or history, so the player never sees it.
+    reasoning: str = ""
+    # The model's updated mood after this turn (docs/04 §9). Committed to the
+    # CharacterStateService only when the reply passes validation. None = keep
+    # the previous mood (the model did not output a valid mood).
+    next_mood: CharacterMood | None = None
 
 
 class CharacterResponseValidationError(Exception):
@@ -131,7 +186,15 @@ def parse_character_response(raw: str, expected_character_id: str) -> CharacterR
         memory_proposals=_parse_memory_proposals(data.get("memory_proposals")),
         action_proposals=_parse_action_proposals(data.get("action_proposals")),
         fact_refs=_parse_fact_refs(data.get("fact_refs")),
+        reasoning=_parse_reasoning(data.get("reasoning")),
+        next_mood=CharacterMood.from_dict(data.get("mood")),
     )
+
+
+def _parse_reasoning(value) -> str:
+    """The optional reasoning text; absent or non-string becomes "". Tolerant:
+    a missing reasoning never rejects the reply (docs/04 §48)."""
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _parse_memory_proposals(value) -> list[MemoryProposal]:
@@ -207,7 +270,8 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
     "JSON 结构示例：\n"
     '{"character_id": "deepseek", "dialogue": "你要说的话", "emotion": "neutral", '
     '"animation_proposal": "none", "memory_proposals": [], "action_proposals": [], '
-    '"fact_refs": []}\n'
+    '"fact_refs": [], "reasoning": "你为什么要这样回复", '
+    '"mood": {"positive": 0.0, "excitement": 0.0}}\n'
     "字段要求：\n"
     "- dialogue：你要说的话本身，保持你的口癖，是完整的自然句子。\n"
     "- emotion：必须且只能是 neutral、happy、annoyed、angry、embarrassed、serious 之一。\n"
@@ -219,7 +283,12 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
     "content 必须是一句完整的话，不要使用 value 等其它字段名。\n"
     "- action_proposals：当前阶段通常为空数组。\n"
     "- fact_refs：当前阶段为空数组。\n"
-    "7 个字段都必须出现。"
+    "- reasoning：用 1-2 句说明你为什么要这样回复（结合你的人设、当前语境和你此刻的心情）。"
+    "玩家看不到这段话，它只用来让你先想清楚再开口。\n"
+    "- mood：你回复完之后的新心情，是一个 {\"positive\": 数值, \"excitement\": 数值} 对象，"
+    "两个数值都在 -1 到 1 之间（positive=积极值，excitement=激动值），"
+    "要让心情随对话自然变化。\n"
+    "9 个字段都必须出现。"
 )
 
 
@@ -274,9 +343,19 @@ class GenerativeRuntime(CharacterRuntime):
             and not request.memory_context
             and not request.narrative_directive
             and not request.recent_conversation
+            and request.mood is None
         ):
             return request.player_message
         parts: list[str] = []
+        if request.mood is not None:
+            # docs/04 §18.3: current character state is the first dynamic layer —
+            # the model's own persistent mood, so the reply stays emotionally
+            # continuous instead of resetting each turn.
+            parts.append(
+                "你当前的心情：积极"
+                f"{request.mood.positive:.1f} / 激动{request.mood.excitement:.1f}"
+                "（范围都是 -1 到 1）。请让你的语气与你当前的心情一致。"
+            )
         if request.narrative_context:
             parts.append("当前剧情：\n" + request.narrative_context)
         if request.environment_info:
@@ -297,12 +376,13 @@ class GenerativeRuntime(CharacterRuntime):
         return self._provider.complete(
             system=self._system_prompt(),
             user=user,
-            max_tokens=1024,
+            # Thinking mode stays on (DeepSeek default) so the model reasons
+            # before answering — the reference template's "逻辑链拷打". The
+            # model's explicit reason is also captured in the structured
+            # output's `reasoning` field, and the `max_tokens` budget is raised
+            # so the reasoning budget does not eat into the reply.
+            max_tokens=2048,
             response_format={"type": "json_object"},
-            # Casual roleplay dialogue does not need a chain-of-thought; turning
-            # off thinking keeps turns fast and cheap and avoids the reasoning
-            # budget eating into max_tokens (docs 思考模式).
-            thinking={"type": "disabled"},
         )
 
     def safe_fallback(self) -> CharacterResponse:
