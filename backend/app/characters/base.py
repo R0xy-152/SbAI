@@ -14,6 +14,9 @@ class CharacterRequest:
     character_id: str
     player_message: str
     recent_conversation: list[dict] = field(default_factory=list)
+    # Authorized narrative context built by the character's Context Builder
+    # (docs/04 §15-17): already filtered to what this character may know.
+    environment_info: str = ""
 
 
 @dataclass

@@ -73,16 +73,18 @@ class DeepSeekRuntime(CharacterRuntime):
         return DEEPSEEK_PERSONA_SYSTEM + STRUCTURED_OUTPUT_INSTRUCTIONS
 
     def _build_user_message(self, request: CharacterRequest) -> str:
-        """Compose the user turn: the recent conversation (TV-07, docs/05 §7)
-        plus the current player message."""
-        if not request.recent_conversation:
+        """Compose the user turn: authorized environment context (TV-08,
+        docs/04 §20), the recent conversation (TV-07, docs/05 §7), and the
+        current player message."""
+        if not request.environment_info and not request.recent_conversation:
             return request.player_message
-        transcript = format_conversation(request.recent_conversation)
-        return (
-            "近期对话：\n"
-            f"{transcript}\n"
-            f"\nPlayer 现在说：{request.player_message}"
-        )
+        parts: list[str] = []
+        if request.environment_info:
+            parts.append("当前环境：\n" + request.environment_info)
+        if request.recent_conversation:
+            parts.append("近期对话：\n" + format_conversation(request.recent_conversation))
+        parts.append(f"Player 现在说：{request.player_message}")
+        return "\n\n".join(parts)
 
     def _call(self, user: str) -> str:
         return self._provider.complete(
