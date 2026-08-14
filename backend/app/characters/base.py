@@ -28,6 +28,12 @@ class CharacterRequest:
     # may use this turn, selected by the Memory system (docs/05 §37-38). The
     # runtime consumes the result; it never decides storage or retrieval.
     memory_context: str = ""
+    # Narrative Directive (docs/03 §24, docs/04 §14, §18.4): the per-turn
+    # narrative goal the current reply must carry — 叙事目标 / 允许范围 /
+    # 禁止提前透露 — authored by the Narrative Runtime and handed in only when
+    # this turn carries story purpose. It never prescribes exact lines and
+    # never mutates Game State. Empty on ordinary turns.
+    narrative_directive: str = ""
 
 
 @dataclass
@@ -260,6 +266,7 @@ class GenerativeRuntime(CharacterRuntime):
             not request.narrative_context
             and not request.environment_info
             and not request.memory_context
+            and not request.narrative_directive
             and not request.recent_conversation
         ):
             return request.player_message
@@ -270,6 +277,11 @@ class GenerativeRuntime(CharacterRuntime):
             parts.append("当前环境：\n" + request.environment_info)
         if request.memory_context:
             parts.append("回忆：\n" + request.memory_context)
+        if request.narrative_directive:
+            # docs/04 §18: the directive sits after the authorized context and
+            # before the conversation — it states this turn's story goal, not
+            # lines to say.
+            parts.append("本轮叙事指令：\n" + request.narrative_directive)
         if request.recent_conversation:
             parts.append("近期对话：\n" + format_conversation(request.recent_conversation))
         parts.append(f"Player 现在说：{request.player_message}")

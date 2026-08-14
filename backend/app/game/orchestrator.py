@@ -143,6 +143,10 @@ class GameOrchestrator:
                 narrative_context=context.narrative_context,
                 # TV-13: the selected long-term memories the character may use.
                 memory_context=format_memories(memories),
+                # Narrative Directive (docs/03 §24): the selected event's
+                # per-turn story goal, handed to the character when this turn
+                # carries plot purpose. Empty on ordinary turns.
+                narrative_directive=decision.directive,
             )
         )
         # The character output succeeded, so its memory proposals may pass the

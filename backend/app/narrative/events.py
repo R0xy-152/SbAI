@@ -52,6 +52,11 @@ class NarrativeEvent:
     requirement: Callable[[NarrativeState], bool] = lambda state: True
     effects: tuple[Effect, ...] = ()
     presentation: tuple[str, ...] = ()
+    # Narrative Directive (docs/03 §24): authored alongside the event and
+    # handed to the current character when this event is selected. It states
+    # this turn's narrative goal / allowed scope / forbidden reveals — never
+    # exact lines, never a Game State mutation.
+    directive: str = ""
     repeat_policy: str = ONCE
 
 
@@ -67,6 +72,8 @@ class NarrativeDecision:
     kind: str = "noop"
     event_id: str | None = None
     presentation: tuple[str, ...] = ()
+    # The selected event's Narrative Directive (docs/03 §24), empty for noop.
+    directive: str = ""
 
 
 class NarrativeEngine:
@@ -95,6 +102,7 @@ class NarrativeEngine:
                 kind="event",
                 event_id=event.event_id,
                 presentation=event.presentation,
+                directive=event.directive,
             )
         return NarrativeDecision(kind="noop")
 

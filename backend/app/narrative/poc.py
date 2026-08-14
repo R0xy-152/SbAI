@@ -25,6 +25,10 @@ def build_poc_events() -> list[NarrativeEvent]:
             requirement=lambda state: "claude_has_appeared" not in state.narrative_flags,
             effects=(Effect(SET_FLAG, "claude_has_appeared"),),
             presentation=("SHOW_CHARACTER", "claude"),
+            directive=(
+                "本轮需要自然地过渡到 Claude 的出现。\n"
+                "不得提前透露：Claude 的隐藏信息。"
+            ),
             repeat_policy=ONCE,
         ),
     ]
