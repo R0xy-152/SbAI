@@ -1,0 +1,123 @@
+﻿:root {
+  color-scheme: dark;
+  font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  background: #10131d;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; min-width: 320px; }
+
+.game-shell {
+  min-height: 100dvh;
+  position: relative;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.scene-background,
+.scene-vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scene-background {
+  z-index: -2;
+  background:
+    linear-gradient(90deg, rgba(8, 11, 19, .72), rgba(8, 11, 19, .16) 50%, rgba(8, 11, 19, .72)),
+    url("../backgroud/background1.png") center / cover no-repeat;
+}
+
+.scene-vignette {
+  z-index: -1;
+  background: radial-gradient(ellipse at center, transparent 35%, rgba(5, 7, 13, .55) 100%);
+}
+
+.character-layer {
+  min-height: 0;
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  padding: 2.5rem 1rem 0;
+}
+
+.character-sprite {
+  display: block;
+  height: min(69dvh, 680px);
+  max-width: min(72vw, 530px);
+  object-fit: contain;
+  object-position: bottom center;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .5));
+}
+.dialogue-panel {
+  width: min(1080px, calc(100% - 2rem));
+  justify-self: center;
+  margin-bottom: .8rem;
+  padding: 1.2rem 1.5rem 1.35rem;
+  border: 1px solid rgba(211, 234, 255, .6);
+  border-left: 5px solid #87d6f4;
+  border-radius: 6px;
+  background: rgba(7, 12, 24, .88);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .35);
+}
+
+.character-name { margin: 0 0 .45rem; color: #a9e8ff; font-weight: 700; letter-spacing: .05em; }
+.dialogue-text { margin: 0; color: #f4f8ff; font-size: clamp(1rem, 2.2vw, 1.15rem); line-height: 1.7; }
+
+.player-input {
+  width: min(1080px, calc(100% - 2rem));
+  justify-self: center;
+  display: flex;
+  gap: .75rem;
+  padding-bottom: .4rem;
+}
+
+.player-input input {
+  min-width: 0;
+  flex: 1;
+  padding: .8rem 1rem;
+  border: 1px solid rgba(211, 234, 255, .55);
+  border-radius: 5px;
+  color: #f6f9ff;
+  background: rgba(7, 12, 24, .92);
+  font: inherit;
+}
+
+.player-input input:focus { outline: 3px solid rgba(135, 214, 244, .45); outline-offset: 1px; }
+
+.player-input button {
+  min-width: 5rem;
+  border: 0;
+  border-radius: 5px;
+  color: #06121b;
+  background: #87d6f4;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.player-input button:hover { background: #b4e9fb; }
+
+.form-status {
+  min-height: 1.5rem;
+  width: min(1080px, calc(100% - 2rem));
+  justify-self: center;
+  margin: 0;
+  color: #d7effa;
+  font-size: .9rem;
+}
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .character-layer { padding-top: 1rem; }
+  .character-sprite { height: min(53dvh, 480px); max-width: 92vw; }
+  .dialogue-panel { padding: .9rem 1rem; margin-bottom: .6rem; }
+  .player-input { gap: .5rem; }
+  .player-input button { min-width: 4.2rem; }
+}
+
+

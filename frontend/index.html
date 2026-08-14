@@ -1,0 +1,55 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="TV-01 Gal UI Shell — local presentation fixture"
+    />
+    <title>Gal UI Shell · TV-01</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="game-shell" aria-label="Galgame user interface shell">
+      <div class="scene-background" aria-hidden="true"></div>
+      <div class="scene-vignette" aria-hidden="true"></div>
+
+      <section class="character-layer" aria-label="当前角色">
+        <img`r`n          class="character-sprite"
+          src="../char/deepseek/pic/deepseek_main.png"
+          alt="DeepSeek 的角色立绘"
+        />
+      </section>
+
+      <section class="dialogue-panel" aria-live="polite" aria-atomic="true">
+        <p class="character-name">DeepSeek</p>
+        <p id="dialogue-text" class="dialogue-text">
+          ……你醒了。别怕，我们先弄清楚这里发生了什么。
+        </p>
+      </section>
+
+      <form id="player-form" class="player-input" novalidate>
+        <label class="sr-only" for="player-message">输入要对 DeepSeek 说的话</label>
+        <input
+          id="player-message"
+          name="message"
+          type="text"
+          maxlength="240"
+          autocomplete="off"
+          placeholder="输入你想说的话…"
+          required
+        />
+        <button type="submit">发送</button>
+      </form>
+
+      <p id="form-status" class="form-status" role="status"></p>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>
+
+
+
+
+
