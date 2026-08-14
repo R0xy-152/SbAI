@@ -14,7 +14,12 @@ from dataclasses import dataclass
 
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
 from app.game.context import CONTEXT_BUILDERS
-from app.game.memory import MemoryStore, format_memories
+from app.game.memory import (
+    MemoryRejected,
+    MemoryStore,
+    format_memories,
+    validate_memory_proposal,
+)
 from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.game.validation import ResponseRejected, validate_response
@@ -169,6 +174,19 @@ class GameOrchestrator:
         memory_store = self._memory_store(session.session_id)
         if approved:
             for proposal in response.memory_proposals:
+                # Memory Write Gate (docs/05 §34-35): a proposal is a Proposal,
+                # not a Memory, until it passes the permission gate. Rejected
+                # proposals are logged for debug and never saved, so they cannot
+                # re-enter the character's context via recall.
+                try:
+                    validate_memory_proposal(
+                        proposal, character_id=character_id, scene=scene
+                    )
+                except MemoryRejected as exc:
+                    logger.warning(
+                        "memory proposal rejected (%s): %r", exc, proposal.content
+                    )
+                    continue
                 memory_store.propose(character_id, proposal)
         if approved and decision.kind == "event":
             self._engine.commit(self._state_for(session.session_id), decision)

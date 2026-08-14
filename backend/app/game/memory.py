@@ -3,9 +3,13 @@
 Episodic Memory is owned by a character: `owner_character_id` scopes who may
 read it (docs/05 §16-17 — a DeepSeek memory is not automatically available to
 Claude). Character output only produces Memory Proposals (docs/04 §44); the
-Write Gate decides what actually gets saved (docs/05 §33-36, simple content
-dedup for the MVP). Retrieval is deterministic (docs/05 §38): owner filter,
-then importance DESC / created_at DESC, LIMIT N — semantic retrieval is not
+Write Gate decides what actually gets saved (docs/05 §33-36). The gate is a
+hard permission boundary, not a prompt preference: it rejects proposals from
+unknown owners and any proposal that stores knowledge the character was never
+given (DeepSeek's visual blindness, docs/05 §23), so hallucinated or
+out-of-band information cannot become long-term Memory or re-enter context
+via recall. Retrieval is deterministic (docs/05 §38): owner filter, then
+importance DESC / created_at DESC, LIMIT N — semantic retrieval is not
 required before pgvector.
 
 MVP simplification: all memories carry the same importance (docs/05 §56-57
@@ -18,8 +22,49 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.characters.base import MemoryProposal
+from app.game.scene import Scene
 
 DEFAULT_IMPORTANCE = 5
+
+# Characters that may own Episodic Memory in this MVP (docs/05 §16-17). Doubao
+# is scripted (no generative memory) and ChatGPT is not yet wired in.
+KNOWN_CHARACTERS = frozenset({"deepseek", "claude"})
+
+
+class MemoryRejected(Exception):
+    """A Memory Proposal failed the Write Gate (docs/05 §34-35).
+
+    Raised with a human-readable reason; the caller must not save the proposal
+    and should record the reason for debug.
+    """
+
+
+def validate_memory_proposal(
+    proposal: MemoryProposal,
+    *,
+    character_id: str,
+    scene: Scene,
+) -> None:
+    """Memory Write Gate (docs/05 §34-35): decide SAVE / REJECT for a Proposal.
+
+    Deterministic, backend-only checks — the model's own phrasing is never
+    trusted as evidence of legitimacy:
+
+    1. the owner must be a known character (correct owner_character_id);
+    2. the character must be entitled to the information: DeepSeek cannot store
+       the scene's visual ground truth (wall_code) she was never given
+       (docs/05 §23, rule 7). This is the same boundary Character Validation
+       enforces on her replies, extended to long-term Memory so knowledge that
+       fails validation cannot re-enter her context via recall.
+
+    Raises MemoryRejected on the first violation. Empty content and exact
+    duplicates are handled by MemoryStore.propose (docs/05 §36), not here.
+    """
+    if character_id not in KNOWN_CHARACTERS:
+        raise MemoryRejected(f"unknown memory owner: {character_id!r}")
+    if character_id == "deepseek" and scene.wall_code:
+        if scene.wall_code in proposal.content:
+            raise MemoryRejected("deepseek cannot store visual scene ground truth")
 
 
 @dataclass(frozen=True)
