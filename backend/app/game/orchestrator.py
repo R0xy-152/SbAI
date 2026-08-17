@@ -21,6 +21,7 @@ from app.game.context import CONTEXT_BUILDERS
 from app.game.evidence import EVIDENCE_REGISTRY, evidence_view
 from app.game.deduction import CLAIM_REGISTRY, submit_deduction
 from app.game.private_interview import submit_challenge
+from app.game import recovery
 from app.game.investigation import InvestigationResult, InvestigationRuntime
 from app.game.memory import (
     MemoryRejected,
@@ -513,6 +514,20 @@ class GameOrchestrator:
     def submit_private_interview_challenge(self, session_id: str, **payload) -> dict:
         state = self._load_known_state(session_id)
         result = submit_challenge(state, **payload)
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
+        return result
+
+    def start_recovery(self, session_id: str) -> dict:
+        state = self._load_known_state(session_id)
+        result = recovery.start(state)
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
+        return result
+
+    def recovery_action(self, session_id: str, action: str, target: str, actor: str) -> dict:
+        state = self._load_known_state(session_id)
+        result = recovery.act(state, action, target, actor)
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
         return result

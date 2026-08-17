@@ -34,6 +34,7 @@ class Chapter1State:
     private_interview_rights: set[str] = field(default_factory=set)
     private_interview_completed: set[str] = field(default_factory=set)
     recovery_status: str = "not_started"
+    recovery: dict = field(default_factory=dict)
     admin_holder: str | None = None
     security_review_open: bool = False
     testified_characters: list[str] = field(default_factory=list)

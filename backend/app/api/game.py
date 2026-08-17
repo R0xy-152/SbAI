@@ -54,6 +54,13 @@ class PrivateInterviewChallengeRequest(BaseModel):
     statement_index: int | None = None
 
 
+class RecoveryActionRequest(BaseModel):
+    session_id: str
+    action: Literal["PREVIEW", "VERIFY", "PROTECT", "REPAIR", "OPTIMIZE"]
+    target: str
+    actor: Literal["player", "deepseek", "claude", "chatgpt", "doubao"]
+
+
 @router.post("/api/game/action", response_model=InvestigationActionResponse)
 def investigation_action(
     payload: InvestigationActionRequest,
@@ -122,5 +129,21 @@ def private_interview_challenge(
 ) -> dict:
     try:
         return orchestrator.submit_private_interview_challenge(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/game/recovery/start")
+def recovery_start(session_id: str, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    try:
+        return orchestrator.start_recovery(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/game/recovery/action")
+def recovery_action(payload: RecoveryActionRequest, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    try:
+        return orchestrator.recovery_action(**payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
