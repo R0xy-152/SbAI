@@ -11,7 +11,8 @@ PAPER_RUBBING_COMPLETE = "PAPER_RUBBING_COMPLETE"
 
 CH1_NOTE_01 = "CH1_NOTE_01"
 CH1_TERMINAL_MAIN = "CH1_TERMINAL_MAIN"
-CH1_CLAUDE_AREA = "CH1_CLAUDE_AREA"
+CH1_C02_DOOR = "CH1_C02_DOOR"
+CH1_CHARACTER_REGISTRY = "CH1_CHARACTER_REGISTRY"
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class HotspotDefinition:
     evidence_on_complete: str | None = None
     evidence_on_inspect: str | None = None
     scene_fact_on_inspect: str | None = None
+    requires_character: str | None = None
 
 
 HOTSPOTS = {
@@ -34,9 +36,23 @@ HOTSPOTS = {
         "inspect",
         evidence_on_inspect="EV02_ADMIN_SESSION_0317",
         scene_fact_on_inspect="TERMINAL_MAIN_INSPECTED",
+        requires_character="claude",
     ),
-    CH1_CLAUDE_AREA: HotspotDefinition(
-        CH1_CLAUDE_AREA, "ROOM_A", "inspect", scene_fact_on_inspect="CLAUDE_AREA_INSPECTED"
+    CH1_C02_DOOR: HotspotDefinition(
+        CH1_C02_DOOR,
+        "ROOM_A",
+        "inspect",
+        evidence_on_inspect="EV03_C02_RELEASE",
+        scene_fact_on_inspect="C02_DOOR_INSPECTED",
+        requires_character="claude",
+    ),
+    CH1_CHARACTER_REGISTRY: HotspotDefinition(
+        CH1_CHARACTER_REGISTRY,
+        "ROOM_A",
+        "inspect",
+        evidence_on_inspect="EV04_CURRENT_DEEPSEEK_REGISTRY",
+        scene_fact_on_inspect="CHARACTER_REGISTRY_INSPECTED",
+        requires_character="claude",
     ),
 }
 
@@ -58,6 +74,11 @@ class InvestigationRuntime:
             raise ValueError(f"unknown hotspot: {hotspot_id}")
         if state.current_scene != hotspot.scene_id:
             raise ValueError("hotspot is not available in the current scene")
+        if (
+            hotspot.requires_character is not None
+            and hotspot.requires_character not in state.chapter1.available_characters
+        ):
+            raise ValueError("hotspot is not available before the 03:17 incident")
 
         current = state.chapter1.hotspot_states.get(hotspot_id, "hidden")
         if action == INSPECT_HOTSPOT:

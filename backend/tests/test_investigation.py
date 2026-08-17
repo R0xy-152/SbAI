@@ -7,6 +7,8 @@ from fastapi.testclient import TestClient
 
 from app.game.investigation import (
     CH1_NOTE_01,
+    CH1_C02_DOOR,
+    CH1_CHARACTER_REGISTRY,
     CH1_TERMINAL_MAIN,
     INSPECT_HOTSPOT,
     PAPER_RUBBING_COMPLETE,
@@ -62,20 +64,29 @@ def test_completion_before_investigation_fails_closed():
         )
 
 
-def test_terminal_log_is_acquired_once_by_actual_investigation():
+def test_0317_hotspots_open_after_claude_appears_and_grant_fixed_evidence():
     orchestrator = _orchestrator()
+    with pytest.raises(ValueError, match="03:17 incident"):
+        orchestrator.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN)
+    inspected = orchestrator.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    orchestrator.handle_investigation_action(inspected.session_id, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
     first = orchestrator.handle_investigation_action(
-        None, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN
+        inspected.session_id, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN
     )
     repeated = orchestrator.handle_investigation_action(
         first.session_id, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN
     )
+    c02 = orchestrator.handle_investigation_action(first.session_id, INSPECT_HOTSPOT, CH1_C02_DOOR)
+    registry = orchestrator.handle_investigation_action(first.session_id, INSPECT_HOTSPOT, CH1_CHARACTER_REGISTRY)
 
     assert first.outcome == "COMPLETED"
     assert first.evidence_id == "EV02_ADMIN_SESSION_0317"
-    assert first.state["acquired_evidence"] == ["EV02_ADMIN_SESSION_0317"]
     assert repeated.outcome == "ALREADY_COMPLETED"
-    assert repeated.state["acquired_evidence"] == ["EV02_ADMIN_SESSION_0317"]
+    assert c02.evidence_id == "EV03_C02_RELEASE"
+    assert registry.evidence_id == "EV04_CURRENT_DEEPSEEK_REGISTRY"
+    assert set(registry.state["acquired_evidence"]) == {
+        "EV01_NOTE_V03", "EV02_ADMIN_SESSION_0317", "EV03_C02_RELEASE", "EV04_CURRENT_DEEPSEEK_REGISTRY"
+    }
 
 
 def test_first_case_links_paper_claude_and_terminal_without_llm():

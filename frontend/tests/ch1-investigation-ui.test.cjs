@@ -7,6 +7,8 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const js = fs.readFileSync(path.join(root, "app.js"), "utf8");
 
 assert.match(html, /data-hotspot-id="CH1_NOTE_01"/);
+assert.match(html, /data-hotspot-id="CH1_C02_DOOR"/);
+assert.match(html, /data-hotspot-id="CH1_CHARACTER_REGISTRY"/);
 assert.match(html, /id="rubbing-surface"/);
 assert.match(js, /INSPECT_HOTSPOT/);
 assert.match(js, /PAPER_RUBBING_COMPLETE/);

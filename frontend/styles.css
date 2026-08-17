@@ -78,6 +78,7 @@ body { margin: 0; min-width: 320px; }
 .hotspot-note { left: 16%; top: 58%; }
 .hotspot-terminal { right: 10%; top: 37%; }
 .hotspot-claude { left: 8%; top: 30%; }
+.hotspot-registry { right: 17%; top: 60%; }
 
 .paper-panel {
   position: fixed;
