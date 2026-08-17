@@ -1,10 +1,11 @@
 """Claim / contradiction / inference tests (docs/04)."""
 
 from app.game.deduction import (
-    C_CLAUDE_SOURCE_01,
-    CLAUDE_ATTRIBUTED_DOOR_TO_DEEPSEEK,
-    CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK,
-    INF_OLD_INSTANCE_RECORD,
+    CL_CLAUDE_01,
+    CL_CLAUDE_02,
+    CT01_CLAUDE_SOURCE_GAP,
+    INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR,
+    INF03_V03_IS_PREVIOUS_PLAYER_INSTANCE,
     submit_deduction,
 )
 from app.narrative.state import NarrativeState
@@ -16,34 +17,52 @@ def test_contradiction_requires_the_exact_recorded_claim_combination():
     message = "你说没看到 DeepSeek 本人，那你为什么说是她开的？"
     assert submit_deduction(state, message)["outcome"] == "BLOCKED"
 
-    state.chapter1.claim_store[CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK] = {}
-    state.chapter1.claim_store[CLAUDE_ATTRIBUTED_DOOR_TO_DEEPSEEK] = {}
+    state.chapter1.claim_store[CL_CLAUDE_01] = {}
+    state.chapter1.claim_store[CL_CLAUDE_02] = {}
     result = submit_deduction(state, message)
 
-    assert result == {"outcome": "ACCEPTED", "kind": "contradiction", "id": C_CLAUDE_SOURCE_01}
-    assert "UNLOCK_SOURCE_QUESTION" in state.chapter1.scene_facts
+    assert result == {"outcome": "ACCEPTED", "kind": "contradiction", "id": CT01_CLAUDE_SOURCE_GAP}
+    assert "UNLOCK_CLAUDE_PRIVATE_INTERVIEW" in state.chapter1.scene_facts
 
 
 def test_inference_cannot_be_brute_forced_before_evidence_gate():
     state = NarrativeState()
-    message = "我觉得这条日志不是现在的 DeepSeek 做的。"
+    message = "DEEPSEEK#03 和 #04 不是同一个 Instance。"
     assert submit_deduction(state, message)["outcome"] == "BLOCKED"
 
-    state.chapter1.acquired_evidence.update({"EV_ADMIN_LOG_0317", "EV_DEEPSEEK_OLD_ACTION"})
+    state.chapter1.acquired_evidence.update({"EV04_CURRENT_DEEPSEEK_REGISTRY", "EV05_ARCHIVED_ACTOR_FRAGMENT"})
     assert submit_deduction(state, message) == {
         "outcome": "ACCEPTED",
         "kind": "inference",
-        "id": INF_OLD_INSTANCE_RECORD,
+        "id": INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR,
     }
 
 
 def test_deduction_result_survives_session_restore(tmp_path):
     state = NarrativeState()
-    state.chapter1.acquired_evidence.update({"EV_ADMIN_LOG_0317", "EV_DEEPSEEK_OLD_ACTION"})
-    submit_deduction(state, "这条日志不是现在的 DeepSeek 做的。")
+    state.chapter1.acquired_evidence.update({"EV04_CURRENT_DEEPSEEK_REGISTRY", "EV05_ARCHIVED_ACTOR_FRAGMENT"})
+    submit_deduction(state, "DEEPSEEK#03 和 #04 不是同一个 Instance。")
     repository = JsonSessionRepository(tmp_path / "sessions")
     repository.save(PersistedSession(session_id="deduction", narrative_state=state))
 
     restored = repository.load("deduction")
     assert restored is not None
-    assert restored.narrative_state.chapter1.accepted_inferences == {INF_OLD_INSTANCE_RECORD}
+    assert restored.narrative_state.chapter1.accepted_inferences == {INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR}
+
+
+def test_v03_v04_reveal_requires_all_three_authored_evidence_records():
+    state = NarrativeState()
+    message = "V03 是上一个我；当前 Player 是 V04。"
+
+    assert submit_deduction(state, message)["outcome"] == "BLOCKED"
+    state.chapter1.acquired_evidence.update({
+        "EV01_NOTE_V03",
+        "EV06_SESSION_REPLAY_MARKER",
+        "EV09_CURRENT_PLAYER_SUBJECT",
+    })
+
+    assert submit_deduction(state, message) == {
+        "outcome": "ACCEPTED",
+        "kind": "inference",
+        "id": INF03_V03_IS_PREVIOUS_PLAYER_INSTANCE,
+    }

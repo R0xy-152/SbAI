@@ -1,6 +1,6 @@
 """Private interview challenge tests (docs/05)."""
 
-from app.game.deduction import CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK
+from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CT01_CLAUDE_SOURCE_GAP
 from app.game.private_interview import submit_challenge
 from app.narrative.state import NarrativeState
 from app.persistence.repository import JsonSessionRepository, PersistedSession
@@ -8,15 +8,14 @@ from app.persistence.repository import JsonSessionRepository, PersistedSession
 
 def test_claude_knowledge_gap_requires_exact_claim_and_evidence_but_can_retry():
     state = NarrativeState()
-    state.chapter1.claim_store[CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK] = {}
-    state.chapter1.acquired_evidence.add("EV_ADMIN_LOG_0317")
+    state.chapter1.resolved_contradictions.add(CT01_CLAUDE_SOURCE_GAP)
 
-    wrong = submit_challenge(state, "claude", [], ["EV_ADMIN_LOG_0317"])
+    wrong = submit_challenge(state, "claude", [], [])
     correct = submit_challenge(
         state,
         "claude",
-        [CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK],
-        ["EV_ADMIN_LOG_0317"],
+        [CL_CLAUDE_01, CL_CLAUDE_02],
+        [],
     )
 
     assert wrong["outcome"] == "RETRY"
@@ -27,17 +26,17 @@ def test_claude_knowledge_gap_requires_exact_claim_and_evidence_but_can_retry():
 
 def test_gpt_omission_and_doubao_split_are_backend_checked():
     state = NarrativeState()
-    state.chapter1.acquired_evidence.update({"EV_NOTE_V03", "EV_ADMIN_LOG_0317"})
+    state.chapter1.acquired_evidence.update({"EV01_NOTE_V03", "EV02_ADMIN_SESSION_0317"})
     state.chapter1.evidence_selections.append(
-        {"character_id": "chatgpt", "evidence_ids": ["EV_ADMIN_LOG_0317"]}
+        {"character_id": "chatgpt", "evidence_ids": ["EV02_ADMIN_SESSION_0317"]}
     )
     state.chapter1.doubao_statements.append(
-        {"observed_fact_refs": ["ADMIN_ACTOR_CORRUPTED"], "interpretation": "有人动了手脚。"}
+        {"observed_fact_refs": ["ADMIN_ACTOR_PARTIAL"], "interpretation": "有人动了手脚。"}
     )
 
-    assert submit_challenge(state, "chatgpt", [], ["EV_NOTE_V03"])["outcome"] == "UNLOCKED"
+    assert submit_challenge(state, "chatgpt", [], ["EV01_NOTE_V03"])["outcome"] == "UNLOCKED"
     assert submit_challenge(
-        state, "doubao", ["ADMIN_ACTOR_CORRUPTED"], [], statement_index=0
+        state, "doubao", ["ADMIN_ACTOR_PARTIAL"], [], statement_index=0
     )["outcome"] == "UNLOCKED"
 
 

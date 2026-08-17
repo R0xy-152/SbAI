@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.game.deduction import CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK
+from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CT01_CLAUDE_SOURCE_GAP
 from app.narrative.state import NarrativeState
 
 
@@ -20,10 +20,8 @@ def submit_challenge(
     success = False
     if character_id == "claude":
         success = (
-            claim_ids == [CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK]
-            and evidence_ids == ["EV_ADMIN_LOG_0317"]
-            and CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK in chapter.claim_store
-            and "EV_ADMIN_LOG_0317" in chapter.acquired_evidence
+            claim_ids == [CL_CLAUDE_01, CL_CLAUDE_02]
+            and CT01_CLAUDE_SOURCE_GAP in chapter.resolved_contradictions
         )
     elif character_id == "chatgpt":
         # The player identifies a held evidence item GPT omitted from one of
