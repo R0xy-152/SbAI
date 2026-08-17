@@ -463,8 +463,7 @@ class GameOrchestrator:
         """Commit one allow-listed physical scene interaction."""
         session = self._resolve_session(session_id)
         state = self._state.state_for(session.session_id)
-        if state.chapter1.phase == "bad_end":
-            raise ValueError("investigation is unavailable in Bad End")
+        self._assert_chapter_actions_available(state)
         # The chapter outline starts when the player performs their first
         # physical interaction; this is not a frontend-selected state change.
         if state.chapter1.phase == "opening":
@@ -497,6 +496,7 @@ class GameOrchestrator:
     def get_evidence(self, session_id: str) -> list[dict]:
         """List only evidence the player has actually acquired."""
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         chapter = state.chapter1
         return [
             evidence_view(
@@ -510,6 +510,7 @@ class GameOrchestrator:
 
     def submit_deduction(self, session_id: str, message: str) -> dict:
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         result = submit_deduction(state, message)
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
@@ -517,6 +518,7 @@ class GameOrchestrator:
 
     def submit_private_interview_challenge(self, session_id: str, **payload) -> dict:
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         result = submit_challenge(state, **payload)
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
@@ -524,6 +526,7 @@ class GameOrchestrator:
 
     def start_recovery(self, session_id: str) -> dict:
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         result = recovery.start(state)
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
@@ -531,6 +534,7 @@ class GameOrchestrator:
 
     def recovery_action(self, session_id: str, action: str, target: str, actor: str) -> dict:
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         result = recovery.act(state, action, target, actor)
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
@@ -538,6 +542,7 @@ class GameOrchestrator:
 
     def start_security_review(self, session_id: str) -> dict:
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         self._chapter1_script.advance(state, OPEN_SECURITY_REVIEW)
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
@@ -548,6 +553,7 @@ class GameOrchestrator:
         if character_id not in actions:
             raise ValueError("unknown Security Review character")
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         self._chapter1_script.advance(state, actions[character_id])
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
@@ -558,6 +564,7 @@ class GameOrchestrator:
         if action not in actions:
             raise ValueError("unknown cleanup action")
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         self._chapter1_script.advance(state, actions[action])
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
@@ -565,6 +572,7 @@ class GameOrchestrator:
 
     def reject_cleanup(self, session_id: str) -> dict:
         state = self._load_known_state(session_id)
+        self._assert_chapter_actions_available(state)
         self._chapter1_script.advance(state, REJECT_CLEANUP)
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
@@ -576,6 +584,7 @@ class GameOrchestrator:
         """Record a presentation without letting it advance plot truth."""
         state = self._load_known_state(session_id)
         chapter = state.chapter1
+        self._assert_chapter_actions_available(state)
         if evidence_id not in EVIDENCE_REGISTRY:
             raise ValueError(f"unknown evidence: {evidence_id}")
         if evidence_id not in chapter.acquired_evidence:
@@ -610,6 +619,13 @@ class GameOrchestrator:
         if self._sessions.get(session_id) is None:
             raise ValueError(f"unknown session: {session_id}")
         return self._state.state_for(session_id)
+
+    @staticmethod
+    def _assert_chapter_actions_available(state: NarrativeState) -> None:
+        if state.chapter1.phase == "bad_end":
+            raise ValueError("chapter actions are unavailable in Bad End")
+        if state.chapter1.phase == "to_be_continued":
+            raise ValueError("chapter actions are unavailable after To Be Continued")
 
     def _advance_first_case(self, state: NarrativeState) -> tuple[str, ...]:
         """Connect real exploration to the first authored investigation beat.

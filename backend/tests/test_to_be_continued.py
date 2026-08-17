@@ -36,3 +36,23 @@ def test_cleanup_character_deletion_persists_before_bad_end_confirmation(tmp_pat
 
     assert result["phase"] == "security_review"
     assert repo.load(session).narrative_state.chapter1.deleted_characters == {"deepseek"}
+
+
+def test_ended_chapter_rejects_all_non_chat_gameplay_actions():
+    orch = GameOrchestrator(SessionStore(), {"deepseek": _Runtime()})
+    session = orch._sessions.get_or_create(None).session_id
+    state = orch._state.state_for(session)
+    state.chapter1.phase = "bad_end"
+
+    for action in (
+        lambda: orch.get_evidence(session),
+        lambda: orch.submit_deduction(session, "V03 是上一个我"),
+        lambda: orch.start_recovery(session),
+        lambda: orch.start_security_review(session),
+    ):
+        try:
+            action()
+        except ValueError as exc:
+            assert "unavailable in Bad End" in str(exc)
+        else:  # pragma: no cover - each action must be closed by the backend
+            raise AssertionError("Bad End allowed a chapter gameplay action")
