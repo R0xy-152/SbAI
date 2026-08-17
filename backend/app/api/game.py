@@ -46,6 +46,14 @@ class DeductionRequest(BaseModel):
     message: str
 
 
+class PrivateInterviewChallengeRequest(BaseModel):
+    session_id: str
+    character_id: str
+    claim_ids: list[str] = []
+    evidence_ids: list[str] = []
+    statement_index: int | None = None
+
+
 @router.post("/api/game/action", response_model=InvestigationActionResponse)
 def investigation_action(
     payload: InvestigationActionRequest,
@@ -105,3 +113,14 @@ def deduction(
         return orchestrator.submit_deduction(payload.session_id, payload.message)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/api/game/private-interview/challenge")
+def private_interview_challenge(
+    payload: PrivateInterviewChallengeRequest,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+) -> dict:
+    try:
+        return orchestrator.submit_private_interview_challenge(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -32,6 +32,7 @@ class Chapter1State:
     hotspot_states: dict[str, str] = field(default_factory=dict)
     scene_facts: set[str] = field(default_factory=set)
     private_interview_rights: set[str] = field(default_factory=set)
+    private_interview_completed: set[str] = field(default_factory=set)
     recovery_status: str = "not_started"
     admin_holder: str | None = None
     security_review_open: bool = False
