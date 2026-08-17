@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from app.providers.base import LLMProvider
+
+if TYPE_CHECKING:
+    from app.narrative.inquiry import Inquiry
 
 
 @dataclass
@@ -39,6 +43,11 @@ class CharacterRequest:
     # the "current character state" layer (docs/04 §18.3). None when the state
     # is not tracked (e.g. scripted lines, or no mood committed yet).
     mood: CharacterMood | None = None
+    # A bounded question proposal, never Ground Truth and never a state change.
+    inquiry: Inquiry | None = None
+    # Immutable evidence explicitly shown to this character; the player
+    # inventory is intentionally not exposed here.
+    presented_evidence: list[dict] = field(default_factory=list)
 
 
 @dataclass

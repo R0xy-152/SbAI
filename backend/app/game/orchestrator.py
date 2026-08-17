@@ -34,6 +34,7 @@ from app.game.validation import ResponseRejected, validate_response
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.chapter1_script import BEGIN_CHAPTER, Chapter1ScriptRuntime
 from app.narrative.interpreter import NarrativeInterpreter
+from app.narrative.inquiry import Inquiry, NOOP as INQUIRY_NOOP, Chapter1InquiryInterpreter
 from app.narrative.state import NarrativeState
 from app.persistence.repository import PersistedSession, SessionRepository
 from app.providers.base import ProviderError
@@ -109,6 +110,7 @@ class GameOrchestrator:
         # (if any) a turn must speak instead of the LLM. None keeps the
         # pre-script behaviour for existing direct-construction tests.
         script: ScriptService | None = None,
+        inquiry_interpreter: Chapter1InquiryInterpreter | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -141,6 +143,7 @@ class GameOrchestrator:
         # Presence Gate map (docs/03 §13.6): empty means the gate is off.
         self._availability = availability if availability is not None else {}
         self._script = script
+        self._inquiry_interpreter = inquiry_interpreter
         self._investigation = InvestigationRuntime()
         self._chapter1_script = Chapter1ScriptRuntime()
 
@@ -181,6 +184,7 @@ class GameOrchestrator:
             narrative_state.current_scene if narrative_state is not None else DEFAULT_SCENE
         )
         context = CONTEXT_BUILDERS[character_id](scene, narrative_state)
+        inquiry = self._inquiry(session.session_id, message, character_id)
         # TV-13: deterministic memory selection (docs/05 §37-38) — only this
         # character's memories, importance/recency ordered, LIMIT N.
         memories = self._memory.store_for(session.session_id).retrieve(
@@ -235,6 +239,10 @@ class GameOrchestrator:
                     # emotionally continuous.
                     mood=self._character_state.mood_for(
                         session.session_id, character_id
+                    ),
+                    inquiry=inquiry,
+                    presented_evidence=self._presented_evidence_for(
+                        narrative_state, character_id
                     ),
                 )
             )
@@ -485,6 +493,37 @@ class GameOrchestrator:
         if self._sessions.get(session_id) is None:
             raise ValueError(f"unknown session: {session_id}")
         return self._state.state_for(session_id)
+
+    @staticmethod
+    def _presented_evidence_for(
+        state: NarrativeState | None, character_id: str
+    ) -> list[dict]:
+        if state is None:
+            return []
+        chapter = state.chapter1
+        return [
+            evidence_view(evidence_id, acquired=True, presented_to={character_id})
+            for evidence_id in sorted(chapter.acquired_evidence)
+            if character_id in chapter.presented_evidence.get(evidence_id, set())
+            and evidence_id in EVIDENCE_REGISTRY
+        ]
+
+    def _inquiry(self, session_id: str, message: str, character_id: str) -> Inquiry | None:
+        """Interpret a question without making it a narrative event."""
+        if self._inquiry_interpreter is None:
+            return None
+        state = self._state.state_for(session_id)
+        try:
+            inquiry = self._inquiry_interpreter.interpret(state, message)
+        except ProviderError:
+            return None
+        if inquiry.intent == INQUIRY_NOOP:
+            return None
+        # A question addressed to another character must not leak into this
+        # speaker's runtime; multi-character routing is a later phase.
+        if inquiry.target is not None and inquiry.target != character_id:
+            return None
+        return inquiry
 
     def _resolve_session(self, session_id: str | None) -> GameSession:
         """Restore a persisted session, or fall back to the in-memory store.

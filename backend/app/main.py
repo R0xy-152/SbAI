@@ -23,6 +23,7 @@ from app.characters.deepseek import DeepSeekRuntime
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
 from app.narrative.interpreter import NarrativeInterpreter
+from app.narrative.inquiry import Chapter1InquiryInterpreter
 from app.narrative.poc import build_poc_events
 from app.persistence.repository import JsonSessionRepository
 from app.providers.anthropic import AnthropicProvider
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
         sessions,
         runtimes,
         interpreter=NarrativeInterpreter(deepseek_provider),
+        inquiry_interpreter=Chapter1InquiryInterpreter(deepseek_provider),
         events=build_poc_events(),
         repository=JsonSessionRepository(data_dir),
         # Presence Gate (docs/03 §13.6): Claude is only interactable after the
