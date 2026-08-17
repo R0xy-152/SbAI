@@ -137,6 +137,9 @@ class CharacterResponse:
     # Evidence deliberately selected to frame this response. The Backend
     # validates it against what was presented to the speaker.
     evidence_refs: list[str] = field(default_factory=list)
+    # Doubao keeps what she observed separate from how she interpreted it.
+    observed_fact_refs: list[str] = field(default_factory=list)
+    interpretation: str | None = None
     # The model's own "why I replied this way" (docs/04 §47, the reference
     # template's "逻辑链拷打" reason field). Internal only: it is never copied
     # into the API response or history, so the player never sees it.
@@ -199,6 +202,8 @@ def parse_character_response(raw: str, expected_character_id: str) -> CharacterR
         action_proposals=_parse_action_proposals(data.get("action_proposals")),
         fact_refs=_parse_fact_refs(data.get("fact_refs")),
         evidence_refs=_parse_evidence_refs(data.get("evidence_refs")),
+        observed_fact_refs=_parse_observed_fact_refs(data.get("observed_fact_refs")),
+        interpretation=_parse_interpretation(data.get("interpretation")),
         reasoning=_parse_reasoning(data.get("reasoning")),
         next_mood=CharacterMood.from_dict(data.get("mood")),
     )
@@ -270,6 +275,22 @@ def _parse_evidence_refs(value) -> list[str]:
     if len(set(value)) != len(value):
         raise CharacterResponseValidationError("evidence_refs must not contain duplicates")
     return list(value)
+
+
+def _parse_observed_fact_refs(value) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(ref, str) for ref in value):
+        raise CharacterResponseValidationError("observed_fact_refs must be a list of strings")
+    return list(value)
+
+
+def _parse_interpretation(value) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise CharacterResponseValidationError("interpretation must be a non-empty string")
+    return value.strip()
 
 
 class CharacterRuntime(ABC):

@@ -21,6 +21,7 @@ from app.characters.base import CharacterRuntime
 from app.characters.claude import ClaudeRuntime
 from app.characters.chatgpt import ChatGPTRuntime
 from app.characters.deepseek import DeepSeekRuntime
+from app.characters.doubao import DoubaoRuntime
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
 from app.narrative.interpreter import NarrativeInterpreter
@@ -82,6 +83,7 @@ def create_app() -> FastAPI:
     deepseek_provider = build_provider("deepseek")
     claude_provider = build_provider("claude")
     chatgpt_provider = build_provider("chatgpt")
+    doubao_provider = build_provider("doubao")
     # Each generative character binds its own provider through the shared
     # LLMProvider interface (docs/02 §18). MVP default is the shared DeepSeek
     # adapter; Anthropic is an explicit opt-in (see build_provider). Each keeps
@@ -90,6 +92,7 @@ def create_app() -> FastAPI:
         "deepseek": DeepSeekRuntime(deepseek_provider),
         "claude": ClaudeRuntime(claude_provider),
         "chatgpt": ChatGPTRuntime(chatgpt_provider),
+        "doubao": DoubaoRuntime(doubao_provider),
     }
     # TV-11: the narrative pipeline (Interpreter → Event Evaluation → Commit)
     # is wired in for the running app. The POC events are validation fixtures
@@ -112,6 +115,7 @@ def create_app() -> FastAPI:
         availability={
             "claude": "claude_has_appeared",
             "chatgpt": "chatgpt_has_appeared",
+            "doubao": "doubao_has_appeared",
         },
         # Script layer (docs/03 §37): the deterministic authored lines — the
         # active opening (docs/01 §4) and per-event beat lines. Fixture ≠

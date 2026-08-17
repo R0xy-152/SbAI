@@ -92,6 +92,7 @@ class Chapter1ScriptRuntime:
         elif action == DOUBAO_APPEARS:
             self._require(CHATGPT in chapter.available_characters)
             chapter.available_characters.add(DOUBAO)
+            state.narrative_flags.add("doubao_has_appeared")
         elif action == COMPLETE_INVESTIGATION:
             self._require(DOUBAO in chapter.available_characters)
             chapter.acquired_evidence.update({"EV_DEEPSEEK_OLD_ACTION", "EV_CURRENT_SUBJECT"})

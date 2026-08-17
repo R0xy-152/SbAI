@@ -260,6 +260,9 @@ class GameOrchestrator:
                 allowed_evidence_ids=frozenset(
                     item["evidence_id"] for item in presented_evidence
                 ),
+                allowed_observed_fact_ids=frozenset(
+                    fact_id for item in presented_evidence for fact_id in item["facts"]
+                ),
             )
             approved = True
         except ResponseRejected as exc:
@@ -278,6 +281,15 @@ class GameOrchestrator:
                     {
                         "character_id": character_id,
                         "evidence_ids": list(response.evidence_refs),
+                    }
+                )
+            if character_id == "doubao" and (
+                response.observed_fact_refs or response.interpretation is not None
+            ):
+                self._state.state_for(session.session_id).chapter1.doubao_statements.append(
+                    {
+                        "observed_fact_refs": list(response.observed_fact_refs),
+                        "interpretation": response.interpretation,
                     }
                 )
             for proposal in response.memory_proposals:
