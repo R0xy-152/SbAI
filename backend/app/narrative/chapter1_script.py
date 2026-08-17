@@ -88,6 +88,7 @@ class Chapter1ScriptRuntime:
         elif action == CHATGPT_APPEARS:
             self._require("EV_ADMIN_LOG_0317" in chapter.acquired_evidence)
             chapter.available_characters.add(CHATGPT)
+            state.narrative_flags.add("chatgpt_has_appeared")
         elif action == DOUBAO_APPEARS:
             self._require(CHATGPT in chapter.available_characters)
             chapter.available_characters.add(DOUBAO)

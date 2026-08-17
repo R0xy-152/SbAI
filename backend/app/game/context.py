@@ -92,4 +92,7 @@ def build_claude_context(
 CONTEXT_BUILDERS: dict[str, Callable[[Scene, NarrativeState | None], CharacterContext]] = {
     "deepseek": build_deepseek_context,
     "claude": build_claude_context,
+    # ChatGPT's first-chapter evidence knowledge is supplied exclusively by
+    # CharacterRequest.presented_evidence, never by the global state.
+    "chatgpt": lambda scene, narrative_state: CharacterContext(),
 }

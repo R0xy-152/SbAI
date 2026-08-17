@@ -163,6 +163,7 @@ def _chapter1_from_dict(data: dict) -> Chapter1State:
             evidence_id: set(character_ids)
             for evidence_id, character_ids in data.get("presented_evidence", {}).items()
         },
+        "evidence_selections": list(data.get("evidence_selections", defaults.evidence_selections)),
         "claim_store": dict(data.get("claim_store", defaults.claim_store)),
         "hotspot_states": dict(data.get("hotspot_states", defaults.hotspot_states)),
         "scene_facts": set(data.get("scene_facts", defaults.scene_facts)),
@@ -186,6 +187,7 @@ def _chapter1_to_dict(state: Chapter1State) -> dict:
             evidence_id: sorted(character_ids)
             for evidence_id, character_ids in state.presented_evidence.items()
         },
+        "evidence_selections": state.evidence_selections,
         "claim_store": state.claim_store,
         "hotspot_states": state.hotspot_states,
         "scene_facts": sorted(state.scene_facts),

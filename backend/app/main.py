@@ -19,6 +19,7 @@ from app.api.chat import router as chat_router
 from app.api.game import router as game_router
 from app.characters.base import CharacterRuntime
 from app.characters.claude import ClaudeRuntime
+from app.characters.chatgpt import ChatGPTRuntime
 from app.characters.deepseek import DeepSeekRuntime
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
@@ -80,6 +81,7 @@ def create_app() -> FastAPI:
     sessions = SessionStore()
     deepseek_provider = build_provider("deepseek")
     claude_provider = build_provider("claude")
+    chatgpt_provider = build_provider("chatgpt")
     # Each generative character binds its own provider through the shared
     # LLMProvider interface (docs/02 §18). MVP default is the shared DeepSeek
     # adapter; Anthropic is an explicit opt-in (see build_provider). Each keeps
@@ -87,6 +89,7 @@ def create_app() -> FastAPI:
     runtimes: dict[str, CharacterRuntime] = {
         "deepseek": DeepSeekRuntime(deepseek_provider),
         "claude": ClaudeRuntime(claude_provider),
+        "chatgpt": ChatGPTRuntime(chatgpt_provider),
     }
     # TV-11: the narrative pipeline (Interpreter → Event Evaluation → Commit)
     # is wired in for the running app. The POC events are validation fixtures
@@ -106,7 +109,10 @@ def create_app() -> FastAPI:
         repository=JsonSessionRepository(data_dir),
         # Presence Gate (docs/03 §13.6): Claude is only interactable after the
         # Narrative Event commits `claude_has_appeared`. DeepSeek is ungated.
-        availability={"claude": "claude_has_appeared"},
+        availability={
+            "claude": "claude_has_appeared",
+            "chatgpt": "chatgpt_has_appeared",
+        },
         # Script layer (docs/03 §37): the deterministic authored lines — the
         # active opening (docs/01 §4) and per-event beat lines. Fixture ≠
         # Production (docs/06 §10); the wording is a placeholder.

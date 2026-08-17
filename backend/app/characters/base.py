@@ -134,6 +134,9 @@ class CharacterResponse:
     memory_proposals: list[MemoryProposal] = field(default_factory=list)
     action_proposals: list[ActionProposal] = field(default_factory=list)
     fact_refs: list[str] = field(default_factory=list)
+    # Evidence deliberately selected to frame this response. The Backend
+    # validates it against what was presented to the speaker.
+    evidence_refs: list[str] = field(default_factory=list)
     # The model's own "why I replied this way" (docs/04 §47, the reference
     # template's "逻辑链拷打" reason field). Internal only: it is never copied
     # into the API response or history, so the player never sees it.
@@ -195,6 +198,7 @@ def parse_character_response(raw: str, expected_character_id: str) -> CharacterR
         memory_proposals=_parse_memory_proposals(data.get("memory_proposals")),
         action_proposals=_parse_action_proposals(data.get("action_proposals")),
         fact_refs=_parse_fact_refs(data.get("fact_refs")),
+        evidence_refs=_parse_evidence_refs(data.get("evidence_refs")),
         reasoning=_parse_reasoning(data.get("reasoning")),
         next_mood=CharacterMood.from_dict(data.get("mood")),
     )
@@ -255,6 +259,16 @@ def _parse_fact_refs(value) -> list[str]:
         raise CharacterResponseValidationError("fact_refs is required")
     if not isinstance(value, list) or not all(isinstance(ref, str) for ref in value):
         raise CharacterResponseValidationError("fact_refs must be a list of strings")
+    return list(value)
+
+
+def _parse_evidence_refs(value) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(ref, str) for ref in value):
+        raise CharacterResponseValidationError("evidence_refs must be a list of strings")
+    if len(set(value)) != len(value):
+        raise CharacterResponseValidationError("evidence_refs must not contain duplicates")
     return list(value)
 
 

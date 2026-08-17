@@ -24,6 +24,7 @@ class Chapter1State:
     available_characters: set[str] = field(default_factory=set)
     acquired_evidence: set[str] = field(default_factory=set)
     presented_evidence: dict[str, set[str]] = field(default_factory=dict)
+    evidence_selections: list[dict] = field(default_factory=list)
     claim_store: dict[str, dict] = field(default_factory=dict)
     hotspot_states: dict[str, str] = field(default_factory=dict)
     scene_facts: set[str] = field(default_factory=set)

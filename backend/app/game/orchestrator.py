@@ -251,8 +251,16 @@ class GameOrchestrator:
         # impermissible response (wrong character, unauthorized fact, visual
         # leak, disallowed action) is rejected before it can touch history,
         # memory, state or the frontend, and replaced with a safe neutral line.
+        presented_evidence = self._presented_evidence_for(narrative_state, character_id)
         try:
-            validate_response(response, character_id=character_id, scene=scene)
+            validate_response(
+                response,
+                character_id=character_id,
+                scene=scene,
+                allowed_evidence_ids=frozenset(
+                    item["evidence_id"] for item in presented_evidence
+                ),
+            )
             approved = True
         except ResponseRejected as exc:
             logger.warning(
@@ -265,6 +273,13 @@ class GameOrchestrator:
         # (docs/03 §28-29). A rejected response proposes and commits nothing.
         memory_store = self._memory.store_for(session.session_id)
         if approved:
+            if response.evidence_refs:
+                self._state.state_for(session.session_id).chapter1.evidence_selections.append(
+                    {
+                        "character_id": character_id,
+                        "evidence_ids": list(response.evidence_refs),
+                    }
+                )
             for proposal in response.memory_proposals:
                 # Memory Write Gate (docs/05 §34-35): a proposal is a Proposal,
                 # not a Memory, until it passes the permission gate. Rejected

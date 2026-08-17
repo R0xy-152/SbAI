@@ -46,6 +46,7 @@ def validate_response(
     *,
     character_id: str,
     scene: Scene,
+    allowed_evidence_ids: frozenset[str] = frozenset(),
 ) -> None:
     """Run Character + Narrative Validation over a structured response.
 
@@ -53,6 +54,11 @@ def validate_response(
     response is approved (docs/04 §49-51).
     """
     _character_validation(response, character_id=character_id, scene=scene)
+    for evidence_id in response.evidence_refs:
+        if evidence_id not in allowed_evidence_ids:
+            raise ResponseRejected(
+                f"{character_id} is not authorized to reference evidence {evidence_id!r}"
+            )
     _narrative_validation(response)
 
 
