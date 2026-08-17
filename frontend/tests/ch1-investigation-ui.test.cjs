@@ -15,5 +15,6 @@ assert.match(js, /api\/game\/state/);
 assert.match(html, /id="evidence-panel"/);
 assert.match(js, /api\/game\/evidence/);
 assert.match(js, /api\/game\/present/);
+assert.match(js, /applyPresentation\(data\.presentation\)/);
 
 console.log("CH1 investigation UI wiring: PASS");

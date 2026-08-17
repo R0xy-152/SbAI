@@ -350,6 +350,7 @@ for (const button of investigationButtons) {
     try {
       const data = await sendInvestigationAction("INSPECT_HOTSPOT", button.dataset.hotspotId);
       applyInvestigationState(data.state);
+      applyPresentation(data.presentation);
       loadEvidence().catch(() => {});
       if (button.dataset.hotspotId === "CH1_NOTE_01") paperPanel.hidden = false;
       status.textContent = data.outcome === "ALREADY_COMPLETED" ? "这里已经调查完毕。" : "已调查。";
@@ -390,6 +391,7 @@ if (rubbingSurface) {
     try {
       const data = await sendInvestigationAction("PAPER_RUBBING_COMPLETE", "CH1_NOTE_01");
       applyInvestigationState(data.state);
+      applyPresentation(data.presentation);
       status.textContent = data.evidence_id ? "发现了一条重要线索。" : "纸张已调查。";
     } catch (_error) {
       submitted = false;

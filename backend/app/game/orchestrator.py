@@ -81,6 +81,7 @@ class InvestigationActionResult:
     hotspot_id: str
     evidence_id: str | None
     state: dict
+    presentation: tuple[str, ...] = ()
 
 
 @dataclass
@@ -419,6 +420,7 @@ class GameOrchestrator:
         result: InvestigationResult = self._investigation.apply(
             state, action, hotspot_id
         )
+        presentation = self._advance_first_case(state)
         if self._repository is not None:
             self._repository.save(self._snapshot(session.session_id))
         return InvestigationActionResult(
@@ -427,6 +429,7 @@ class GameOrchestrator:
             hotspot_id=result.hotspot_id,
             evidence_id=result.evidence_id,
             state=self._investigation_state_view(state),
+            presentation=presentation,
         )
 
     def get_investigation_state(self, session_id: str) -> dict:
@@ -493,6 +496,26 @@ class GameOrchestrator:
         if self._sessions.get(session_id) is None:
             raise ValueError(f"unknown session: {session_id}")
         return self._state.state_for(session_id)
+
+    def _advance_first_case(self, state: NarrativeState) -> tuple[str, ...]:
+        """Connect real exploration to the first authored investigation beat.
+
+        This is intentionally a tiny deterministic bridge: paper evidence
+        reveals Claude; the terminal log then resolves the first impossible
+        event. Neither step invokes a provider or unlocks later characters.
+        """
+        chapter = state.chapter1
+        presentation: list[str] = []
+        if "EV_NOTE_V03" in chapter.acquired_evidence and "claude" not in chapter.available_characters:
+            self._chapter1_script.advance(state, "CLAUDE_APPEARS")
+            presentation.append("SHOW_CHARACTER claude")
+        if (
+            "claude" in chapter.available_characters
+            and "EV_ADMIN_LOG_0317" in chapter.acquired_evidence
+            and "EV_CH1_RESOLVE_IMPOSSIBLE_EVENT" not in state.completed_events
+        ):
+            self._chapter1_script.advance(state, "RESOLVE_IMPOSSIBLE_EVENT")
+        return tuple(presentation)
 
     @staticmethod
     def _presented_evidence_for(

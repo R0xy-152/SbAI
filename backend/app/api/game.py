@@ -25,6 +25,7 @@ class InvestigationActionResponse(BaseModel):
     hotspot_id: str
     evidence_id: str | None = None
     state: dict
+    presentation: list[str] = []
 
 
 class PresentEvidenceRequest(BaseModel):

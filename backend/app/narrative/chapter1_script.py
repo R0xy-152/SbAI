@@ -74,9 +74,17 @@ class Chapter1ScriptRuntime:
         elif action == CLAUDE_APPEARS:
             self._require("EV_NOTE_V03" in chapter.acquired_evidence)
             chapter.available_characters.add(CLAUDE)
+            # Keeps the legacy generic Presence Gate aligned with the new
+            # chapter-one authoritative availability state.
+            state.narrative_flags.add("claude_has_appeared")
         elif action == RESOLVE_IMPOSSIBLE_EVENT:
             self._require(CLAUDE in chapter.available_characters)
+            # The actual terminal interaction now grants this evidence. The
+            # fallback add preserves the phase-two script fixture, which has
+            # no physical investigation runtime by design.
             chapter.acquired_evidence.add("EV_ADMIN_LOG_0317")
+            state.revealed_facts.add("FIRST_IMPOSSIBLE_EVENT_RESOLVED")
+            state.active_objective = "向 Claude 追问 03:17 的记录来源"
         elif action == CHATGPT_APPEARS:
             self._require("EV_ADMIN_LOG_0317" in chapter.acquired_evidence)
             chapter.available_characters.add(CHATGPT)

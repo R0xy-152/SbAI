@@ -78,6 +78,27 @@ def test_terminal_log_is_acquired_once_by_actual_investigation():
     assert repeated.state["acquired_evidence"] == ["EV_ADMIN_LOG_0317"]
 
 
+def test_first_case_links_paper_claude_and_terminal_without_llm():
+    orchestrator = _orchestrator()
+    inspected = orchestrator.handle_investigation_action(
+        None, INSPECT_HOTSPOT, CH1_NOTE_01
+    )
+    paper = orchestrator.handle_investigation_action(
+        inspected.session_id, PAPER_RUBBING_COMPLETE, CH1_NOTE_01
+    )
+    terminal = orchestrator.handle_investigation_action(
+        inspected.session_id, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN
+    )
+    state = orchestrator._state.state_for(inspected.session_id)
+
+    assert paper.presentation == ("SHOW_CHARACTER claude",)
+    assert "claude" in state.chapter1.available_characters
+    assert "claude_has_appeared" in state.narrative_flags
+    assert terminal.evidence_id == "EV_ADMIN_LOG_0317"
+    assert "FIRST_IMPOSSIBLE_EVENT_RESOLVED" in state.revealed_facts
+    assert state.active_objective == "向 Claude 追问 03:17 的记录来源"
+
+
 def test_hotspot_state_survives_repository_restore(tmp_path):
     repository = JsonSessionRepository(tmp_path / "sessions")
     first = _orchestrator(repository)
