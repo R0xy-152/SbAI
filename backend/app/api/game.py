@@ -179,3 +179,10 @@ def security_review_cleanup(payload: CleanupRequest, orchestrator: GameOrchestra
         return orchestrator.cleanup(**payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@router.post("/api/game/security-review/reject-cleanup")
+def security_review_reject_cleanup(session_id: str, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    try:
+        return orchestrator.reject_cleanup(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

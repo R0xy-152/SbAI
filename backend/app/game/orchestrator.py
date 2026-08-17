@@ -23,7 +23,7 @@ from app.game.deduction import CLAIM_REGISTRY, submit_deduction
 from app.game.private_interview import submit_challenge
 from app.game import recovery
 from app.game.security_review import SELF_PROOFS
-from app.narrative.chapter1_script import CONFIRM_KEEP_CHATGPT, DELEGATE_CLEANUP, DELETE_CLAUDE, DELETE_DEEPSEEK, DELETE_DOUBAO, OPEN_SECURITY_REVIEW, TESTIFY_CLAUDE, TESTIFY_CHATGPT, TESTIFY_DEEPSEEK, TESTIFY_DOUBAO
+from app.narrative.chapter1_script import CONFIRM_KEEP_CHATGPT, DELEGATE_CLEANUP, DELETE_CLAUDE, DELETE_DEEPSEEK, DELETE_DOUBAO, OPEN_SECURITY_REVIEW, REJECT_CLEANUP, TESTIFY_CLAUDE, TESTIFY_CHATGPT, TESTIFY_DEEPSEEK, TESTIFY_DOUBAO
 from app.game.investigation import InvestigationResult, InvestigationRuntime
 from app.game.memory import (
     MemoryRejected,
@@ -560,6 +560,13 @@ class GameOrchestrator:
         state = self._load_known_state(session_id)
         self._chapter1_script.advance(state, actions[action])
         return {"phase": state.chapter1.phase, "ending": state.chapter1.ending, "available_characters": sorted(state.chapter1.available_characters)}
+
+    def reject_cleanup(self, session_id: str) -> dict:
+        state = self._load_known_state(session_id)
+        self._chapter1_script.advance(state, REJECT_CLEANUP)
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
+        return {"phase": state.chapter1.phase, "ending": state.chapter1.ending, "scene_id": state.current_scene}
 
     def present_evidence(
         self, session_id: str, character_id: str, evidence_id: str
