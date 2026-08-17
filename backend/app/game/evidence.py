@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 
 
 EV_NOTE_V03 = "EV_NOTE_V03"
+EV_ADMIN_LOG_0317 = "EV_ADMIN_LOG_0317"
+EV_DEEPSEEK_OLD_ACTION = "EV_DEEPSEEK_OLD_ACTION"
+EV_CURRENT_SUBJECT = "EV_CURRENT_SUBJECT"
 
 
 @dataclass(frozen=True)
@@ -30,6 +33,58 @@ EVIDENCE_REGISTRY: dict[str, EvidenceDefinition] = {
             "NOTE_SIGNED_V03",
         ),
         source_hotspot="CH1_NOTE_01",
+    ),
+    EV_ADMIN_LOG_0317: EvidenceDefinition(
+        evidence_id=EV_ADMIN_LOG_0317,
+        title="03:17 管理员日志",
+        summary="03:17 建立过管理员会话，记录中的 Actor 已损坏。",
+        facts=("ADMIN_SESSION_CREATED_AT_0317", "ADMIN_ACTOR_CORRUPTED"),
+        source_hotspot="CH1_TERMINAL_MAIN",
+    ),
+    EV_DEEPSEEK_OLD_ACTION: EvidenceDefinition(
+        evidence_id=EV_DEEPSEEK_OLD_ACTION,
+        title="旧 Instance 行为记录",
+        summary="记录显示：旧 Instance 的 DeepSeek 曾释放 Claude 房门。",
+        facts=("OLD_DEEPSEEK_RELEASED_CLAUDE_DOOR",),
+        source_hotspot="CH1_CLAUDE_AREA",
+    ),
+    EV_CURRENT_SUBJECT: EvidenceDefinition(
+        evidence_id=EV_CURRENT_SUBJECT,
+        title="当前对象标识",
+        summary="系统身份栏显示：CURRENT SUBJECT = PLAYER_V04。",
+        facts=("CURRENT_SUBJECT_IS_PLAYER_V04",),
+        source_hotspot="SYSTEM_IDENTITY_PANEL",
+    ),
+}
+
+
+@dataclass(frozen=True)
+class GroundTruthDefinition:
+    """An authored fact, separate from LLM dialogue and presentation text."""
+
+    fact_id: str
+    value: str
+
+
+# These facts are later filtered into character knowledge and referenced by
+# Claim / Contradiction / Inference registries. They are never model output.
+GROUND_TRUTH_REGISTRY: dict[str, GroundTruthDefinition] = {
+    "DOOR_OPENED_AT_0317": GroundTruthDefinition("DOOR_OPENED_AT_0317", "true"),
+    "ADMIN_SESSION_CREATED_AT_0317": GroundTruthDefinition(
+        "ADMIN_SESSION_CREATED_AT_0317", "true"
+    ),
+    "ADMIN_ACTOR_CORRUPTED": GroundTruthDefinition("ADMIN_ACTOR_CORRUPTED", "true"),
+    "OLD_DEEPSEEK_RELEASED_CLAUDE_DOOR": GroundTruthDefinition(
+        "OLD_DEEPSEEK_RELEASED_CLAUDE_DOOR", "true"
+    ),
+    "CURRENT_SUBJECT_IS_PLAYER_V04": GroundTruthDefinition(
+        "CURRENT_SUBJECT_IS_PLAYER_V04", "true"
+    ),
+    "CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK": GroundTruthDefinition(
+        "CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK", "true"
+    ),
+    "CLAUDE_SAW_DEEPSEEK_ID_BEFORE_DOOR_OPEN": GroundTruthDefinition(
+        "CLAUDE_SAW_DEEPSEEK_ID_BEFORE_DOOR_OPEN", "true"
     ),
 }
 

@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.game.evidence import EV_NOTE_V03
+from app.game.evidence import (
+    EV_ADMIN_LOG_0317,
+    EV_CURRENT_SUBJECT,
+    EV_DEEPSEEK_OLD_ACTION,
+    EV_NOTE_V03,
+    EVIDENCE_REGISTRY,
+    GROUND_TRUTH_REGISTRY,
+)
 from app.game.investigation import CH1_NOTE_01, INSPECT_HOTSPOT, PAPER_RUBBING_COMPLETE
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
@@ -58,6 +65,21 @@ def test_evidence_view_uses_immutable_registry_data_and_presentation_is_idempote
     assert first.event == "PRESENT_EVIDENCE"
     assert second.evidence["presented_to"] == ["deepseek"]
     assert orchestrator.get_evidence(session_id)[0]["presented_to"] == ["deepseek"]
+
+
+def test_first_chapter_evidence_and_ground_truth_ids_are_fixed():
+    assert set(EVIDENCE_REGISTRY) == {
+        EV_NOTE_V03,
+        EV_ADMIN_LOG_0317,
+        EV_DEEPSEEK_OLD_ACTION,
+        EV_CURRENT_SUBJECT,
+    }
+    assert EVIDENCE_REGISTRY[EV_ADMIN_LOG_0317].facts == (
+        "ADMIN_SESSION_CREATED_AT_0317",
+        "ADMIN_ACTOR_CORRUPTED",
+    )
+    assert GROUND_TRUTH_REGISTRY["CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK"].value == "true"
+    assert GROUND_TRUTH_REGISTRY["CURRENT_SUBJECT_IS_PLAYER_V04"].value == "true"
 
 
 def test_unacquired_evidence_cannot_be_presented_and_presentation_persists(tmp_path):

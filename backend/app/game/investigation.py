@@ -20,6 +20,7 @@ class HotspotDefinition:
     scene_id: str
     interaction_type: str
     evidence_on_complete: str | None = None
+    evidence_on_inspect: str | None = None
     scene_fact_on_inspect: str | None = None
 
 
@@ -28,7 +29,11 @@ HOTSPOTS = {
         CH1_NOTE_01, "ROOM_A", "paper_rubbing", evidence_on_complete="EV_NOTE_V03"
     ),
     CH1_TERMINAL_MAIN: HotspotDefinition(
-        CH1_TERMINAL_MAIN, "ROOM_A", "inspect", scene_fact_on_inspect="TERMINAL_MAIN_INSPECTED"
+        CH1_TERMINAL_MAIN,
+        "ROOM_A",
+        "inspect",
+        evidence_on_inspect="EV_ADMIN_LOG_0317",
+        scene_fact_on_inspect="TERMINAL_MAIN_INSPECTED",
     ),
     CH1_CLAUDE_AREA: HotspotDefinition(
         CH1_CLAUDE_AREA, "ROOM_A", "inspect", scene_fact_on_inspect="CLAUDE_AREA_INSPECTED"
@@ -58,9 +63,15 @@ class InvestigationRuntime:
         if action == INSPECT_HOTSPOT:
             if current == "completed":
                 return InvestigationResult(action, hotspot_id, "ALREADY_COMPLETED")
-            state.chapter1.hotspot_states[hotspot_id] = "investigated"
+            evidence_id = hotspot.evidence_on_inspect
+            state.chapter1.hotspot_states[hotspot_id] = (
+                "completed" if evidence_id is not None else "investigated"
+            )
             if hotspot.scene_fact_on_inspect is not None:
                 state.chapter1.scene_facts.add(hotspot.scene_fact_on_inspect)
+            if evidence_id is not None:
+                state.chapter1.acquired_evidence.add(evidence_id)
+                return InvestigationResult(action, hotspot_id, "COMPLETED", evidence_id)
             return InvestigationResult(action, hotspot_id, "INVESTIGATED")
 
         if action == PAPER_RUBBING_COMPLETE:

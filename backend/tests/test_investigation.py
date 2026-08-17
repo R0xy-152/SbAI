@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.game.investigation import (
     CH1_NOTE_01,
+    CH1_TERMINAL_MAIN,
     INSPECT_HOTSPOT,
     PAPER_RUBBING_COMPLETE,
 )
@@ -59,6 +60,22 @@ def test_completion_before_investigation_fails_closed():
         _orchestrator().handle_investigation_action(
             None, PAPER_RUBBING_COMPLETE, CH1_NOTE_01
         )
+
+
+def test_terminal_log_is_acquired_once_by_actual_investigation():
+    orchestrator = _orchestrator()
+    first = orchestrator.handle_investigation_action(
+        None, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN
+    )
+    repeated = orchestrator.handle_investigation_action(
+        first.session_id, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN
+    )
+
+    assert first.outcome == "COMPLETED"
+    assert first.evidence_id == "EV_ADMIN_LOG_0317"
+    assert first.state["acquired_evidence"] == ["EV_ADMIN_LOG_0317"]
+    assert repeated.outcome == "ALREADY_COMPLETED"
+    assert repeated.state["acquired_evidence"] == ["EV_ADMIN_LOG_0317"]
 
 
 def test_hotspot_state_survives_repository_restore(tmp_path):
