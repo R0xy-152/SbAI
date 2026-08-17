@@ -7,6 +7,13 @@
       "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--port", "8000"],
       "port": 8000,
       "cwd": "D:\\gal\\backend"
+    },
+    {
+      "name": "gal-preview",
+      "runtimeExecutable": "D:\\gal\\backend\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--port", "8001"],
+      "port": 8001,
+      "cwd": "D:\\gal\\backend"
     }
   ]
 }
