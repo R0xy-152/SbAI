@@ -19,6 +19,7 @@ from app.characters.base import CharacterRequest, CharacterResponse, CharacterRu
 from app.characters.registry import CharacterRuntimeRegistry
 from app.game.context import CONTEXT_BUILDERS
 from app.game.evidence import EVIDENCE_REGISTRY, evidence_view
+from app.game.deduction import CLAIM_REGISTRY, submit_deduction
 from app.game.investigation import InvestigationResult, InvestigationRuntime
 from app.game.memory import (
     MemoryRejected,
@@ -276,6 +277,24 @@ class GameOrchestrator:
         # (docs/03 §28-29). A rejected response proposes and commits nothing.
         memory_store = self._memory.store_for(session.session_id)
         if approved:
+            definitions = [CLAIM_REGISTRY.get(claim_id) for claim_id in response.claim_refs]
+            if any(
+                definition is None or definition.character_id != character_id
+                for definition in definitions
+            ):
+                approved = False
+                response = runtime.safe_fallback()
+            else:
+                for definition in definitions:
+                    if definition is not None:
+                        self._state.state_for(session.session_id).chapter1.claim_store.setdefault(
+                            definition.claim_id,
+                            {
+                                "character_id": definition.character_id,
+                                "fact_refs": list(definition.fact_refs),
+                                "statement_type": "public",
+                            },
+                        )
             if response.evidence_refs:
                 self._state.state_for(session.session_id).chapter1.evidence_selections.append(
                     {
@@ -482,6 +501,13 @@ class GameOrchestrator:
             for evidence_id in sorted(chapter.acquired_evidence)
             if evidence_id in EVIDENCE_REGISTRY
         ]
+
+    def submit_deduction(self, session_id: str, message: str) -> dict:
+        state = self._load_known_state(session_id)
+        result = submit_deduction(state, message)
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
+        return result
 
     def present_evidence(
         self, session_id: str, character_id: str, evidence_id: str

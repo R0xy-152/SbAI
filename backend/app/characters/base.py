@@ -140,6 +140,7 @@ class CharacterResponse:
     # Doubao keeps what she observed separate from how she interpreted it.
     observed_fact_refs: list[str] = field(default_factory=list)
     interpretation: str | None = None
+    claim_refs: list[str] = field(default_factory=list)
     # The model's own "why I replied this way" (docs/04 §47, the reference
     # template's "逻辑链拷打" reason field). Internal only: it is never copied
     # into the API response or history, so the player never sees it.
@@ -204,6 +205,7 @@ def parse_character_response(raw: str, expected_character_id: str) -> CharacterR
         evidence_refs=_parse_evidence_refs(data.get("evidence_refs")),
         observed_fact_refs=_parse_observed_fact_refs(data.get("observed_fact_refs")),
         interpretation=_parse_interpretation(data.get("interpretation")),
+        claim_refs=_parse_claim_refs(data.get("claim_refs")),
         reasoning=_parse_reasoning(data.get("reasoning")),
         next_mood=CharacterMood.from_dict(data.get("mood")),
     )
@@ -291,6 +293,14 @@ def _parse_interpretation(value) -> str | None:
     if not isinstance(value, str) or not value.strip():
         raise CharacterResponseValidationError("interpretation must be a non-empty string")
     return value.strip()
+
+
+def _parse_claim_refs(value) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or not all(isinstance(ref, str) for ref in value):
+        raise CharacterResponseValidationError("claim_refs must be a list of strings")
+    return list(value)
 
 
 class CharacterRuntime(ABC):

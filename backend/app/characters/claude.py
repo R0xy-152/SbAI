@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from app.characters.base import CharacterRequest, CharacterResponse, GenerativeRuntime
 from app.characters.claude_truth import claude_inquiry_response, contract_prompt
+from app.game.deduction import CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK
+from app.narrative.inquiry import ASK_OBSERVATION_SOURCE
 from app.providers.base import ProviderError
 
 CLAUDE_PERSONA_SYSTEM = (
@@ -63,6 +65,11 @@ class ClaudeRuntime(GenerativeRuntime):
                     character_id="claude",
                     dialogue=deterministic,
                     emotion="serious",
+                    claim_refs=(
+                        [CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK]
+                        if request.inquiry.intent == ASK_OBSERVATION_SOURCE
+                        else []
+                    ),
                 )
         try:
             return super().respond(request)

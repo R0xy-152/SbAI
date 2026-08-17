@@ -26,6 +26,8 @@ class Chapter1State:
     presented_evidence: dict[str, set[str]] = field(default_factory=dict)
     evidence_selections: list[dict] = field(default_factory=list)
     doubao_statements: list[dict] = field(default_factory=list)
+    resolved_contradictions: set[str] = field(default_factory=set)
+    accepted_inferences: set[str] = field(default_factory=set)
     claim_store: dict[str, dict] = field(default_factory=dict)
     hotspot_states: dict[str, str] = field(default_factory=dict)
     scene_facts: set[str] = field(default_factory=set)

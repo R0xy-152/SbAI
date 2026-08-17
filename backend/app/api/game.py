@@ -41,6 +41,11 @@ class PresentEvidenceResponse(BaseModel):
     evidence: dict
 
 
+class DeductionRequest(BaseModel):
+    session_id: str
+    message: str
+
+
 @router.post("/api/game/action", response_model=InvestigationActionResponse)
 def investigation_action(
     payload: InvestigationActionRequest,
@@ -89,3 +94,14 @@ def present_evidence(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return PresentEvidenceResponse(**result.__dict__)
+
+
+@router.post("/api/game/deduction")
+def deduction(
+    payload: DeductionRequest,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+) -> dict:
+    try:
+        return orchestrator.submit_deduction(payload.session_id, payload.message)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
