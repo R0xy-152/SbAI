@@ -70,9 +70,9 @@ class Chapter1ScriptRuntime:
             chapter.private_interview_rights.add(DEEPSEEK)
         elif action == DISCOVER_NOTE:
             self._require(chapter.phase == "investigation" and DEEPSEEK in chapter.available_characters)
-            chapter.acquired_evidence.add("EV_NOTE_V03")
+            chapter.acquired_evidence.add("EV01_NOTE_V03")
         elif action == CLAUDE_APPEARS:
-            self._require("EV_NOTE_V03" in chapter.acquired_evidence)
+            self._require("EV01_NOTE_V03" in chapter.acquired_evidence)
             chapter.available_characters.add(CLAUDE)
             # Keeps the legacy generic Presence Gate aligned with the new
             # chapter-one authoritative availability state.
@@ -82,11 +82,11 @@ class Chapter1ScriptRuntime:
             # The actual terminal interaction now grants this evidence. The
             # fallback add preserves the phase-two script fixture, which has
             # no physical investigation runtime by design.
-            chapter.acquired_evidence.add("EV_ADMIN_LOG_0317")
+            chapter.acquired_evidence.update({"EV02_ADMIN_SESSION_0317", "EV03_C02_RELEASE", "EV04_CURRENT_DEEPSEEK_REGISTRY"})
             state.revealed_facts.add("FIRST_IMPOSSIBLE_EVENT_RESOLVED")
             state.active_objective = "向 Claude 追问 03:17 的记录来源"
         elif action == CHATGPT_APPEARS:
-            self._require("EV_ADMIN_LOG_0317" in chapter.acquired_evidence)
+            self._require("EV02_ADMIN_SESSION_0317" in chapter.acquired_evidence)
             chapter.available_characters.add(CHATGPT)
             state.narrative_flags.add("chatgpt_has_appeared")
         elif action == DOUBAO_APPEARS:
@@ -95,10 +95,10 @@ class Chapter1ScriptRuntime:
             state.narrative_flags.add("doubao_has_appeared")
         elif action == COMPLETE_INVESTIGATION:
             self._require(DOUBAO in chapter.available_characters)
-            chapter.acquired_evidence.update({"EV_DEEPSEEK_OLD_ACTION", "EV_CURRENT_SUBJECT"})
+            chapter.acquired_evidence.update({"EV05_ARCHIVED_ACTOR_FRAGMENT", "EV06_SESSION_REPLAY_MARKER", "EV09_CURRENT_PLAYER_SUBJECT"})
             state.active_objective = "确认角色证词中的信息缺口"
         elif action == UNLOCK_PRIVATE_INTERVIEWS:
-            self._require("EV_DEEPSEEK_OLD_ACTION" in chapter.acquired_evidence)
+            self._require("EV05_ARCHIVED_ACTOR_FRAGMENT" in chapter.acquired_evidence)
             chapter.private_interview_rights.update({CLAUDE, CHATGPT, DOUBAO})
             state.active_objective = "应对 Sandbox Recovery 危机"
         elif action == START_RECOVERY:

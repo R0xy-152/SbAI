@@ -6,10 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.game.evidence import (
-    EV_ADMIN_LOG_0317,
-    EV_CURRENT_SUBJECT,
-    EV_DEEPSEEK_OLD_ACTION,
-    EV_NOTE_V03,
+    EV01_NOTE_V03,
+    EV02_ADMIN_SESSION_0317,
     EVIDENCE_REGISTRY,
     GROUND_TRUTH_REGISTRY,
 )
@@ -50,17 +48,17 @@ def test_evidence_view_uses_immutable_registry_data_and_presentation_is_idempote
 
     listed = orchestrator.get_evidence(session_id)
     assert listed == [{
-        "evidence_id": EV_NOTE_V03,
-        "title": "V03 留下的纸条",
-        "summary": "纸条压痕显示：03:17，不要把管理员权限交给“最会替你解释的人”。署名 V03。",
+        "evidence_id": EV01_NOTE_V03,
+        "title": "压痕纸条",
+        "summary": "03:17\n\n不要把管理员权限交给‘最会替你解释的人’。\n\n—— V03",
         "facts": ["NOTE_TIMESTAMP_0317", "NOTE_WARNING_ADMIN_EXPLAINER", "NOTE_SIGNED_V03"],
-        "source_hotspot": CH1_NOTE_01,
+        "source_hotspot": "paper_rubbing",
         "acquired": True,
         "presented_to": [],
     }]
 
-    first = orchestrator.present_evidence(session_id, "deepseek", EV_NOTE_V03)
-    second = orchestrator.present_evidence(session_id, "deepseek", EV_NOTE_V03)
+    first = orchestrator.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
+    second = orchestrator.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
 
     assert first.event == "PRESENT_EVIDENCE"
     assert second.evidence["presented_to"] == ["deepseek"]
@@ -68,15 +66,17 @@ def test_evidence_view_uses_immutable_registry_data_and_presentation_is_idempote
 
 
 def test_first_chapter_evidence_and_ground_truth_ids_are_fixed():
-    assert set(EVIDENCE_REGISTRY) == {
-        EV_NOTE_V03,
-        EV_ADMIN_LOG_0317,
-        EV_DEEPSEEK_OLD_ACTION,
-        EV_CURRENT_SUBJECT,
-    }
-    assert EVIDENCE_REGISTRY[EV_ADMIN_LOG_0317].facts == (
+    assert set(EVIDENCE_REGISTRY) == {f"EV{index:02d}_{suffix}" for index, suffix in (
+        (1, "NOTE_V03"), (2, "ADMIN_SESSION_0317"), (3, "C02_RELEASE"),
+        (4, "CURRENT_DEEPSEEK_REGISTRY"), (5, "ARCHIVED_ACTOR_FRAGMENT"),
+        (6, "SESSION_REPLAY_MARKER"), (7, "CLAUDE_RECOVERY_ACCESS"),
+        (8, "GPT_RECOVERY_SERVICE"), (9, "CURRENT_PLAYER_SUBJECT"),
+        (10, "GPT_FIRST_SUMMARY"), (11, "GPT_SECOND_SUMMARY"),
+    )}
+    assert EVIDENCE_REGISTRY[EV02_ADMIN_SESSION_0317].facts == (
         "ADMIN_SESSION_CREATED_AT_0317",
-        "ADMIN_ACTOR_CORRUPTED",
+        "C02_RELEASED_AT_0317",
+        "ADMIN_ACTOR_PARTIAL",
     )
     assert GROUND_TRUTH_REGISTRY["CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK"].value == "true"
     assert GROUND_TRUTH_REGISTRY["CURRENT_SUBJECT_IS_PLAYER_V04"].value == "true"
@@ -90,10 +90,10 @@ def test_unacquired_evidence_cannot_be_presented_and_presentation_persists(tmp_p
     ).session_id
 
     with pytest.raises(ValueError, match="has not been acquired"):
-        first.present_evidence(session_id, "deepseek", EV_NOTE_V03)
+        first.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
 
     first.handle_investigation_action(session_id, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
-    first.present_evidence(session_id, "deepseek", EV_NOTE_V03)
+    first.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
 
     restored = _orchestrator(repository)
     assert restored.get_evidence(session_id)[0]["presented_to"] == ["deepseek"]
@@ -120,7 +120,7 @@ def test_evidence_api_ignores_client_supplied_content(tmp_path):
             json={
                 "session_id": inspected["session_id"],
                 "character_id": "deepseek",
-                "evidence_id": EV_NOTE_V03,
+                "evidence_id": EV01_NOTE_V03,
                 "summary": "injected",
                 "facts": ["INJECTED"],
             },

@@ -26,13 +26,13 @@ class HotspotDefinition:
 
 HOTSPOTS = {
     CH1_NOTE_01: HotspotDefinition(
-        CH1_NOTE_01, "ROOM_A", "paper_rubbing", evidence_on_complete="EV_NOTE_V03"
+        CH1_NOTE_01, "ROOM_A", "paper_rubbing", evidence_on_complete="EV01_NOTE_V03"
     ),
     CH1_TERMINAL_MAIN: HotspotDefinition(
         CH1_TERMINAL_MAIN,
         "ROOM_A",
         "inspect",
-        evidence_on_inspect="EV_ADMIN_LOG_0317",
+        evidence_on_inspect="EV02_ADMIN_SESSION_0317",
         scene_fact_on_inspect="TERMINAL_MAIN_INSPECTED",
     ),
     CH1_CLAUDE_AREA: HotspotDefinition(

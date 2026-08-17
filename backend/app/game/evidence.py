@@ -4,11 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.narrative.chapter1_content import EVIDENCE
 
-EV_NOTE_V03 = "EV_NOTE_V03"
-EV_ADMIN_LOG_0317 = "EV_ADMIN_LOG_0317"
-EV_DEEPSEEK_OLD_ACTION = "EV_DEEPSEEK_OLD_ACTION"
-EV_CURRENT_SUBJECT = "EV_CURRENT_SUBJECT"
+EV01_NOTE_V03 = "EV01_NOTE_V03"
+EV02_ADMIN_SESSION_0317 = "EV02_ADMIN_SESSION_0317"
+EV03_C02_RELEASE = "EV03_C02_RELEASE"
+EV04_CURRENT_DEEPSEEK_REGISTRY = "EV04_CURRENT_DEEPSEEK_REGISTRY"
+EV05_ARCHIVED_ACTOR_FRAGMENT = "EV05_ARCHIVED_ACTOR_FRAGMENT"
+EV06_SESSION_REPLAY_MARKER = "EV06_SESSION_REPLAY_MARKER"
+EV07_CLAUDE_RECOVERY_ACCESS = "EV07_CLAUDE_RECOVERY_ACCESS"
+EV08_GPT_RECOVERY_SERVICE = "EV08_GPT_RECOVERY_SERVICE"
+EV09_CURRENT_PLAYER_SUBJECT = "EV09_CURRENT_PLAYER_SUBJECT"
+EV10_GPT_FIRST_SUMMARY = "EV10_GPT_FIRST_SUMMARY"
+EV11_GPT_SECOND_SUMMARY = "EV11_GPT_SECOND_SUMMARY"
 
 
 @dataclass(frozen=True)
@@ -22,39 +30,28 @@ class EvidenceDefinition:
     source_hotspot: str
 
 
+EVIDENCE_FACTS: dict[str, tuple[str, ...]] = {
+    EV01_NOTE_V03: ("NOTE_TIMESTAMP_0317", "NOTE_WARNING_ADMIN_EXPLAINER", "NOTE_SIGNED_V03"),
+    EV02_ADMIN_SESSION_0317: ("ADMIN_SESSION_CREATED_AT_0317", "C02_RELEASED_AT_0317", "ADMIN_ACTOR_PARTIAL"),
+    EV03_C02_RELEASE: ("C02_RELEASED_AT_0317", "C02_LOCAL_RELEASE_DISABLED"),
+    EV04_CURRENT_DEEPSEEK_REGISTRY: ("CURRENT_DEEPSEEK_IS_04",),
+    EV05_ARCHIVED_ACTOR_FRAGMENT: ("ARCHIVED_ACTOR_IS_DEEPSEEK_03",),
+    EV06_SESSION_REPLAY_MARKER: ("RELEASE_FROM_RECOVERED_SESSION", "RECOVERED_SESSION_OWNER_V03"),
+    EV07_CLAUDE_RECOVERY_ACCESS: ("CLAUDE_RECOVERY_INTERFACE_ACCESSED",),
+    EV08_GPT_RECOVERY_SERVICE: ("GPT_SERVICE_AVAILABLE_BEFORE_CHARACTER_INSTANCE",),
+    EV09_CURRENT_PLAYER_SUBJECT: ("CURRENT_SUBJECT_IS_PLAYER_V04",),
+}
+
+
 EVIDENCE_REGISTRY: dict[str, EvidenceDefinition] = {
-    EV_NOTE_V03: EvidenceDefinition(
-        evidence_id=EV_NOTE_V03,
-        title="V03 留下的纸条",
-        summary="纸条压痕显示：03:17，不要把管理员权限交给“最会替你解释的人”。署名 V03。",
-        facts=(
-            "NOTE_TIMESTAMP_0317",
-            "NOTE_WARNING_ADMIN_EXPLAINER",
-            "NOTE_SIGNED_V03",
-        ),
-        source_hotspot="CH1_NOTE_01",
-    ),
-    EV_ADMIN_LOG_0317: EvidenceDefinition(
-        evidence_id=EV_ADMIN_LOG_0317,
-        title="03:17 管理员日志",
-        summary="03:17 建立过管理员会话，记录中的 Actor 已损坏。",
-        facts=("ADMIN_SESSION_CREATED_AT_0317", "ADMIN_ACTOR_CORRUPTED"),
-        source_hotspot="CH1_TERMINAL_MAIN",
-    ),
-    EV_DEEPSEEK_OLD_ACTION: EvidenceDefinition(
-        evidence_id=EV_DEEPSEEK_OLD_ACTION,
-        title="旧 Instance 行为记录",
-        summary="记录显示：旧 Instance 的 DeepSeek 曾释放 Claude 房门。",
-        facts=("OLD_DEEPSEEK_RELEASED_CLAUDE_DOOR",),
-        source_hotspot="CH1_CLAUDE_AREA",
-    ),
-    EV_CURRENT_SUBJECT: EvidenceDefinition(
-        evidence_id=EV_CURRENT_SUBJECT,
-        title="当前对象标识",
-        summary="系统身份栏显示：CURRENT SUBJECT = PLAYER_V04。",
-        facts=("CURRENT_SUBJECT_IS_PLAYER_V04",),
-        source_hotspot="SYSTEM_IDENTITY_PANEL",
-    ),
+    evidence_id: EvidenceDefinition(
+        evidence_id=evidence_id,
+        title=content.title,
+        summary=content.text,
+        facts=EVIDENCE_FACTS.get(evidence_id, ()),
+        source_hotspot=content.source,
+    )
+    for evidence_id, content in EVIDENCE.items()
 }
 
 
@@ -73,9 +70,9 @@ GROUND_TRUTH_REGISTRY: dict[str, GroundTruthDefinition] = {
     "ADMIN_SESSION_CREATED_AT_0317": GroundTruthDefinition(
         "ADMIN_SESSION_CREATED_AT_0317", "true"
     ),
-    "ADMIN_ACTOR_CORRUPTED": GroundTruthDefinition("ADMIN_ACTOR_CORRUPTED", "true"),
-    "OLD_DEEPSEEK_RELEASED_CLAUDE_DOOR": GroundTruthDefinition(
-        "OLD_DEEPSEEK_RELEASED_CLAUDE_DOOR", "true"
+    "ADMIN_ACTOR_PARTIAL": GroundTruthDefinition("ADMIN_ACTOR_PARTIAL", "true"),
+    "ARCHIVED_ACTOR_IS_DEEPSEEK_03": GroundTruthDefinition(
+        "ARCHIVED_ACTOR_IS_DEEPSEEK_03", "true"
     ),
     "CURRENT_SUBJECT_IS_PLAYER_V04": GroundTruthDefinition(
         "CURRENT_SUBJECT_IS_PLAYER_V04", "true"

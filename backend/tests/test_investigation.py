@@ -48,11 +48,11 @@ def test_paper_completion_requires_investigation_and_grants_evidence_once():
         first.session_id, PAPER_RUBBING_COMPLETE, CH1_NOTE_01
     )
 
-    assert complete.evidence_id == "EV_NOTE_V03"
+    assert complete.evidence_id == "EV01_NOTE_V03"
     assert complete.state["hotspots"][CH1_NOTE_01] == "completed"
-    assert complete.state["acquired_evidence"] == ["EV_NOTE_V03"]
+    assert complete.state["acquired_evidence"] == ["EV01_NOTE_V03"]
     assert repeated.outcome == "ALREADY_COMPLETED"
-    assert repeated.state["acquired_evidence"] == ["EV_NOTE_V03"]
+    assert repeated.state["acquired_evidence"] == ["EV01_NOTE_V03"]
 
 
 def test_completion_before_investigation_fails_closed():
@@ -72,10 +72,10 @@ def test_terminal_log_is_acquired_once_by_actual_investigation():
     )
 
     assert first.outcome == "COMPLETED"
-    assert first.evidence_id == "EV_ADMIN_LOG_0317"
-    assert first.state["acquired_evidence"] == ["EV_ADMIN_LOG_0317"]
+    assert first.evidence_id == "EV02_ADMIN_SESSION_0317"
+    assert first.state["acquired_evidence"] == ["EV02_ADMIN_SESSION_0317"]
     assert repeated.outcome == "ALREADY_COMPLETED"
-    assert repeated.state["acquired_evidence"] == ["EV_ADMIN_LOG_0317"]
+    assert repeated.state["acquired_evidence"] == ["EV02_ADMIN_SESSION_0317"]
 
 
 def test_first_case_links_paper_claude_and_terminal_without_llm():
@@ -94,7 +94,7 @@ def test_first_case_links_paper_claude_and_terminal_without_llm():
     assert paper.presentation == ("SHOW_CHARACTER claude",)
     assert "claude" in state.chapter1.available_characters
     assert "claude_has_appeared" in state.narrative_flags
-    assert terminal.evidence_id == "EV_ADMIN_LOG_0317"
+    assert terminal.evidence_id == "EV02_ADMIN_SESSION_0317"
     assert "FIRST_IMPOSSIBLE_EVENT_RESOLVED" in state.revealed_facts
     assert state.active_objective == "向 Claude 追问 03:17 的记录来源"
 
@@ -114,7 +114,7 @@ def test_hotspot_state_survives_repository_restore(tmp_path):
     )
 
     assert restored["hotspots"][CH1_NOTE_01] == "completed"
-    assert restored["acquired_evidence"] == ["EV_NOTE_V03"]
+    assert restored["acquired_evidence"] == ["EV01_NOTE_V03"]
 
 
 def test_action_api_only_accepts_allow_listed_hotspot_actions(tmp_path):
@@ -139,4 +139,4 @@ def test_action_api_only_accepts_allow_listed_hotspot_actions(tmp_path):
         )
 
     assert completed.status_code == 200
-    assert completed.json()["evidence_id"] == "EV_NOTE_V03"
+    assert completed.json()["evidence_id"] == "EV01_NOTE_V03"

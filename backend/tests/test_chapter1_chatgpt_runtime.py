@@ -39,28 +39,28 @@ class _Provider(LLMProvider):
 
 
 def test_chatgpt_prompt_and_response_make_evidence_order_traceable():
-    provider = _Provider(["EV_ADMIN_LOG_0317", "EV_NOTE_V03"])
+    provider = _Provider(["EV02_ADMIN_SESSION_0317", "EV01_NOTE_V03"])
     response = ChatGPTRuntime(provider).respond(
         CharacterRequest(
             character_id="chatgpt",
             player_message="整理一下线索。",
             presented_evidence=[
-                {"evidence_id": "EV_NOTE_V03", "summary": "纸条包含 03:17。"},
-                {"evidence_id": "EV_ADMIN_LOG_0317", "summary": "管理员日志记录 Actor 损坏。"},
+                {"evidence_id": "EV01_NOTE_V03", "summary": "纸条包含 03:17。"},
+                {"evidence_id": "EV02_ADMIN_SESSION_0317", "summary": "管理员会话记录。"},
             ],
         )
     )
 
-    assert response.evidence_refs == ["EV_ADMIN_LOG_0317", "EV_NOTE_V03"]
-    assert "EV_NOTE_V03" in provider.user
-    assert "EV_ADMIN_LOG_0317" in provider.user
+    assert response.evidence_refs == ["EV02_ADMIN_SESSION_0317", "EV01_NOTE_V03"]
+    assert "EV01_NOTE_V03" in provider.user
+    assert "EV02_ADMIN_SESSION_0317" in provider.user
 
 
 def test_chatgpt_cannot_reference_evidence_that_was_not_presented():
     response = CharacterResponse(
         character_id="chatgpt",
         dialogue="我看过日志。",
-        evidence_refs=["EV_ADMIN_LOG_0317"],
+        evidence_refs=["EV02_ADMIN_SESSION_0317"],
     )
 
     with pytest.raises(ResponseRejected, match="not authorized to reference evidence"):
@@ -68,7 +68,7 @@ def test_chatgpt_cannot_reference_evidence_that_was_not_presented():
             response,
             character_id="chatgpt",
             scene=Scene(scene_id="ROOM_A", wall_code=""),
-            allowed_evidence_ids=frozenset({"EV_NOTE_V03"}),
+            allowed_evidence_ids=frozenset({"EV01_NOTE_V03"}),
         )
 
 
@@ -76,18 +76,18 @@ def test_approved_selection_is_persisted_for_later_audit(tmp_path):
     repository = JsonSessionRepository(tmp_path / "sessions")
     orchestrator = GameOrchestrator(
         SessionStore(),
-        {"chatgpt": ChatGPTRuntime(_Provider(["EV_NOTE_V03"]))},
+        {"chatgpt": ChatGPTRuntime(_Provider(["EV01_NOTE_V03"]))},
         repository=repository,
     )
     session_id = orchestrator._sessions.get_or_create(None).session_id
     state = orchestrator._state.state_for(session_id)
-    state.chapter1.acquired_evidence.add("EV_NOTE_V03")
-    state.chapter1.presented_evidence["EV_NOTE_V03"] = {"chatgpt"}
+    state.chapter1.acquired_evidence.add("EV01_NOTE_V03")
+    state.chapter1.presented_evidence["EV01_NOTE_V03"] = {"chatgpt"}
 
     orchestrator.handle_turn(session_id, "整理线索。", character_id="chatgpt")
 
     restored = JsonSessionRepository(tmp_path / "sessions").load(session_id)
     assert restored is not None
     assert restored.narrative_state.chapter1.evidence_selections == [
-        {"character_id": "chatgpt", "evidence_ids": ["EV_NOTE_V03"]}
+        {"character_id": "chatgpt", "evidence_ids": ["EV01_NOTE_V03"]}
     ]

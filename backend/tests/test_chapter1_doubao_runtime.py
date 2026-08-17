@@ -27,7 +27,7 @@ class _Provider(LLMProvider):
                 "memory_proposals": [],
                 "action_proposals": [],
                 "fact_refs": [],
-                "observed_fact_refs": ["ADMIN_ACTOR_CORRUPTED"],
+                "observed_fact_refs": ["ADMIN_ACTOR_PARTIAL"],
                 "interpretation": "有人故意做了手脚。",
             },
             ensure_ascii=False,
@@ -41,15 +41,15 @@ def test_doubao_keeps_observation_and_interpretation_separate():
             player_message="你怎么看这条日志？",
             presented_evidence=[
                 {
-                    "evidence_id": "EV_ADMIN_LOG_0317",
-                    "summary": "管理员日志记录 Actor 损坏。",
-                    "facts": ["ADMIN_SESSION_CREATED_AT_0317", "ADMIN_ACTOR_CORRUPTED"],
+                    "evidence_id": "EV02_ADMIN_SESSION_0317",
+                    "summary": "管理员会话记录。",
+                    "facts": ["ADMIN_SESSION_CREATED_AT_0317", "ADMIN_ACTOR_PARTIAL"],
                 }
             ],
         )
     )
 
-    assert response.observed_fact_refs == ["ADMIN_ACTOR_CORRUPTED"]
+    assert response.observed_fact_refs == ["ADMIN_ACTOR_PARTIAL"]
     assert response.interpretation == "有人故意做了手脚。"
 
 
@@ -65,7 +65,7 @@ def test_doubao_cannot_turn_an_unseen_fact_into_an_observation():
             response,
             character_id="doubao",
             scene=Scene(scene_id="ROOM_A", wall_code=""),
-            allowed_observed_fact_ids=frozenset({"ADMIN_ACTOR_CORRUPTED"}),
+            allowed_observed_fact_ids=frozenset({"ADMIN_ACTOR_PARTIAL"}),
         )
 
 
@@ -76,8 +76,8 @@ def test_doubao_statement_is_persisted_as_two_distinct_fields(tmp_path):
     )
     session_id = orchestrator._sessions.get_or_create(None).session_id
     state = orchestrator._state.state_for(session_id)
-    state.chapter1.acquired_evidence.add("EV_ADMIN_LOG_0317")
-    state.chapter1.presented_evidence["EV_ADMIN_LOG_0317"] = {"doubao"}
+    state.chapter1.acquired_evidence.add("EV02_ADMIN_SESSION_0317")
+    state.chapter1.presented_evidence["EV02_ADMIN_SESSION_0317"] = {"doubao"}
 
     orchestrator.handle_turn(session_id, "你怎么看？", character_id="doubao")
 
@@ -85,7 +85,7 @@ def test_doubao_statement_is_persisted_as_two_distinct_fields(tmp_path):
     assert restored is not None
     assert restored.narrative_state.chapter1.doubao_statements == [
         {
-            "observed_fact_refs": ["ADMIN_ACTOR_CORRUPTED"],
+            "observed_fact_refs": ["ADMIN_ACTOR_PARTIAL"],
             "interpretation": "有人故意做了手脚。",
         }
     ]

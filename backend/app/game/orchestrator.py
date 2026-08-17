@@ -620,12 +620,12 @@ class GameOrchestrator:
         """
         chapter = state.chapter1
         presentation: list[str] = []
-        if "EV_NOTE_V03" in chapter.acquired_evidence and "claude" not in chapter.available_characters:
+        if "EV01_NOTE_V03" in chapter.acquired_evidence and "claude" not in chapter.available_characters:
             self._chapter1_script.advance(state, "CLAUDE_APPEARS")
             presentation.append("SHOW_CHARACTER claude")
         if (
             "claude" in chapter.available_characters
-            and "EV_ADMIN_LOG_0317" in chapter.acquired_evidence
+            and "EV02_ADMIN_SESSION_0317" in chapter.acquired_evidence
             and "EV_CH1_RESOLVE_IMPOSSIBLE_EVENT" not in state.completed_events
         ):
             self._chapter1_script.advance(state, "RESOLVE_IMPOSSIBLE_EVENT")
