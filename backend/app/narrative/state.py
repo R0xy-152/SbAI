@@ -12,6 +12,27 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class Chapter1State:
+    """Authoritative state for the new chapter-one deterministic skeleton.
+
+    This is deliberately a chapter outline, not an implementation of the
+    later investigation, evidence, interview, or recovery subsystems. Those
+    systems will replace the corresponding script actions in later phases.
+    """
+
+    phase: str = "opening"
+    available_characters: set[str] = field(default_factory=set)
+    acquired_evidence: set[str] = field(default_factory=set)
+    private_interview_rights: set[str] = field(default_factory=set)
+    recovery_status: str = "not_started"
+    admin_holder: str | None = None
+    security_review_open: bool = False
+    testified_characters: list[str] = field(default_factory=list)
+    deleted_characters: set[str] = field(default_factory=set)
+    ending: str | None = None
+
+
+@dataclass
 class NarrativeState:
     current_scene: str = "binding_room"
     story_phase: str = "prologue"
@@ -19,3 +40,4 @@ class NarrativeState:
     revealed_facts: set[str] = field(default_factory=set)
     completed_events: set[str] = field(default_factory=set)
     active_objective: str | None = None
+    chapter1: Chapter1State = field(default_factory=Chapter1State)

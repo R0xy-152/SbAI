@@ -21,7 +21,7 @@ from pathlib import Path
 
 from app.characters.base import CharacterMood
 from app.game.memory import EpisodicMemory
-from app.narrative.state import NarrativeState
+from app.narrative.state import Chapter1State, NarrativeState
 
 
 @dataclass
@@ -108,6 +108,7 @@ def _session_to_dict(session: PersistedSession) -> dict:
             "revealed_facts": sorted(state.revealed_facts),
             "completed_events": sorted(state.completed_events),
             "active_objective": state.active_objective,
+            "chapter1": _chapter1_to_dict(state.chapter1),
         },
         "memories": {
             owner: [_memory_to_dict(memory) for memory in memories]
@@ -134,6 +135,7 @@ def _session_from_dict(data: dict) -> PersistedSession:
             revealed_facts=set(narrative["revealed_facts"]),
             completed_events=set(narrative["completed_events"]),
             active_objective=narrative["active_objective"],
+            chapter1=_chapter1_from_dict(narrative.get("chapter1", {})),
         ),
         memories={
             owner: [_memory_from_dict(memory) for memory in memories]
@@ -149,6 +151,38 @@ def _session_from_dict(data: dict) -> PersistedSession:
             for owner, mood in data.get("character_states", {}).items()
         },
     )
+
+
+def _chapter1_from_dict(data: dict) -> Chapter1State:
+    defaults = Chapter1State()
+    values = {
+        "phase": data.get("phase", defaults.phase),
+        "available_characters": set(data.get("available_characters", defaults.available_characters)),
+        "acquired_evidence": set(data.get("acquired_evidence", defaults.acquired_evidence)),
+        "private_interview_rights": set(data.get("private_interview_rights", defaults.private_interview_rights)),
+        "recovery_status": data.get("recovery_status", defaults.recovery_status),
+        "admin_holder": data.get("admin_holder", defaults.admin_holder),
+        "security_review_open": data.get("security_review_open", defaults.security_review_open),
+        "testified_characters": list(data.get("testified_characters", defaults.testified_characters)),
+        "deleted_characters": set(data.get("deleted_characters", defaults.deleted_characters)),
+        "ending": data.get("ending", defaults.ending),
+    }
+    return Chapter1State(**values)
+
+
+def _chapter1_to_dict(state: Chapter1State) -> dict:
+    return {
+        "phase": state.phase,
+        "available_characters": sorted(state.available_characters),
+        "acquired_evidence": sorted(state.acquired_evidence),
+        "private_interview_rights": sorted(state.private_interview_rights),
+        "recovery_status": state.recovery_status,
+        "admin_holder": state.admin_holder,
+        "security_review_open": state.security_review_open,
+        "testified_characters": state.testified_characters,
+        "deleted_characters": sorted(state.deleted_characters),
+        "ending": state.ending,
+    }
 
 
 def _memory_to_dict(memory: EpisodicMemory) -> dict:
