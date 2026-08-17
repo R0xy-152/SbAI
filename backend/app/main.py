@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.chat import router as chat_router
+from app.api.game import router as game_router
 from app.characters.base import CharacterRuntime
 from app.characters.claude import ClaudeRuntime
 from app.characters.deepseek import DeepSeekRuntime
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
         script=ScriptService(build_script_nodes()),
     )
     app.include_router(chat_router)
+    app.include_router(game_router)
 
     # Serve the static frontend from the repo root so the game can be validated
     # in a browser without a separate static server. API routes are registered

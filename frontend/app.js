@@ -15,6 +15,14 @@ const switchButtons = {
   claude: document.querySelector("#switch-claude"),
 };
 
+const investigationButtons =
+  typeof document.querySelectorAll === "function"
+    ? document.querySelectorAll("[data-hotspot-id]")
+    : [];
+const paperPanel = document.querySelector("#paper-panel");
+const paperClose = document.querySelector("#paper-close");
+const rubbingSurface = document.querySelector("#rubbing-surface");
+
 // TV-16: per-character display (docs/01 §10.1-10.2). Claude's portrait is a
 // temporary validation fixture (docs/06 §28: Fixture ≠ Production Content).
 const CHARACTERS = {
@@ -250,6 +258,69 @@ async function sendMessage(message) {
   return data;
 }
 
+async function sendInvestigationAction(action, hotspotId) {
+  const response = await fetch(`${API_BASE}/api/game/action`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, action, hotspot_id: hotspotId }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const data = await response.json();
+  sessionId = data.session_id;
+  writeSessionId(sessionId);
+  return data;
+}
+
+function applyInvestigationState(state) {
+  for (const button of investigationButtons) {
+    const hotspotState = state.hotspots?.[button.dataset.hotspotId];
+    button.classList.toggle("is-completed", hotspotState === "completed");
+  }
+}
+
+async function loadInvestigationState() {
+  if (!sessionId || typeof fetch !== "function") return;
+  const response = await fetch(
+    `${API_BASE}/api/game/state?session_id=${encodeURIComponent(sessionId)}`,
+  );
+  if (response.ok) applyInvestigationState(await response.json());
+}
+
+for (const button of investigationButtons) {
+  button.addEventListener("click", async () => {
+    try {
+      const data = await sendInvestigationAction("INSPECT_HOTSPOT", button.dataset.hotspotId);
+      applyInvestigationState(data.state);
+      if (button.dataset.hotspotId === "CH1_NOTE_01") paperPanel.hidden = false;
+      status.textContent = data.outcome === "ALREADY_COMPLETED" ? "这里已经调查完毕。" : "已调查。";
+    } catch (_error) {
+      status.textContent = "调查失败，请重试。";
+    }
+  });
+}
+
+paperClose?.addEventListener("click", () => { paperPanel.hidden = true; });
+
+if (rubbingSurface) {
+  let coveredPoints = 0;
+  let submitted = false;
+  rubbingSurface.addEventListener("pointermove", async () => {
+    if (submitted) return;
+    coveredPoints += 1;
+    if (coveredPoints < 30) return;
+    submitted = true;
+    rubbingSurface.classList.add("is-revealed");
+    try {
+      const data = await sendInvestigationAction("PAPER_RUBBING_COMPLETE", "CH1_NOTE_01");
+      applyInvestigationState(data.state);
+      status.textContent = data.evidence_id ? "发现了一条重要线索。" : "纸张已调查。";
+    } catch (_error) {
+      submitted = false;
+      status.textContent = "涂画提交失败，请重试。";
+    }
+  });
+}
+
 function setWaiting(waiting) {
   input.disabled = waiting;
   sendButton.disabled = waiting;
@@ -322,6 +393,7 @@ async function openOpening() {
     const data = await response.json();
     sessionId = data.session_id;
     writeSessionId(sessionId);
+    await loadInvestigationState();
     if (!data.dialogue) return; // already opened: keep the current stage
     applyPresentation(data.presentation);
     setSpeaker(data.character_id);

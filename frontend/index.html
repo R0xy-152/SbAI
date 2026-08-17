@@ -26,6 +26,21 @@
         />
       </section>
 
+      <nav class="scene-hotspots" aria-label="调查场景">
+        <button type="button" class="scene-hotspot hotspot-note" data-hotspot-id="CH1_NOTE_01">桌上的纸</button>
+        <button type="button" class="scene-hotspot hotspot-terminal" data-hotspot-id="CH1_TERMINAL_MAIN">终端</button>
+        <button type="button" class="scene-hotspot hotspot-claude" data-hotspot-id="CH1_CLAUDE_AREA">房间角落</button>
+      </nav>
+
+      <section id="paper-panel" class="paper-panel" hidden aria-label="纸张涂画">
+        <button type="button" id="paper-close" class="paper-close">关闭</button>
+        <p>在纸面上拖动，让压痕显现。</p>
+        <div id="rubbing-surface" class="rubbing-surface">
+          <p class="paper-message">03:17<br />不要把管理员权限交给<br />“最会替你解释的人”。<br />—— V03</p>
+          <div id="rubbing-cover" class="rubbing-cover"></div>
+        </div>
+      </section>
+
       <section class="dialogue-panel" aria-live="polite" aria-atomic="true">
         <p id="character-name" class="character-name">DeepSeek</p>
         <p id="dialogue-text" class="dialogue-text">
@@ -67,7 +82,6 @@
     <script src="./app.js"></script>
   </body>
 </html>
-
 
 
 

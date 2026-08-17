@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
 from app.characters.registry import CharacterRuntimeRegistry
 from app.game.context import CONTEXT_BUILDERS
+from app.game.investigation import InvestigationResult, InvestigationRuntime
 from app.game.memory import (
     MemoryRejected,
     MemoryService,
@@ -30,6 +31,7 @@ from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.game.validation import ResponseRejected, validate_response
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
+from app.narrative.chapter1_script import BEGIN_CHAPTER, Chapter1ScriptRuntime
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.state import NarrativeState
 from app.persistence.repository import PersistedSession, SessionRepository
@@ -68,6 +70,15 @@ class TurnResult:
     # deterministic backend facts, separate from the model's animation
     # proposal.
     presentation: tuple[str, ...] = ()
+
+
+@dataclass
+class InvestigationActionResult:
+    session_id: str
+    outcome: str
+    hotspot_id: str
+    evidence_id: str | None
+    state: dict
 
 
 class GameOrchestrator:
@@ -121,6 +132,8 @@ class GameOrchestrator:
         # Presence Gate map (docs/03 §13.6): empty means the gate is off.
         self._availability = availability if availability is not None else {}
         self._script = script
+        self._investigation = InvestigationRuntime()
+        self._chapter1_script = Chapter1ScriptRuntime()
 
     def handle_turn(
         self,
@@ -375,6 +388,48 @@ class GameOrchestrator:
         if session is None:
             raise ValueError(f"unknown session: {session_id}")
         return list(session.messages)
+
+    def handle_investigation_action(
+        self, session_id: str | None, action: str, hotspot_id: str
+    ) -> InvestigationActionResult:
+        """Commit one allow-listed physical scene interaction."""
+        session = self._resolve_session(session_id)
+        state = self._state.state_for(session.session_id)
+        # The chapter outline starts when the player performs their first
+        # physical interaction; this is not a frontend-selected state change.
+        if state.chapter1.phase == "opening":
+            self._chapter1_script.advance(state, BEGIN_CHAPTER)
+        result: InvestigationResult = self._investigation.apply(
+            state, action, hotspot_id
+        )
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session.session_id))
+        return InvestigationActionResult(
+            session_id=session.session_id,
+            outcome=result.outcome,
+            hotspot_id=result.hotspot_id,
+            evidence_id=result.evidence_id,
+            state=self._investigation_state_view(state),
+        )
+
+    def get_investigation_state(self, session_id: str) -> dict:
+        """Return hotspot state without minting a new session."""
+        if self._repository is not None:
+            persisted = self._repository.load(session_id)
+            if persisted is not None:
+                self._restore_session(persisted)
+        if self._sessions.get(session_id) is None:
+            raise ValueError(f"unknown session: {session_id}")
+        return self._investigation_state_view(self._state.state_for(session_id))
+
+    @staticmethod
+    def _investigation_state_view(state: NarrativeState) -> dict:
+        chapter = state.chapter1
+        return {
+            "scene_id": state.current_scene,
+            "hotspots": dict(chapter.hotspot_states),
+            "acquired_evidence": sorted(chapter.acquired_evidence),
+        }
 
     def _resolve_session(self, session_id: str | None) -> GameSession:
         """Restore a persisted session, or fall back to the in-memory store.

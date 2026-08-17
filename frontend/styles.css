@@ -62,6 +62,43 @@ body { margin: 0; min-width: 320px; }
 .character-sprite.is-fading-out { animation: character-fade-out 420ms ease-in both; }
 .character-sprite.is-shaking { animation: character-shake 460ms ease-in-out; }
 
+.scene-hotspots { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+.scene-hotspot {
+  position: absolute;
+  pointer-events: auto;
+  border: 1px solid rgba(169, 232, 255, .35);
+  border-radius: 999px;
+  padding: .35rem .7rem;
+  color: #dff7ff;
+  background: rgba(7, 12, 24, .72);
+  cursor: pointer;
+}
+.scene-hotspot:hover, .scene-hotspot:focus-visible { background: rgba(30, 48, 78, .94); }
+.scene-hotspot.is-completed { border-color: #9fffc5; color: #9fffc5; }
+.hotspot-note { left: 16%; top: 58%; }
+.hotspot-terminal { right: 10%; top: 37%; }
+.hotspot-claude { left: 8%; top: 30%; }
+
+.paper-panel {
+  position: fixed;
+  z-index: 20;
+  inset: 50% auto auto 50%;
+  width: min(620px, calc(100% - 2rem));
+  transform: translate(-50%, -50%);
+  padding: 1.25rem;
+  border: 1px solid rgba(211, 234, 255, .6);
+  border-radius: 8px;
+  color: #eaf8ff;
+  background: rgba(7, 12, 24, .97);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .65);
+}
+.paper-panel[hidden] { display: none; }
+.paper-close { float: right; border: 0; color: #d7effa; background: transparent; cursor: pointer; }
+.rubbing-surface { position: relative; min-height: 260px; overflow: hidden; border-radius: 4px; background: #e7dfce; touch-action: none; }
+.paper-message { position: absolute; inset: 50% auto auto 50%; width: 80%; margin: 0; transform: translate(-50%, -50%) rotate(-2deg); color: #5a4436; font: 1.1rem/1.7 Georgia, serif; }
+.rubbing-cover { position: absolute; inset: 0; background: repeating-linear-gradient(12deg, #b6aa96, #b6aa96 3px, #cfc4b0 3px, #cfc4b0 7px); opacity: .96; transition: opacity .25s ease; }
+.rubbing-surface.is-revealed .rubbing-cover { opacity: 0; pointer-events: none; }
+
 @keyframes character-fade-in {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
@@ -204,5 +241,5 @@ body { margin: 0; min-width: 320px; }
   .dialogue-panel { padding: .9rem 1rem; margin-bottom: .6rem; }
   .player-input { gap: .5rem; }
   .player-input button { min-width: 4.2rem; }
+  .scene-hotspot { font-size: .78rem; }
 }
-

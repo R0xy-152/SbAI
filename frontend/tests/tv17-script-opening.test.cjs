@@ -57,9 +57,9 @@ global.document = {
   createElement: () => ({ textContent: "" }),
 };
 
-let captured = null;
+const captured = [];
 global.fetch = async (url, options) => {
-  captured = { url, options };
+  captured.push({ url, options });
   return {
     ok: true,
     status: 200,
@@ -81,9 +81,10 @@ require("../app.js");
   // Let the auto-invoked openOpening() finish its fetch + render.
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  assert.equal(captured.url, "/api/chat/opening");
-  assert.equal(captured.options.method, "POST");
-  assert.equal(JSON.parse(captured.options.body).session_id, null);
+  assert.equal(captured[0].url, "/api/chat/opening");
+  assert.equal(captured[0].options.method, "POST");
+  assert.equal(JSON.parse(captured[0].options.body).session_id, null);
+  assert.equal(captured[1].url, "/api/game/state?session_id=sess-1");
   assert.equal(dialogue.textContent, "……你醒了。别怕，我们先弄清楚这里发生了什么。");
   assert.equal(characterName.textContent, "DeepSeek");
   assert.equal(sprite.dataset.character, "deepseek");
