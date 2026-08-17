@@ -61,6 +61,11 @@ class RecoveryActionRequest(BaseModel):
     actor: Literal["player", "deepseek", "claude", "chatgpt", "doubao"]
 
 
+class TestimonyRequest(BaseModel):
+    session_id: str
+    character_id: Literal["deepseek", "claude", "doubao", "chatgpt"]
+
+
 @router.post("/api/game/action", response_model=InvestigationActionResponse)
 def investigation_action(
     payload: InvestigationActionRequest,
@@ -145,5 +150,21 @@ def recovery_start(session_id: str, orchestrator: GameOrchestrator = Depends(get
 def recovery_action(payload: RecoveryActionRequest, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
     try:
         return orchestrator.recovery_action(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/game/security-review/start")
+def security_review_start(session_id: str, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    try:
+        return orchestrator.start_security_review(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/game/security-review/testify")
+def security_review_testify(payload: TestimonyRequest, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    try:
+        return orchestrator.testify(**payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

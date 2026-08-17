@@ -22,6 +22,8 @@ from app.game.evidence import EVIDENCE_REGISTRY, evidence_view
 from app.game.deduction import CLAIM_REGISTRY, submit_deduction
 from app.game.private_interview import submit_challenge
 from app.game import recovery
+from app.game.security_review import SELF_PROOFS
+from app.narrative.chapter1_script import OPEN_SECURITY_REVIEW, TESTIFY_CLAUDE, TESTIFY_CHATGPT, TESTIFY_DEEPSEEK, TESTIFY_DOUBAO
 from app.game.investigation import InvestigationResult, InvestigationRuntime
 from app.game.memory import (
     MemoryRejected,
@@ -531,6 +533,23 @@ class GameOrchestrator:
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
         return result
+
+    def start_security_review(self, session_id: str) -> dict:
+        state = self._load_known_state(session_id)
+        self._chapter1_script.advance(state, OPEN_SECURITY_REVIEW)
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
+        return {"status": "OPEN", "order": ["deepseek", "claude", "doubao", "chatgpt"]}
+
+    def testify(self, session_id: str, character_id: str) -> dict:
+        actions = {"deepseek": TESTIFY_DEEPSEEK, "claude": TESTIFY_CLAUDE, "doubao": TESTIFY_DOUBAO, "chatgpt": TESTIFY_CHATGPT}
+        if character_id not in actions:
+            raise ValueError("unknown Security Review character")
+        state = self._load_known_state(session_id)
+        self._chapter1_script.advance(state, actions[character_id])
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
+        return {"character_id": character_id, "statement": SELF_PROOFS[character_id], "completed": list(state.chapter1.testified_characters)}
 
     def present_evidence(
         self, session_id: str, character_id: str, evidence_id: str
