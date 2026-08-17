@@ -20,3 +20,19 @@ def test_reject_cleanup_enters_boundary_breach_and_persists(tmp_path):
     result = orch.reject_cleanup(session)
     assert result == {"phase": "to_be_continued", "ending": "to_be_continued", "scene_id": "BOUNDARY_BREACH"}
     assert repo.load(session).narrative_state.chapter1.ending == "to_be_continued"
+
+
+def test_cleanup_character_deletion_persists_before_bad_end_confirmation(tmp_path):
+    repo = JsonSessionRepository(tmp_path / "sessions")
+    orch = GameOrchestrator(SessionStore(), {"deepseek": _Runtime()}, repository=repo)
+    session = orch._sessions.get_or_create(None).session_id
+    state = orch._state.state_for(session)
+    state.chapter1.phase = "security_review"
+    state.chapter1.security_review_open = True
+    state.chapter1.admin_holder = "player"
+    state.chapter1.testified_characters = ["deepseek", "claude", "doubao", "chatgpt"]
+
+    result = orch.cleanup(session, "DELETE_DEEPSEEK")
+
+    assert result["phase"] == "security_review"
+    assert repo.load(session).narrative_state.chapter1.deleted_characters == {"deepseek"}

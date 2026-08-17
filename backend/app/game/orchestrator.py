@@ -559,6 +559,8 @@ class GameOrchestrator:
             raise ValueError("unknown cleanup action")
         state = self._load_known_state(session_id)
         self._chapter1_script.advance(state, actions[action])
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
         return {"phase": state.chapter1.phase, "ending": state.chapter1.ending, "available_characters": sorted(state.chapter1.available_characters)}
 
     def reject_cleanup(self, session_id: str) -> dict:
