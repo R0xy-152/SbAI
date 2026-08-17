@@ -65,6 +65,10 @@ class TestimonyRequest(BaseModel):
     session_id: str
     character_id: Literal["deepseek", "claude", "doubao", "chatgpt"]
 
+class CleanupRequest(BaseModel):
+    session_id: str
+    action: Literal["DELEGATE", "DELETE_DEEPSEEK", "DELETE_CLAUDE", "DELETE_DOUBAO", "CONFIRM_KEEP_CHATGPT"]
+
 
 @router.post("/api/game/action", response_model=InvestigationActionResponse)
 def investigation_action(
@@ -166,5 +170,12 @@ def security_review_start(session_id: str, orchestrator: GameOrchestrator = Depe
 def security_review_testify(payload: TestimonyRequest, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
     try:
         return orchestrator.testify(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@router.post("/api/game/security-review/cleanup")
+def security_review_cleanup(payload: CleanupRequest, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    try:
+        return orchestrator.cleanup(**payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

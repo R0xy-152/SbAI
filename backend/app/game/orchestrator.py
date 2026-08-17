@@ -23,7 +23,7 @@ from app.game.deduction import CLAIM_REGISTRY, submit_deduction
 from app.game.private_interview import submit_challenge
 from app.game import recovery
 from app.game.security_review import SELF_PROOFS
-from app.narrative.chapter1_script import OPEN_SECURITY_REVIEW, TESTIFY_CLAUDE, TESTIFY_CHATGPT, TESTIFY_DEEPSEEK, TESTIFY_DOUBAO
+from app.narrative.chapter1_script import CONFIRM_KEEP_CHATGPT, DELEGATE_CLEANUP, DELETE_CLAUDE, DELETE_DEEPSEEK, DELETE_DOUBAO, OPEN_SECURITY_REVIEW, TESTIFY_CLAUDE, TESTIFY_CHATGPT, TESTIFY_DEEPSEEK, TESTIFY_DOUBAO
 from app.game.investigation import InvestigationResult, InvestigationRuntime
 from app.game.memory import (
     MemoryRejected,
@@ -463,6 +463,8 @@ class GameOrchestrator:
         """Commit one allow-listed physical scene interaction."""
         session = self._resolve_session(session_id)
         state = self._state.state_for(session.session_id)
+        if state.chapter1.phase == "bad_end":
+            raise ValueError("investigation is unavailable in Bad End")
         # The chapter outline starts when the player performs their first
         # physical interaction; this is not a frontend-selected state change.
         if state.chapter1.phase == "opening":
@@ -550,6 +552,14 @@ class GameOrchestrator:
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
         return {"character_id": character_id, "statement": SELF_PROOFS[character_id], "completed": list(state.chapter1.testified_characters)}
+
+    def cleanup(self, session_id: str, action: str) -> dict:
+        actions = {"DELEGATE": DELEGATE_CLEANUP, "DELETE_DEEPSEEK": DELETE_DEEPSEEK, "DELETE_CLAUDE": DELETE_CLAUDE, "DELETE_DOUBAO": DELETE_DOUBAO, "CONFIRM_KEEP_CHATGPT": CONFIRM_KEEP_CHATGPT}
+        if action not in actions:
+            raise ValueError("unknown cleanup action")
+        state = self._load_known_state(session_id)
+        self._chapter1_script.advance(state, actions[action])
+        return {"phase": state.chapter1.phase, "ending": state.chapter1.ending, "available_characters": sorted(state.chapter1.available_characters)}
 
     def present_evidence(
         self, session_id: str, character_id: str, evidence_id: str
@@ -664,12 +674,16 @@ class GameOrchestrator:
         state yet (fresh or not restored) has no flags, so a gated character is
         rejected until the flag is committed by a Narrative Event.
         """
+        state = self._state.get(session_id)
+        if state is not None and state.chapter1.phase == "bad_end":
+            if character_id != "chatgpt":
+                raise CharacterUnavailable("only chatgpt is available in Bad End")
+            return
         if not self._availability:
             return
         required = self._availability.get(character_id)
         if required is None:
             return
-        state = self._state.get(session_id)
         flags = state.narrative_flags if state is not None else set()
         if required not in flags:
             raise CharacterUnavailable(
