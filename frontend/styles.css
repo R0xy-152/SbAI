@@ -176,6 +176,25 @@ body { margin: 0; min-width: 320px; }
   background: rgba(7, 12, 24, .9);
 }
 
+.evidence-panel {
+  width: min(1080px, calc(100% - 2rem));
+  justify-self: center;
+  max-height: 34dvh;
+  overflow: auto;
+  margin-bottom: .5rem;
+  padding: .9rem 1.1rem;
+  border: 1px solid rgba(159, 255, 197, .5);
+  border-radius: 6px;
+  background: rgba(7, 12, 24, .93);
+}
+.evidence-empty { margin: 0; color: #d7effa; }
+.evidence-list { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
+.evidence-card { padding: .7rem; border: 1px solid rgba(211, 234, 255, .25); border-radius: 5px; }
+.evidence-card h3, .evidence-card p { margin: 0; }
+.evidence-card p { margin-top: .35rem; color: #d7effa; font-size: .9rem; line-height: 1.55; }
+.evidence-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+.evidence-actions button { border: 1px solid rgba(159, 255, 197, .6); border-radius: 4px; padding: .28rem .55rem; color: #dfffe9; background: rgba(20, 61, 46, .65); cursor: pointer; }
+
 .history-title {
   margin: 0 0 .5rem;
   color: #a9e8ff;

@@ -27,6 +27,19 @@ class InvestigationActionResponse(BaseModel):
     state: dict
 
 
+class PresentEvidenceRequest(BaseModel):
+    session_id: str
+    character_id: str
+    evidence_id: str
+
+
+class PresentEvidenceResponse(BaseModel):
+    session_id: str
+    event: str
+    character_id: str
+    evidence: dict
+
+
 @router.post("/api/game/action", response_model=InvestigationActionResponse)
 def investigation_action(
     payload: InvestigationActionRequest,
@@ -50,3 +63,28 @@ def investigation_state(
         return orchestrator.get_investigation_state(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/api/game/evidence")
+def evidence_list(
+    session_id: str,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+) -> list[dict]:
+    try:
+        return orchestrator.get_evidence(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/api/game/present", response_model=PresentEvidenceResponse)
+def present_evidence(
+    payload: PresentEvidenceRequest,
+    orchestrator: GameOrchestrator = Depends(get_orchestrator),
+) -> PresentEvidenceResponse:
+    try:
+        result = orchestrator.present_evidence(
+            payload.session_id, payload.character_id, payload.evidence_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return PresentEvidenceResponse(**result.__dict__)

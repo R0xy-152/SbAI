@@ -10,6 +10,10 @@ const sendButton = form.querySelector("button[type='submit']");
 const historyToggle = document.querySelector("#history-toggle");
 const historyPanel = document.querySelector("#history-panel");
 const historyList = document.querySelector("#history-list");
+const evidenceToggle = document.querySelector("#evidence-toggle");
+const evidencePanel = document.querySelector("#evidence-panel");
+const evidenceList = document.querySelector("#evidence-list");
+const evidenceEmpty = document.querySelector("#evidence-empty");
 const switchButtons = {
   deepseek: document.querySelector("#switch-deepseek"),
   claude: document.querySelector("#switch-claude"),
@@ -271,6 +275,61 @@ async function sendInvestigationAction(action, hotspotId) {
   return data;
 }
 
+async function loadEvidence() {
+  if (!sessionId || typeof fetch !== "function") return;
+  const response = await fetch(
+    `${API_BASE}/api/game/evidence?session_id=${encodeURIComponent(sessionId)}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  renderEvidence(await response.json());
+}
+
+function renderEvidence(evidence) {
+  if (!evidenceList || !evidenceEmpty) return;
+  evidenceList.replaceChildren();
+  evidenceEmpty.hidden = evidence.length > 0;
+  for (const item of evidence) {
+    const card = document.createElement("li");
+    card.className = "evidence-card";
+    const title = document.createElement("h3");
+    title.textContent = item.title;
+    const summary = document.createElement("p");
+    summary.textContent = item.summary;
+    const actions = document.createElement("div");
+    actions.className = "evidence-actions";
+    for (const characterId of Object.keys(CHARACTERS)) {
+      const present = document.createElement("button");
+      present.type = "button";
+      present.textContent = item.presented_to.includes(characterId)
+        ? `已向 ${CHARACTERS[characterId].name} 出示`
+        : `向 ${CHARACTERS[characterId].name} 出示`;
+      present.disabled = item.presented_to.includes(characterId);
+      present.addEventListener("click", async () => {
+        try {
+          const response = await fetch(`${API_BASE}/api/game/present`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              session_id: sessionId,
+              character_id: characterId,
+              evidence_id: item.evidence_id,
+            }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const result = await response.json();
+          status.textContent = `已向 ${CHARACTERS[result.character_id].name} 出示证据。`;
+          await loadEvidence();
+        } catch (_error) {
+          status.textContent = "出示证据失败，请重试。";
+        }
+      });
+      actions.appendChild(present);
+    }
+    card.append(title, summary, actions);
+    evidenceList.appendChild(card);
+  }
+}
+
 function applyInvestigationState(state) {
   for (const button of investigationButtons) {
     const hotspotState = state.hotspots?.[button.dataset.hotspotId];
@@ -291,10 +350,28 @@ for (const button of investigationButtons) {
     try {
       const data = await sendInvestigationAction("INSPECT_HOTSPOT", button.dataset.hotspotId);
       applyInvestigationState(data.state);
+      loadEvidence().catch(() => {});
       if (button.dataset.hotspotId === "CH1_NOTE_01") paperPanel.hidden = false;
       status.textContent = data.outcome === "ALREADY_COMPLETED" ? "这里已经调查完毕。" : "已调查。";
     } catch (_error) {
       status.textContent = "调查失败，请重试。";
+    }
+  });
+}
+
+if (evidenceToggle) {
+  evidenceToggle.addEventListener("click", async () => {
+    if (evidencePanel.hidden) {
+      try {
+        await loadEvidence();
+        evidencePanel.hidden = false;
+        evidenceToggle.textContent = "收起证据";
+      } catch (_error) {
+        status.textContent = "证据加载失败。";
+      }
+    } else {
+      evidencePanel.hidden = true;
+      evidenceToggle.textContent = "证据";
     }
   });
 }

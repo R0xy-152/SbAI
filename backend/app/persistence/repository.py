@@ -159,6 +159,11 @@ def _chapter1_from_dict(data: dict) -> Chapter1State:
         "phase": data.get("phase", defaults.phase),
         "available_characters": set(data.get("available_characters", defaults.available_characters)),
         "acquired_evidence": set(data.get("acquired_evidence", defaults.acquired_evidence)),
+        "presented_evidence": {
+            evidence_id: set(character_ids)
+            for evidence_id, character_ids in data.get("presented_evidence", {}).items()
+        },
+        "claim_store": dict(data.get("claim_store", defaults.claim_store)),
         "hotspot_states": dict(data.get("hotspot_states", defaults.hotspot_states)),
         "scene_facts": set(data.get("scene_facts", defaults.scene_facts)),
         "private_interview_rights": set(data.get("private_interview_rights", defaults.private_interview_rights)),
@@ -177,6 +182,11 @@ def _chapter1_to_dict(state: Chapter1State) -> dict:
         "phase": state.phase,
         "available_characters": sorted(state.available_characters),
         "acquired_evidence": sorted(state.acquired_evidence),
+        "presented_evidence": {
+            evidence_id: sorted(character_ids)
+            for evidence_id, character_ids in state.presented_evidence.items()
+        },
+        "claim_store": state.claim_store,
         "hotspot_states": state.hotspot_states,
         "scene_facts": sorted(state.scene_facts),
         "private_interview_rights": sorted(state.private_interview_rights),

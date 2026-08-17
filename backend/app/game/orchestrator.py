@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
 from app.characters.registry import CharacterRuntimeRegistry
 from app.game.context import CONTEXT_BUILDERS
+from app.game.evidence import EVIDENCE_REGISTRY, evidence_view
 from app.game.investigation import InvestigationResult, InvestigationRuntime
 from app.game.memory import (
     MemoryRejected,
@@ -79,6 +80,14 @@ class InvestigationActionResult:
     hotspot_id: str
     evidence_id: str | None
     state: dict
+
+
+@dataclass
+class PresentEvidenceResult:
+    session_id: str
+    event: str
+    character_id: str
+    evidence: dict
 
 
 class GameOrchestrator:
@@ -422,6 +431,43 @@ class GameOrchestrator:
             raise ValueError(f"unknown session: {session_id}")
         return self._investigation_state_view(self._state.state_for(session_id))
 
+    def get_evidence(self, session_id: str) -> list[dict]:
+        """List only evidence the player has actually acquired."""
+        state = self._load_known_state(session_id)
+        chapter = state.chapter1
+        return [
+            evidence_view(
+                evidence_id,
+                acquired=True,
+                presented_to=chapter.presented_evidence.get(evidence_id, set()),
+            )
+            for evidence_id in sorted(chapter.acquired_evidence)
+            if evidence_id in EVIDENCE_REGISTRY
+        ]
+
+    def present_evidence(
+        self, session_id: str, character_id: str, evidence_id: str
+    ) -> PresentEvidenceResult:
+        """Record a presentation without letting it advance plot truth."""
+        state = self._load_known_state(session_id)
+        chapter = state.chapter1
+        if evidence_id not in EVIDENCE_REGISTRY:
+            raise ValueError(f"unknown evidence: {evidence_id}")
+        if evidence_id not in chapter.acquired_evidence:
+            raise ValueError("evidence has not been acquired")
+        if character_id not in chapter.available_characters:
+            raise ValueError("character is not available")
+        presented_to = chapter.presented_evidence.setdefault(evidence_id, set())
+        presented_to.add(character_id)
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
+        return PresentEvidenceResult(
+            session_id=session_id,
+            event="PRESENT_EVIDENCE",
+            character_id=character_id,
+            evidence=evidence_view(evidence_id, acquired=True, presented_to=presented_to),
+        )
+
     @staticmethod
     def _investigation_state_view(state: NarrativeState) -> dict:
         chapter = state.chapter1
@@ -430,6 +476,15 @@ class GameOrchestrator:
             "hotspots": dict(chapter.hotspot_states),
             "acquired_evidence": sorted(chapter.acquired_evidence),
         }
+
+    def _load_known_state(self, session_id: str) -> NarrativeState:
+        if self._repository is not None:
+            persisted = self._repository.load(session_id)
+            if persisted is not None:
+                self._restore_session(persisted)
+        if self._sessions.get(session_id) is None:
+            raise ValueError(f"unknown session: {session_id}")
+        return self._state.state_for(session_id)
 
     def _resolve_session(self, session_id: str | None) -> GameSession:
         """Restore a persisted session, or fall back to the in-memory store.
