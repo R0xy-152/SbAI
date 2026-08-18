@@ -95,4 +95,10 @@ def submit_deduction(state: NarrativeState, message: str) -> dict:
         chapter.available_characters.add("chatgpt")
         state.narrative_flags.add("chatgpt_has_appeared")
         chapter.scene_facts.add("CURRENT_DEEPSEEK_CLEARED")
+    if identifier == INF03_V03_IS_PREVIOUS_PLAYER_INSTANCE:
+        chapter.phase = "recovery_required"
+        chapter.recovery_status = "required"
+        state.current_scene = "RECOVERY_REQUIRED"
+        state.story_phase = "chapter1_recovery_required"
+        state.active_objective = "SANDBOX INTEGRITY FAILURE：进入 Recovery"
     return {"outcome": "ACCEPTED", "kind": kind, "id": identifier}

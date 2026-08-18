@@ -72,6 +72,9 @@ def test_v03_v04_reveal_requires_all_three_authored_evidence_records():
         "kind": "inference",
         "id": INF03_V03_IS_PREVIOUS_PLAYER_INSTANCE,
     }
+    assert state.chapter1.phase == "recovery_required"
+    assert state.chapter1.recovery_status == "required"
+    assert state.current_scene == "RECOVERY_REQUIRED"
 
 
 def test_gpt_omission_requires_both_the_second_summary_and_replay_marker():
