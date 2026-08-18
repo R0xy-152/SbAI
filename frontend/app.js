@@ -418,7 +418,9 @@ for (const button of investigationButtons) {
       if (button.dataset.hotspotId === "CH1_NOTE_01") paperPanel.hidden = false;
       status.textContent = data.outcome === "ALREADY_COMPLETED" ? "这里已经调查完毕。" : "已调查。";
     } catch (_error) {
-      status.textContent = "调查失败，请重试。";
+      status.textContent = API_BASE
+        ? "调查服务未连接：请先启动后端，或通过 http://127.0.0.1:8000/frontend/index.html 打开。"
+        : "调查失败，请重试。";
     }
   });
 }
