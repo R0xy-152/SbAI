@@ -10,6 +10,7 @@ assert.match(html, /data-hotspot-id="CH1_NOTE_01"/);
 assert.match(html, /data-hotspot-id="CH1_C02_DOOR"/);
 assert.match(html, /data-hotspot-id="CH1_CHARACTER_REGISTRY"/);
 assert.match(html, /id="switch-chatgpt"/);
+assert.match(html, /id="switch-doubao"/);
 assert.match(html, /id="rubbing-surface"/);
 assert.match(js, /INSPECT_HOTSPOT/);
 assert.match(js, /PAPER_RUBBING_COMPLETE/);

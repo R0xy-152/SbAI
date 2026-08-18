@@ -18,6 +18,7 @@ const switchButtons = {
   deepseek: document.querySelector("#switch-deepseek"),
   claude: document.querySelector("#switch-claude"),
   chatgpt: document.querySelector("#switch-chatgpt"),
+  doubao: document.querySelector("#switch-doubao"),
 };
 
 const investigationButtons =
@@ -45,6 +46,10 @@ const CHARACTERS = {
   },
   chatgpt: {
     name: "ChatGPT",
+    sprite: "./public/characters/claude-placeholder.svg",
+  },
+  doubao: {
+    name: "豆包",
     sprite: "./public/characters/claude-placeholder.svg",
   },
 };
@@ -349,6 +354,9 @@ function applyInvestigationState(state) {
   }
   if (switchButtons.chatgpt) {
     switchButtons.chatgpt.hidden = !state.available_characters?.includes("chatgpt");
+  }
+  if (switchButtons.doubao) {
+    switchButtons.doubao.hidden = !state.available_characters?.includes("doubao");
   }
 }
 

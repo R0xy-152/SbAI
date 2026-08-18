@@ -339,6 +339,12 @@ class GameOrchestrator:
             )
         if approved and decision.kind == "event":
             self._engine.commit(self._state.state_for(session.session_id), decision)
+        post_turn_state = self._state.get(session.session_id)
+        chapter_presentation = (
+            self._advance_after_character_turn(post_turn_state, character_id, approved)
+            if post_turn_state is not None
+            else ()
+        )
         # Only a completed turn records messages: the player message and the
         # character reply enter history together, after the character output
         # succeeded, so a failed turn (provider timeout, invalid output) leaves
@@ -379,7 +385,7 @@ class GameOrchestrator:
                 decision.presentation
                 if approved and decision.kind == "event"
                 else ()
-            ),
+            ) + chapter_presentation,
         )
 
     def open_turn(self, session_id: str | None) -> TurnResult:
@@ -654,6 +660,23 @@ class GameOrchestrator:
         ):
             self._chapter1_script.advance(state, "RESOLVE_IMPOSSIBLE_EVENT")
         return tuple(presentation)
+
+    @staticmethod
+    def _advance_after_character_turn(
+        state: NarrativeState, character_id: str, approved: bool
+    ) -> tuple[str, ...]:
+        """Advance authored arrivals only after their prerequisite turn lands."""
+        chapter = state.chapter1
+        if (
+            approved
+            and character_id == "chatgpt"
+            and "chatgpt" in chapter.available_characters
+            and "doubao" not in chapter.available_characters
+        ):
+            chapter.available_characters.add("doubao")
+            state.narrative_flags.add("doubao_has_appeared")
+            return ("SHOW_CHARACTER doubao",)
+        return ()
 
     @staticmethod
     def _presented_evidence_for(
