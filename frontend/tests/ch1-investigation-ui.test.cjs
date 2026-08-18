@@ -21,6 +21,8 @@ assert.match(js, /GRID_COLUMNS = 28/);
 assert.match(js, /GRID_ROWS = 15/);
 assert.match(js, /COMPLETE_COVERAGE = 0\.38/);
 assert.match(js, /destination-out/);
+assert.match(js, /不要把管理员权限交给/);
+assert.match(js, /—— V03/);
 assert.match(js, /api\/game\/action/);
 assert.match(js, /api\/game\/state/);
 assert.match(html, /id="evidence-panel"/);

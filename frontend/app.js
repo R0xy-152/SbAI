@@ -475,21 +475,23 @@ if (rubbingSurface && rubbingCanvas && typeof document.createElement === "functi
   function drawImprint(target, alpha = 1) {
     const centerX = width * 0.5;
     const centerY = height * 0.5;
+    const drawWords = (offsetX, offsetY, color) => {
+      target.fillStyle = color;
+      target.font = "700 28px Georgia, serif";
+      target.fillText("03:17", offsetX, offsetY - 47);
+      target.font = "600 17px Georgia, serif";
+      target.fillText("不要把管理员权限交给", offsetX, offsetY - 10);
+      target.fillText("“最会替你解释的人”。", offsetX, offsetY + 18);
+      target.font = "600 15px ui-monospace, Consolas, monospace";
+      target.fillText("—— V03", offsetX + 96, offsetY + 51);
+    };
     target.save();
     target.translate(centerX, centerY);
     target.rotate(-0.045);
     target.textAlign = "center";
     target.textBaseline = "middle";
-    target.font = "700 30px Georgia, serif";
-    target.fillStyle = `rgba(67, 49, 36, ${0.23 * alpha})`;
-    target.fillText("LOG ACCESS", 2, -13);
-    target.font = "600 18px ui-monospace, Consolas, monospace";
-    target.fillText("R7K4-19", 2, 24);
-    target.fillStyle = `rgba(248, 240, 224, ${0.84 * alpha})`;
-    target.font = "700 30px Georgia, serif";
-    target.fillText("LOG ACCESS", 0, -15);
-    target.font = "600 18px ui-monospace, Consolas, monospace";
-    target.fillText("R7K4-19", 0, 22);
+    drawWords(2, 2, `rgba(67, 49, 36, ${0.23 * alpha})`);
+    drawWords(0, 0, `rgba(248, 240, 224, ${0.84 * alpha})`);
     target.restore();
   }
 
