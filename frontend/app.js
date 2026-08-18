@@ -410,12 +410,13 @@ async function loadInvestigationState() {
 
 for (const button of investigationButtons) {
   button.addEventListener("click", async () => {
+    const isPaperHotspot = button.dataset.hotspotId === "CH1_NOTE_01";
+    if (isPaperHotspot) paperPanel.hidden = false;
     try {
       const data = await sendInvestigationAction("INSPECT_HOTSPOT", button.dataset.hotspotId);
       applyInvestigationState(data.state);
       applyPresentation(data.presentation);
       loadEvidence().catch(() => {});
-      if (button.dataset.hotspotId === "CH1_NOTE_01") paperPanel.hidden = false;
       status.textContent = data.outcome === "ALREADY_COMPLETED" ? "这里已经调查完毕。" : "已调查。";
     } catch (_error) {
       status.textContent = API_BASE

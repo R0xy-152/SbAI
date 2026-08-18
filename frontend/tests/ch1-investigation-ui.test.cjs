@@ -13,6 +13,8 @@ assert.match(html, /id="switch-chatgpt"/);
 assert.match(html, /id="switch-doubao"/);
 assert.match(html, /id="rubbing-surface"/);
 assert.match(js, /INSPECT_HOTSPOT/);
+assert.match(js, /const isPaperHotspot = button\.dataset\.hotspotId === "CH1_NOTE_01"/);
+assert.match(js, /if \(isPaperHotspot\) paperPanel\.hidden = false/);
 assert.match(js, /PAPER_RUBBING_COMPLETE/);
 assert.match(js, /api\/game\/action/);
 assert.match(js, /api\/game\/state/);
