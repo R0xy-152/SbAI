@@ -39,7 +39,7 @@ def claude_inquiry_response(inquiry: Inquiry) -> str | None:
     if inquiry.intent == ASK_EVENT_TIME and inquiry.topic == "timestamp_0317":
         return "我能确认门在 03:17 打开。除此之外，不能从这个时间点直接推出是谁亲手做的。"
     if inquiry.intent == ASK_CHARACTER_KNOWLEDGE:
-        return "我见过门打开前出现的 DeepSeek 标识；那是记录，不是对她本人的视觉确认。"
+        return "门是 DeepSeek 打开的——至少记录把它归到了 DeepSeek 标识下；我并没有亲眼看到她本人。"
     if inquiry.intent == ASK_CHARACTER_SUSPICION:
         return "我不会把推测包装成证词。你若有证据，我只回答它直接涉及的部分。"
     return None

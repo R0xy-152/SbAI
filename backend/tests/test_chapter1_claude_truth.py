@@ -5,7 +5,7 @@ import json
 from app.characters.base import CharacterRequest
 from app.characters.claude import ClaudeRuntime
 from app.characters.claude_truth import CLAUDE_TRUTH_CONTRACT
-from app.narrative.inquiry import ASK_OBSERVATION_SOURCE, Inquiry
+from app.narrative.inquiry import ASK_CHARACTER_KNOWLEDGE, ASK_OBSERVATION_SOURCE, Inquiry
 from app.providers.base import LLMProvider, ProviderError
 
 
@@ -50,6 +50,27 @@ def test_claude_never_claims_to_have_visually_seen_deepseek():
 
     assert response.dialogue == "没有。我看到的是记录，不是她本人。"
     assert "CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK" in CLAUDE_TRUTH_CONTRACT.known_facts
+
+
+def test_claude_public_claims_are_separate_and_deterministic():
+    runtime = ClaudeRuntime(_FailingProvider())
+    attribution = runtime.respond(
+        CharacterRequest(
+            character_id="claude",
+            player_message="是谁打开 C-02 的门？",
+            inquiry=Inquiry(ASK_CHARACTER_KNOWLEDGE, target="claude", topic="door_open"),
+        )
+    )
+    source = runtime.respond(
+        CharacterRequest(
+            character_id="claude",
+            player_message="你亲眼看见了吗？",
+            inquiry=Inquiry(ASK_OBSERVATION_SOURCE, target="claude", topic="door_open"),
+        )
+    )
+
+    assert attribution.claim_refs == ["CL_CLAUDE_01"]
+    assert source.claim_refs == ["CL_CLAUDE_02"]
 
 
 def test_claude_prompt_uses_contract_and_only_presented_evidence():

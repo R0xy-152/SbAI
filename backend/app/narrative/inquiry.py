@@ -68,7 +68,28 @@ class Chapter1InquiryInterpreter:
             max_tokens=256,
             response_format={"type": "json_object"},
         )
-        return self._parse(raw, chapter.available_characters)
+        parsed = self._parse(raw, chapter.available_characters)
+        if parsed.intent != NOOP:
+            return parsed
+        return self._mock_safe_fallback(player_message, chapter.available_characters)
+
+    @staticmethod
+    def _mock_safe_fallback(player_message: str, available_characters: set[str]) -> Inquiry:
+        """Small deterministic fallback for required chapter-one questions.
+
+        MockProvider deliberately does not implement a second LLM persona for
+        inquiry classification. These patterns keep the authored Claude
+        investigation path playable without an API key; unmatched language
+        remains fail-closed as ``noop``.
+        """
+        normalized = player_message.lower().replace(" ", "")
+        if "claude" not in available_characters:
+            return Inquiry(NOOP)
+        if "亲眼" in normalized or "消息来源" in normalized or "没看到" in normalized:
+            return Inquiry(ASK_OBSERVATION_SOURCE, target="claude", subject="deepseek", topic="door_open")
+        if ("谁打开" in normalized or "谁开的" in normalized) and ("门" in normalized or "c-02" in normalized):
+            return Inquiry(ASK_CHARACTER_KNOWLEDGE, target="claude", subject="deepseek", topic="door_open")
+        return Inquiry(NOOP)
 
     @staticmethod
     def _parse(raw: str, available_characters: set[str]) -> Inquiry:

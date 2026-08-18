@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 
 from app.narrative.inquiry import (
+    ASK_CHARACTER_KNOWLEDGE,
     ASK_OBSERVATION_SOURCE,
     NOOP,
     Chapter1InquiryInterpreter,
 )
 from app.narrative.state import NarrativeState
+from app.providers.mock import MockProvider
 from app.providers.base import LLMProvider
 
 
@@ -61,6 +63,21 @@ def test_prompt_exposes_only_player_known_scope_and_interpreter_never_mutates_st
     assert "CURRENT_SUBJECT_IS_PLAYER_V04" not in provider.system
     assert state.chapter1.acquired_evidence == {"EV_NOTE_V03"}
     assert state.completed_events == set()
+
+
+def test_mock_provider_uses_only_the_authored_claude_question_fallbacks():
+    state = _state()
+
+    attribution = Chapter1InquiryInterpreter(MockProvider()).interpret(
+        state, "C-02 的门是谁打开的？"
+    )
+    source = Chapter1InquiryInterpreter(MockProvider()).interpret(
+        state, "你亲眼看见 DeepSeek 开门了吗？"
+    )
+
+    assert attribution.intent == ASK_CHARACTER_KNOWLEDGE
+    assert attribution.topic == "door_open"
+    assert source.intent == ASK_OBSERVATION_SOURCE
 
 
 def test_unavailable_characters_and_unknown_topics_fail_closed():
