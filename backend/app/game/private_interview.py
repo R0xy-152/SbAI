@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CT01_CLAUDE_SOURCE_GAP
+from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CL_DB_01, CL_DB_02, CL_DB_03, CT01_CLAUDE_SOURCE_GAP
 from app.narrative.chapter1_content import CLAIMS
 from app.narrative.state import NarrativeState
 
@@ -36,13 +36,12 @@ def submit_challenge(
                 for selection in chapter.evidence_selections
             )
         )
-    elif character_id == "doubao" and statement_index is not None:
-        if 0 <= statement_index < len(chapter.doubao_statements):
-            statement = chapter.doubao_statements[statement_index]
-            success = (
-                claim_ids == statement["observed_fact_refs"]
-                and bool(statement["interpretation"])
-            )
+    elif character_id == "doubao":
+        success = (
+            claim_ids == [CL_DB_01]
+            and evidence_ids == ["OBSERVED_GPT_TEXT_ON_SCREEN"]
+            and CL_DB_01 in chapter.claim_store
+        )
     else:
         raise ValueError("unknown private interview challenge character")
 
@@ -62,4 +61,16 @@ def submit_challenge(
                 },
             )
         chapter.acquired_evidence.add("EV05_ARCHIVED_ACTOR_FRAGMENT")
+    elif character_id == "doubao":
+        for claim_id in (CL_DB_02, CL_DB_03):
+            chapter.claim_store.setdefault(
+                claim_id,
+                {
+                    "character_id": "doubao",
+                    "fact_refs": [],
+                    "statement_type": "private",
+                    "text": CLAIMS[claim_id],
+                },
+            )
+        chapter.acquired_evidence.add("EV08_GPT_RECOVERY_SERVICE")
     return {"outcome": "UNLOCKED", "character_id": character_id}

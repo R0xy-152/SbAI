@@ -621,6 +621,9 @@ class GameOrchestrator:
             "private_interview_challenges": {
                 "claude": "CT01_CLAUDE_SOURCE_GAP" in chapter.resolved_contradictions
                 and "claude" not in chapter.private_interview_completed,
+                "doubao": "doubao" in chapter.available_characters
+                and "CL_DB_01" in chapter.claim_store
+                and "doubao" not in chapter.private_interview_completed,
             },
             "available_characters": sorted(chapter.available_characters),
         }

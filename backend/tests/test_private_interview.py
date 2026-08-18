@@ -32,14 +32,11 @@ def test_gpt_omission_and_doubao_split_are_backend_checked():
     state.chapter1.evidence_selections.append(
         {"character_id": "chatgpt", "evidence_ids": ["EV02_ADMIN_SESSION_0317"]}
     )
-    state.chapter1.doubao_statements.append(
-        {"observed_fact_refs": ["ADMIN_ACTOR_PARTIAL"], "interpretation": "有人动了手脚。"}
-    )
+    state.chapter1.claim_store["CL_DB_01"] = {}
 
     assert submit_challenge(state, "chatgpt", [], ["EV01_NOTE_V03"])["outcome"] == "UNLOCKED"
-    assert submit_challenge(
-        state, "doubao", ["ADMIN_ACTOR_PARTIAL"], [], statement_index=0
-    )["outcome"] == "UNLOCKED"
+    assert submit_challenge(state, "doubao", ["CL_DB_01"], ["OBSERVED_GPT_TEXT_ON_SCREEN"])["outcome"] == "UNLOCKED"
+    assert "EV08_GPT_RECOVERY_SERVICE" in state.chapter1.acquired_evidence
 
 
 def test_private_interview_rights_persist(tmp_path):
