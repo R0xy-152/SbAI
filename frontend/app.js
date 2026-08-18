@@ -28,7 +28,6 @@ const investigationButtons =
 const paperPanel = document.querySelector("#paper-panel");
 const paperClose = document.querySelector("#paper-close");
 const rubbingSurface = document.querySelector("#rubbing-surface");
-const rubbingGraphite = document.querySelector("#rubbing-graphite");
 const deductionForm = document.querySelector("#deduction-form");
 const deductionInput = document.querySelector("#deduction-message");
 const claudePrivateInterview = document.querySelector("#claude-private-interview");
@@ -446,28 +445,12 @@ if (evidenceToggle) {
 paperClose?.addEventListener("click", () => { paperPanel.hidden = true; });
 
 if (rubbingSurface) {
-  let coveredDistance = 0;
-  let previousPoint = null;
+  let coveredPoints = 0;
   let submitted = false;
-  rubbingSurface.addEventListener("pointermove", async (event) => {
+  rubbingSurface.addEventListener("pointermove", async () => {
     if (submitted) return;
-    const bounds = rubbingSurface.getBoundingClientRect();
-    const point = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
-    if (previousPoint) coveredDistance += Math.hypot(point.x - previousPoint.x, point.y - previousPoint.y);
-    previousPoint = point;
-    const progress = Math.min(1, coveredDistance / 900);
-    rubbingSurface.style.setProperty("--rubbing-progress", progress.toFixed(3));
-    if (rubbingGraphite && coveredDistance > 3) {
-      const mark = document.createElement("span");
-      mark.className = "rubbing-mark";
-      mark.style.left = `${point.x + (Math.random() - .5) * 8}px`;
-      mark.style.top = `${point.y + (Math.random() - .5) * 6}px`;
-      mark.style.setProperty("--mark-width", `${18 + Math.random() * 22}px`);
-      mark.style.setProperty("--mark-height", `${4 + Math.random() * 5}px`);
-      mark.style.setProperty("--mark-angle", `${Math.random() * 20 - 10}deg`);
-      rubbingGraphite.appendChild(mark);
-    }
-    if (progress < 1) return;
+    coveredPoints += 1;
+    if (coveredPoints < 30) return;
     submitted = true;
     rubbingSurface.classList.add("is-revealed");
     try {
