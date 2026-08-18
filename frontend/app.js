@@ -356,6 +356,9 @@ function applyInvestigationState(state) {
   if (claudePrivateInterview) {
     claudePrivateInterview.hidden = !state.private_interview_challenges?.claude;
   }
+  if (switchButtons.claude) {
+    switchButtons.claude.hidden = !state.available_characters?.includes("claude");
+  }
   if (doubaoPrivateInterview) {
     doubaoPrivateInterview.hidden = !state.private_interview_challenges?.doubao;
   }
@@ -473,6 +476,23 @@ form.addEventListener("submit", async (event) => {
   if (!message) {
     status.textContent = "请先输入一句话。";
     input.focus();
+    return;
+  }
+  if (message.startsWith("/推理")) {
+    const deduction = message.slice(3).trim();
+    if (!deduction || !sessionId) {
+      status.textContent = "先获得相关证词后再提交推理。";
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/api/game/deduction`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sessionId, message: deduction }) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      status.textContent = result.outcome === "ACCEPTED" ? "推理成立，调查状态已更新。" : "这条推理暂时无法成立。";
+      input.value = "";
+      loadInvestigationState().catch(() => {});
+      loadEvidence().catch(() => {});
+    } catch (_error) { status.textContent = "推理提交失败，请重试。"; }
     return;
   }
 
@@ -624,3 +644,17 @@ async function openOpening() {
 }
 
 openOpening();
+
+if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+  const opening = dialogueText.textContent.trim();
+  characterSprite.classList.add("is-opening");
+  window.requestAnimationFrame(() => {
+    let index = 0;
+    dialogueText.textContent = "";
+    const timer = window.setInterval(() => {
+      dialogueText.textContent += opening[index] || "";
+      index += 1;
+      if (index >= opening.length) window.clearInterval(timer);
+    }, 34);
+  });
+}

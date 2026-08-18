@@ -59,6 +59,7 @@ body { margin: 0; min-width: 320px; }
 
 .character-sprite.is-hidden { visibility: hidden; }
 .character-sprite.is-fading-in { animation: character-fade-in 420ms ease-out both; }
+.character-sprite.is-opening { animation: character-fade-in 900ms ease-out both; }
 .character-sprite.is-fading-out { animation: character-fade-out 420ms ease-in both; }
 .character-sprite.is-shaking { animation: character-shake 460ms ease-in-out; }
 

@@ -54,7 +54,7 @@
           <button type="button" id="switch-deepseek" class="character-switch is-active">
             DeepSeek
           </button>
-          <button type="button" id="switch-claude" class="character-switch">Claude</button>
+          <button type="button" id="switch-claude" class="character-switch" hidden>Claude</button>
           <button type="button" id="switch-chatgpt" class="character-switch" hidden>ChatGPT</button>
           <button type="button" id="switch-doubao" class="character-switch" hidden>豆包</button>
         </div>
@@ -72,12 +72,6 @@
         <p id="evidence-empty" class="evidence-empty">尚未获得证据。</p>
         <ol id="evidence-list" class="evidence-list"></ol>
       </section>
-
-      <form id="deduction-form" class="deduction-form" novalidate>
-        <label for="deduction-message">指出证词中的矛盾</label>
-        <input id="deduction-message" type="text" maxlength="240" placeholder="例如：你没看到 DeepSeek，为什么说是她开的？" />
-        <button type="submit">提交推理</button>
-      </form>
 
       <section id="claude-private-interview" class="private-interview" hidden aria-label="Claude私审">
         <h2 class="history-title">Claude 私审：信息断层</h2>
@@ -106,7 +100,7 @@
           type="text"
           maxlength="240"
           autocomplete="off"
-          placeholder="输入你想说的话…"
+          placeholder="输入你想说的话…（推理请以 /推理 开头）"
           required
         />
         <button type="submit">发送</button>

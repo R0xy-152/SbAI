@@ -19,7 +19,7 @@ assert.match(js, /api\/game\/state/);
 assert.match(html, /id="evidence-panel"/);
 assert.match(js, /api\/game\/evidence/);
 assert.match(js, /api\/game\/present/);
-assert.match(html, /id="deduction-form"/);
+assert.match(html, /推理请以 \/推理 开头/);
 assert.match(js, /api\/game\/deduction/);
 assert.match(html, /id="claude-private-interview"/);
 assert.match(js, /api\/game\/private-interview\/challenge/);
