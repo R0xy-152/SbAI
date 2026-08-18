@@ -96,10 +96,10 @@ body { margin: 0; min-width: 320px; }
 }
 .paper-panel[hidden] { display: none; }
 .paper-close { float: right; border: 0; color: #d7effa; background: transparent; cursor: pointer; }
-.rubbing-surface { position: relative; min-height: 260px; overflow: hidden; border-radius: 4px; background: #e7dfce; touch-action: none; }
-.paper-message { position: absolute; inset: 50% auto auto 50%; width: 80%; margin: 0; transform: translate(-50%, -50%) rotate(-2deg); color: #5a4436; font: 1.1rem/1.7 Georgia, serif; }
-.rubbing-cover { position: absolute; inset: 0; background: repeating-linear-gradient(12deg, #b6aa96, #b6aa96 3px, #cfc4b0 3px, #cfc4b0 7px); opacity: .96; transition: opacity .25s ease; }
-.rubbing-surface.is-revealed .rubbing-cover { opacity: 0; pointer-events: none; }
+.rubbing-surface { position: relative; min-height: 260px; overflow: hidden; border-radius: 4px; background: #e7dfce; touch-action: none; cursor: crosshair; box-shadow: inset 0 0 24px rgba(71, 51, 34, .22); }
+.rubbing-canvas { display: block; width: 100%; height: 260px; touch-action: none; }
+.rubbing-hint { position: absolute; right: .75rem; bottom: .5rem; margin: 0; color: rgba(74, 56, 40, .52); font-size: .76rem; pointer-events: none; transition: opacity .3s ease; }
+.rubbing-surface.is-revealed .rubbing-hint { opacity: 0; }
 
 @keyframes character-fade-in {
   from { opacity: 0; transform: translateY(10px); }

@@ -35,10 +35,10 @@
 
       <section id="paper-panel" class="paper-panel" hidden aria-label="纸张涂画">
         <button type="button" id="paper-close" class="paper-close">关闭</button>
-        <p>在纸面上拖动，让压痕显现。</p>
+        <p>悬停并来回涂擦纸面，让凹刻压痕从石墨中浮现。</p>
         <div id="rubbing-surface" class="rubbing-surface">
-          <p class="paper-message">03:17<br />不要把管理员权限交给<br />“最会替你解释的人”。<br />—— V03</p>
-          <div id="rubbing-cover" class="rubbing-cover"></div>
+          <canvas id="rubbing-canvas" class="rubbing-canvas" aria-label="可涂擦的纸面拓印">在纸面上移动指针以涂擦。</canvas>
+          <p class="rubbing-hint" aria-hidden="true">不需要按住鼠标 · 涂擦越多，压痕越清晰</p>
         </div>
       </section>
 

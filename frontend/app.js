@@ -28,6 +28,7 @@ const investigationButtons =
 const paperPanel = document.querySelector("#paper-panel");
 const paperClose = document.querySelector("#paper-close");
 const rubbingSurface = document.querySelector("#rubbing-surface");
+const rubbingCanvas = document.querySelector("#rubbing-canvas");
 const deductionForm = document.querySelector("#deduction-form");
 const deductionInput = document.querySelector("#deduction-message");
 const claudePrivateInterview = document.querySelector("#claude-private-interview");
@@ -445,14 +446,137 @@ if (evidenceToggle) {
 
 paperClose?.addEventListener("click", () => { paperPanel.hidden = true; });
 
-if (rubbingSurface) {
-  let coveredPoints = 0;
+if (rubbingSurface && rubbingCanvas && typeof document.createElement === "function") {
+  const GRID_COLUMNS = 28;
+  const GRID_ROWS = 15;
+  const COMPLETE_COVERAGE = 0.38;
+  const graphiteCanvas = document.createElement("canvas");
+  const context = rubbingCanvas.getContext?.("2d");
+  const graphiteContext = graphiteCanvas.getContext?.("2d");
+  const coveredCells = new Set();
+  let width = 0;
+  let height = 0;
+  let pixelRatio = 1;
+  let previousPoint = null;
   let submitted = false;
-  rubbingSurface.addEventListener("pointermove", async () => {
-    if (submitted) return;
-    coveredPoints += 1;
-    if (coveredPoints < 30) return;
+
+  function drawPaperTexture(target) {
+    target.fillStyle = "#e7dfce";
+    target.fillRect(0, 0, width, height);
+    target.globalCompositeOperation = "multiply";
+    for (let index = 0; index < width * height / 170; index += 1) {
+      const shade = 184 + ((index * 37) % 34);
+      target.fillStyle = `rgba(${shade}, ${shade - 8}, ${shade - 20}, .12)`;
+      target.fillRect((index * 71) % width, (index * 43) % height, 1, 1);
+    }
+    target.globalCompositeOperation = "source-over";
+  }
+
+  function drawImprint(target, alpha = 1) {
+    const centerX = width * 0.5;
+    const centerY = height * 0.5;
+    target.save();
+    target.translate(centerX, centerY);
+    target.rotate(-0.045);
+    target.textAlign = "center";
+    target.textBaseline = "middle";
+    target.font = "700 30px Georgia, serif";
+    target.fillStyle = `rgba(67, 49, 36, ${0.23 * alpha})`;
+    target.fillText("LOG ACCESS", 2, -13);
+    target.font = "600 18px ui-monospace, Consolas, monospace";
+    target.fillText("R7K4-19", 2, 24);
+    target.fillStyle = `rgba(248, 240, 224, ${0.84 * alpha})`;
+    target.font = "700 30px Georgia, serif";
+    target.fillText("LOG ACCESS", 0, -15);
+    target.font = "600 18px ui-monospace, Consolas, monospace";
+    target.fillText("R7K4-19", 0, 22);
+    target.restore();
+  }
+
+  function liftImprint() {
+    graphiteContext.save();
+    graphiteContext.globalCompositeOperation = "destination-out";
+    drawImprint(graphiteContext, 0.93);
+    graphiteContext.restore();
+  }
+
+  function renderPaper() {
+    context.save();
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    drawPaperTexture(context);
+    context.drawImage(graphiteCanvas, 0, 0, width, height);
+    drawImprint(context, Math.max(0.12, coveredCells.size / (GRID_COLUMNS * GRID_ROWS)));
+    context.restore();
+  }
+
+  function resizePaper() {
+    const bounds = rubbingSurface.getBoundingClientRect();
+    const nextWidth = Math.max(1, Math.round(bounds.width));
+    const nextHeight = Math.max(1, Math.round(bounds.height));
+    if (nextWidth === width && nextHeight === height) return;
+    width = nextWidth;
+    height = nextHeight;
+    pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    rubbingCanvas.width = width * pixelRatio;
+    rubbingCanvas.height = height * pixelRatio;
+    graphiteCanvas.width = width * pixelRatio;
+    graphiteCanvas.height = height * pixelRatio;
+    graphiteContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    liftImprint();
+    renderPaper();
+  }
+
+  function markCoverage(from, to) {
+    const distance = Math.max(1, Math.hypot(to.x - from.x, to.y - from.y));
+    for (let step = 0; step <= distance; step += 7) {
+      const progress = step / distance;
+      const x = from.x + (to.x - from.x) * progress;
+      const y = from.y + (to.y - from.y) * progress;
+      const column = Math.min(GRID_COLUMNS - 1, Math.max(0, Math.floor(x / width * GRID_COLUMNS)));
+      const row = Math.min(GRID_ROWS - 1, Math.max(0, Math.floor(y / height * GRID_ROWS)));
+      coveredCells.add(`${column}:${row}`);
+    }
+  }
+
+  function depositGraphite(from, to) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const length = Math.max(1, Math.hypot(dx, dy));
+    const normalX = -dy / length;
+    const normalY = dx / length;
+    graphiteContext.save();
+    graphiteContext.lineCap = "round";
+    for (let line = -2; line <= 2; line += 1) {
+      const offset = line * 1.8 + (Math.random() - .5) * 1.2;
+      graphiteContext.globalAlpha = 0.12 + Math.random() * 0.08;
+      graphiteContext.strokeStyle = "#373239";
+      graphiteContext.lineWidth = 1.65 + Math.random() * .9;
+      graphiteContext.beginPath();
+      graphiteContext.moveTo(from.x + normalX * offset, from.y + normalY * offset);
+      graphiteContext.lineTo(to.x + normalX * offset, to.y + normalY * offset);
+      graphiteContext.stroke();
+    }
+    for (let particle = 0; particle < Math.ceil(length / 5); particle += 1) {
+      const progress = Math.random();
+      const spread = (Math.random() - .5) * 11;
+      graphiteContext.globalAlpha = 0.08 + Math.random() * 0.13;
+      graphiteContext.fillStyle = "#2d2930";
+      graphiteContext.beginPath();
+      graphiteContext.arc(from.x + dx * progress + normalX * spread, from.y + dy * progress + normalY * spread, .35 + Math.random() * 1.1, 0, Math.PI * 2);
+      graphiteContext.fill();
+    }
+    graphiteContext.restore();
+    liftImprint();
+  }
+
+  async function completeRubbing() {
     submitted = true;
+    graphiteContext.save();
+    graphiteContext.fillStyle = "rgba(53, 48, 56, .12)";
+    graphiteContext.fillRect(0, 0, width, height);
+    graphiteContext.restore();
+    liftImprint();
+    renderPaper();
     rubbingSurface.classList.add("is-revealed");
     try {
       const data = await sendInvestigationAction("PAPER_RUBBING_COMPLETE", "CH1_NOTE_01");
@@ -463,6 +587,22 @@ if (rubbingSurface) {
       submitted = false;
       status.textContent = "涂画提交失败，请重试。";
     }
+  }
+
+  rubbingSurface.addEventListener("pointerenter", resizePaper);
+  rubbingSurface.addEventListener("pointerleave", () => { previousPoint = null; });
+  rubbingSurface.addEventListener("pointermove", (event) => {
+    if (submitted) return;
+    resizePaper();
+    const bounds = rubbingSurface.getBoundingClientRect();
+    const point = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    if (previousPoint) {
+      depositGraphite(previousPoint, point);
+      markCoverage(previousPoint, point);
+      renderPaper();
+      if (coveredCells.size >= GRID_COLUMNS * GRID_ROWS * COMPLETE_COVERAGE) completeRubbing();
+    }
+    previousPoint = point;
   });
 }
 
