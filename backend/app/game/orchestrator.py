@@ -299,6 +299,10 @@ class GameOrchestrator:
                                 "statement_type": "public",
                             },
                         )
+                        if definition.claim_id == "CL_CLAUDE_05":
+                            self._state.state_for(session.session_id).chapter1.acquired_evidence.add(
+                                "EV07_CLAUDE_RECOVERY_ACCESS"
+                            )
             if response.evidence_refs:
                 self._state.state_for(session.session_id).chapter1.evidence_selections.append(
                     {

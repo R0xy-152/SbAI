@@ -9,6 +9,7 @@ from app.narrative.state import NarrativeState
 
 CL_CLAUDE_01 = "CL_CLAUDE_01"
 CL_CLAUDE_02 = "CL_CLAUDE_02"
+CL_CLAUDE_05 = "CL_CLAUDE_05"
 CL_DB_01 = "CL_DB_01"
 CL_DB_02 = "CL_DB_02"
 CL_DB_03 = "CL_DB_03"
@@ -30,6 +31,7 @@ class ClaimDefinition:
 CLAIM_REGISTRY = {
     CL_CLAUDE_01: ClaimDefinition(CL_CLAUDE_01, "claude", ("CLAUDE_ATTRIBUTES_C02_RELEASE_TO_DEEPSEEK",)),
     CL_CLAUDE_02: ClaimDefinition(CL_CLAUDE_02, "claude", ("CLAUDE_DID_NOT_VISUALLY_SEE_DEEPSEEK",)),
+    CL_CLAUDE_05: ClaimDefinition(CL_CLAUDE_05, "claude", ("CLAUDE_RECOVERY_INTERFACE_ACCESSED",)),
     CL_DB_01: ClaimDefinition(CL_DB_01, "doubao", ()),
 }
 

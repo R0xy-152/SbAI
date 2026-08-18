@@ -87,6 +87,8 @@ class Chapter1InquiryInterpreter:
             return Inquiry(NOOP)
         if "亲眼" in normalized or "消息来源" in normalized or "没看到" in normalized:
             return Inquiry(ASK_OBSERVATION_SOURCE, target="claude", subject="deepseek", topic="door_open")
+        if "recovery" in normalized or "恢复接口" in normalized:
+            return Inquiry(ASK_CHARACTER_KNOWLEDGE, target="claude", topic="evidence")
         if ("谁打开" in normalized or "谁开的" in normalized) and ("门" in normalized or "c-02" in normalized):
             return Inquiry(ASK_CHARACTER_KNOWLEDGE, target="claude", subject="deepseek", topic="door_open")
         if "doubao" in available_characters and "gpt" in normalized and ("早就在" in normalized or "什么时候出现" in normalized):

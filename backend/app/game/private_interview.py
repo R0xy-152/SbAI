@@ -73,4 +73,5 @@ def submit_challenge(
                 },
             )
         chapter.acquired_evidence.add("EV08_GPT_RECOVERY_SERVICE")
+        state.narrative_flags.add("claude_recovery_disclosure_open")
     return {"outcome": "UNLOCKED", "character_id": character_id}

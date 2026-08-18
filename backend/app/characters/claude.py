@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from app.characters.base import CharacterRequest, CharacterResponse, GenerativeRuntime
 from app.characters.claude_truth import claude_inquiry_response, contract_prompt
-from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02
+from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CL_CLAUDE_05
 from app.narrative.inquiry import ASK_CHARACTER_KNOWLEDGE, ASK_OBSERVATION_SOURCE
 from app.providers.base import ProviderError
 
@@ -59,6 +59,17 @@ class ClaudeRuntime(GenerativeRuntime):
 
     def respond(self, request: CharacterRequest) -> CharacterResponse:
         if request.inquiry is not None:
+            if (
+                request.inquiry.intent == ASK_CHARACTER_KNOWLEDGE
+                and request.inquiry.topic == "evidence"
+                and "UNLOCK_CLAUDE_RECOVERY_DISCLOSURE" in request.narrative_context
+            ):
+                return CharacterResponse(
+                    character_id="claude",
+                    dialogue="是，我访问过 Recovery Interface。我在找一个出口，除此之外我暂时不会解释。",
+                    emotion="serious",
+                    claim_refs=[CL_CLAUDE_05],
+                )
             deterministic = claude_inquiry_response(request.inquiry)
             if deterministic is not None:
                 return CharacterResponse(

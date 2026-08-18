@@ -36,7 +36,7 @@ class CharacterContext:
     narrative_context: str = ""
 
 
-def _narrative_context_for(state: NarrativeState | None) -> str:
+def _narrative_context_for(state: NarrativeState | None, *, character_id: str | None = None) -> str:
     """The Authorized Narrative Context (docs/04 §8, §17): only the
     relevant_flags a character is entitled to know, rendered minimally."""
     if state is None:
@@ -46,6 +46,8 @@ def _narrative_context_for(state: NarrativeState | None) -> str:
     # EV_POC_CLAUDE_APPEARS event committed (docs/06 §18).
     if "claude_has_appeared" in state.narrative_flags:
         lines.append("Claude已经出现在这个房间里了。")
+    if character_id == "claude" and "claude_recovery_disclosure_open" in state.narrative_flags:
+        lines.append("你现在可以承认自己访问过 Recovery Interface，但不可展开完整计划。")
     return "\n".join(lines)
 
 
@@ -63,7 +65,7 @@ def build_deepseek_context(
         lines.append("你听见：" + "、".join(scene.sounds))
     return CharacterContext(
         environment_info="\n".join(lines),
-        narrative_context=_narrative_context_for(narrative_state),
+        narrative_context=_narrative_context_for(narrative_state, character_id="deepseek"),
     )
 
 
@@ -82,7 +84,7 @@ def build_claude_context(
     lines.append(f"房间的墙上写着一个数字：{scene.wall_code}")
     return CharacterContext(
         environment_info="\n".join(lines),
-        narrative_context=_narrative_context_for(narrative_state),
+        narrative_context=_narrative_context_for(narrative_state, character_id="claude"),
     )
 
 
