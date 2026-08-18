@@ -74,4 +74,7 @@ def submit_deduction(state: NarrativeState, message: str) -> dict:
     if not ready:
         return {"outcome": "BLOCKED", "kind": kind, "id": identifier}
     chapter.accepted_inferences.add(identifier)
+    if identifier == INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR:
+        chapter.acquired_evidence.add("EV06_SESSION_REPLAY_MARKER")
+        chapter.scene_facts.add("CURRENT_DEEPSEEK_CLEARED")
     return {"outcome": "ACCEPTED", "kind": kind, "id": identifier}

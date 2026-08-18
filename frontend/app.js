@@ -483,8 +483,11 @@ if (deductionForm && deductionInput) {
       const result = await response.json();
       if (result.outcome === "ACCEPTED") {
         deductionInput.value = "";
-        status.textContent = "推理成立：Claude 的信息来源存在断层，已解锁私审挑战。";
+        status.textContent = result.id === "INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR"
+          ? "推理成立：当前 DeepSeek 不是 03:17 的执行者，已恢复旧会话标记。"
+          : "推理成立：Claude 的信息来源存在断层，已解锁私审挑战。";
         loadInvestigationState().catch(() => {});
+        loadEvidence().catch(() => {});
       } else if (result.outcome === "BLOCKED") {
         status.textContent = "推理还缺少关键证词或证据。";
       } else {

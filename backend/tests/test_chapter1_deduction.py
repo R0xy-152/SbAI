@@ -36,6 +36,8 @@ def test_inference_cannot_be_brute_forced_before_evidence_gate():
         "kind": "inference",
         "id": INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR,
     }
+    assert "EV06_SESSION_REPLAY_MARKER" in state.chapter1.acquired_evidence
+    assert "CURRENT_DEEPSEEK_CLEARED" in state.chapter1.scene_facts
 
 
 def test_deduction_result_survives_session_restore(tmp_path):
