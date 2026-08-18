@@ -32,6 +32,8 @@ const deductionForm = document.querySelector("#deduction-form");
 const deductionInput = document.querySelector("#deduction-message");
 const claudePrivateInterview = document.querySelector("#claude-private-interview");
 const claudePrivateSubmit = document.querySelector("#claude-private-submit");
+const doubaoPrivateInterview = document.querySelector("#doubao-private-interview");
+const doubaoPrivateSubmit = document.querySelector("#doubao-private-submit");
 
 // TV-16: per-character display (docs/01 §10.1-10.2). Claude's portrait is a
 // temporary validation fixture (docs/06 §28: Fixture ≠ Production Content).
@@ -352,12 +354,29 @@ function applyInvestigationState(state) {
   if (claudePrivateInterview) {
     claudePrivateInterview.hidden = !state.private_interview_challenges?.claude;
   }
+  if (doubaoPrivateInterview) {
+    doubaoPrivateInterview.hidden = !state.private_interview_challenges?.doubao;
+  }
   if (switchButtons.chatgpt) {
     switchButtons.chatgpt.hidden = !state.available_characters?.includes("chatgpt");
   }
   if (switchButtons.doubao) {
     switchButtons.doubao.hidden = !state.available_characters?.includes("doubao");
   }
+}
+
+if (doubaoPrivateSubmit && doubaoPrivateInterview) {
+  doubaoPrivateSubmit.addEventListener("click", async () => {
+    const observation = doubaoPrivateInterview.querySelector("input[name='doubao-observation']:checked")?.value;
+    if (!sessionId || !observation) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/game/private-interview/challenge`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sessionId, character_id: "doubao", claim_ids: ["CL_DB_01"], evidence_ids: [observation] }) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      status.textContent = result.outcome === "UNLOCKED" ? "豆包私审完成：她看到的是系统文字，不是 GPT 本人。" : "这仍是解释，不是豆包实际观察到的事实。";
+      if (result.outcome === "UNLOCKED") { await loadInvestigationState(); loadEvidence().catch(() => {}); }
+    } catch (_error) { status.textContent = "私审提交失败，请重试。"; }
+  });
 }
 
 async function loadInvestigationState() {

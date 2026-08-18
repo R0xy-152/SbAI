@@ -86,6 +86,12 @@
         <label><input type="checkbox" name="claude-claim" value="CL_CLAUDE_02" /> “我没有看到 DeepSeek 本人。”</label>
         <button type="button" id="claude-private-submit">提交质询</button>
       </section>
+      <section id="doubao-private-interview" class="private-interview" hidden aria-label="豆包私审">
+        <h2 class="history-title">豆包 私审：她到底看见了什么？</h2>
+        <label><input type="radio" name="doubao-observation" value="OBSERVED_GPT_TEXT_ON_SCREEN" /> 她看到屏幕上出现了 GPT 相关文字。</label>
+        <label><input type="radio" name="doubao-observation" value="GPT_CHARACTER_PRESENT" /> GPT 本人早已在场。</label>
+        <button type="button" id="doubao-private-submit">提交拆分</button>
+      </section>
 
       <form id="player-form" class="player-input" novalidate>
         <label class="sr-only" for="player-message">输入要对 DeepSeek 说的话</label>
