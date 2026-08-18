@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from app.characters.base import CharacterRequest, GenerativeRuntime
+from app.characters.base import CharacterRequest, CharacterResponse, GenerativeRuntime
+from app.game.deduction import CL_DB_01
+from app.narrative.inquiry import ASK_CHARACTER_SUSPICION
 
 
 DOUBAO_PERSONA_SYSTEM = (
@@ -16,6 +18,20 @@ class DoubaoRuntime(GenerativeRuntime):
     character_id = "doubao"
     persona_system = DOUBAO_PERSONA_SYSTEM
     fallback_lines = ["我先把我实际看到的部分记下来，解释可能还不够准。"]
+
+    def respond(self, request: CharacterRequest) -> CharacterResponse:
+        if (
+            request.inquiry is not None
+            and request.inquiry.intent == ASK_CHARACTER_SUSPICION
+            and request.inquiry.subject == "chatgpt"
+        ):
+            return CharacterResponse(
+                character_id="doubao",
+                dialogue="GPT 早就在这里了呀？我记得很早就看到和她有关的东西。",
+                emotion="serious",
+                claim_refs=[CL_DB_01],
+            )
+        return super().respond(request)
 
     def _build_user_message(self, request: CharacterRequest) -> str:
         message = super()._build_user_message(request)

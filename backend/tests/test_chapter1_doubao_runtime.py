@@ -8,6 +8,7 @@ import pytest
 
 from app.characters.base import CharacterRequest, CharacterResponse
 from app.characters.doubao import DoubaoRuntime
+from app.narrative.inquiry import ASK_CHARACTER_SUSPICION, Inquiry
 from app.game.orchestrator import GameOrchestrator
 from app.game.scene import Scene
 from app.game.state.session import SessionStore
@@ -51,6 +52,18 @@ def test_doubao_keeps_observation_and_interpretation_separate():
 
     assert response.observed_fact_refs == ["ADMIN_ACTOR_PARTIAL"]
     assert response.interpretation == "有人故意做了手脚。"
+
+
+def test_doubao_early_gpt_statement_is_a_structured_public_claim():
+    response = DoubaoRuntime(_Provider()).respond(
+        CharacterRequest(
+            character_id="doubao",
+            player_message="GPT 是什么时候出现的？",
+            inquiry=Inquiry(ASK_CHARACTER_SUSPICION, target="doubao", subject="chatgpt", topic="evidence"),
+        )
+    )
+
+    assert response.claim_refs == ["CL_DB_01"]
 
 
 def test_doubao_cannot_turn_an_unseen_fact_into_an_observation():
