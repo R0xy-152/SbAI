@@ -70,4 +70,5 @@ def submit_challenge(
     elif character_id == "chatgpt":
         for claim_id in ("CL_GPT_03", "CL_GPT_04"):
             chapter.claim_store.setdefault(claim_id, {"character_id": "chatgpt", "fact_refs": [], "statement_type": "private", "text": CLAIMS[claim_id]})
+        chapter.acquired_evidence.add("EV09_CURRENT_PLAYER_SUBJECT")
     return {"outcome": "UNLOCKED", "character_id": character_id}

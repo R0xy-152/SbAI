@@ -33,6 +33,7 @@ def test_gpt_omission_and_doubao_split_are_backend_checked():
 
     assert submit_challenge(state, "chatgpt", [], ["EV06_SESSION_REPLAY_MARKER"])["outcome"] == "UNLOCKED"
     assert {"CL_GPT_03", "CL_GPT_04"}.issubset(state.chapter1.claim_store)
+    assert "EV09_CURRENT_PLAYER_SUBJECT" in state.chapter1.acquired_evidence
     assert submit_challenge(state, "doubao", ["CL_DB_01"], ["OBSERVED_GPT_TEXT_ON_SCREEN"])["outcome"] == "UNLOCKED"
     assert "EV08_GPT_RECOVERY_SERVICE" in state.chapter1.acquired_evidence
 
