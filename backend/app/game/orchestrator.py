@@ -303,6 +303,15 @@ class GameOrchestrator:
                             self._state.state_for(session.session_id).chapter1.acquired_evidence.add(
                                 "EV07_CLAUDE_RECOVERY_ACCESS"
                             )
+                current_state = self._state.get(session.session_id)
+                if current_state is not None:
+                    chapter = current_state.chapter1
+                    if {
+                        "EV06_SESSION_REPLAY_MARKER",
+                        "EV07_CLAUDE_RECOVERY_ACCESS",
+                        "EV08_GPT_RECOVERY_SERVICE",
+                    }.issubset(chapter.acquired_evidence):
+                        chapter.acquired_evidence.add("EV11_GPT_SECOND_SUMMARY")
             if response.evidence_refs:
                 self._state.state_for(session.session_id).chapter1.evidence_selections.append(
                     {
