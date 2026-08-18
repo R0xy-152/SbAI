@@ -34,6 +34,8 @@ const claudePrivateInterview = document.querySelector("#claude-private-interview
 const claudePrivateSubmit = document.querySelector("#claude-private-submit");
 const doubaoPrivateInterview = document.querySelector("#doubao-private-interview");
 const doubaoPrivateSubmit = document.querySelector("#doubao-private-submit");
+const gptPrivateInterview = document.querySelector("#gpt-private-interview");
+const gptPrivateSubmit = document.querySelector("#gpt-private-submit");
 
 // TV-16: per-character display (docs/01 §10.1-10.2). Claude's portrait is a
 // temporary validation fixture (docs/06 §28: Fixture ≠ Production Content).
@@ -357,12 +359,28 @@ function applyInvestigationState(state) {
   if (doubaoPrivateInterview) {
     doubaoPrivateInterview.hidden = !state.private_interview_challenges?.doubao;
   }
+  if (gptPrivateInterview) {
+    gptPrivateInterview.hidden = !state.private_interview_challenges?.chatgpt;
+  }
   if (switchButtons.chatgpt) {
     switchButtons.chatgpt.hidden = !state.available_characters?.includes("chatgpt");
   }
   if (switchButtons.doubao) {
     switchButtons.doubao.hidden = !state.available_characters?.includes("doubao");
   }
+}
+
+if (gptPrivateSubmit && gptPrivateInterview) {
+  gptPrivateSubmit.addEventListener("click", async () => {
+    if (!sessionId) return;
+    try {
+      const response = await fetch(`${API_BASE}/api/game/private-interview/challenge`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: sessionId, character_id: "chatgpt", claim_ids: [], evidence_ids: ["EV06_SESSION_REPLAY_MARKER"] }) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      status.textContent = result.outcome === "UNLOCKED" ? "GPT 承认：她在替你安排调查优先级。已获得当前玩家身份记录。" : "这项证据尚未形成可追问的遗漏。";
+      if (result.outcome === "UNLOCKED") { await loadInvestigationState(); loadEvidence().catch(() => {}); }
+    } catch (_error) { status.textContent = "私审提交失败，请重试。"; }
+  });
 }
 
 if (doubaoPrivateSubmit && doubaoPrivateInterview) {
