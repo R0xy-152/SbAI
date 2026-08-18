@@ -616,6 +616,7 @@ class GameOrchestrator:
                 "claude": "CT01_CLAUDE_SOURCE_GAP" in chapter.resolved_contradictions
                 and "claude" not in chapter.private_interview_completed,
             },
+            "available_characters": sorted(chapter.available_characters),
         }
 
     def _load_known_state(self, session_id: str) -> NarrativeState:

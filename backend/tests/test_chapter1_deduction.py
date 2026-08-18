@@ -37,6 +37,9 @@ def test_inference_cannot_be_brute_forced_before_evidence_gate():
         "id": INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR,
     }
     assert "EV06_SESSION_REPLAY_MARKER" in state.chapter1.acquired_evidence
+    assert "EV10_GPT_FIRST_SUMMARY" in state.chapter1.acquired_evidence
+    assert "chatgpt" in state.chapter1.available_characters
+    assert "chatgpt_has_appeared" in state.narrative_flags
     assert "CURRENT_DEEPSEEK_CLEARED" in state.chapter1.scene_facts
 
 

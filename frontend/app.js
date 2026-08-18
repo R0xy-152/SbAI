@@ -17,6 +17,7 @@ const evidenceEmpty = document.querySelector("#evidence-empty");
 const switchButtons = {
   deepseek: document.querySelector("#switch-deepseek"),
   claude: document.querySelector("#switch-claude"),
+  chatgpt: document.querySelector("#switch-chatgpt"),
 };
 
 const investigationButtons =
@@ -40,6 +41,10 @@ const CHARACTERS = {
   },
   claude: {
     name: "Claude",
+    sprite: "./public/characters/claude-placeholder.svg",
+  },
+  chatgpt: {
+    name: "ChatGPT",
     sprite: "./public/characters/claude-placeholder.svg",
   },
 };
@@ -342,6 +347,9 @@ function applyInvestigationState(state) {
   if (claudePrivateInterview) {
     claudePrivateInterview.hidden = !state.private_interview_challenges?.claude;
   }
+  if (switchButtons.chatgpt) {
+    switchButtons.chatgpt.hidden = !state.available_characters?.includes("chatgpt");
+  }
 }
 
 async function loadInvestigationState() {
@@ -484,7 +492,7 @@ if (deductionForm && deductionInput) {
       if (result.outcome === "ACCEPTED") {
         deductionInput.value = "";
         status.textContent = result.id === "INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR"
-          ? "推理成立：当前 DeepSeek 不是 03:17 的执行者，已恢复旧会话标记。"
+          ? "推理成立：当前 DeepSeek 不是 03:17 的执行者；GPT 已带着调查摘要加入。"
           : "推理成立：Claude 的信息来源存在断层，已解锁私审挑战。";
         loadInvestigationState().catch(() => {});
         loadEvidence().catch(() => {});
