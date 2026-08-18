@@ -45,6 +45,8 @@ def map_player_deduction(message: str) -> tuple[str, str] | None:
     normalized = message.lower().replace(" ", "")
     if "没看到" in normalized and ("为什么说" in normalized or "为什么是她" in normalized):
         return ("contradiction", CT01_CLAUDE_SOURCE_GAP)
+    if "gpt" in normalized and ("遗漏" in normalized or "没提" in normalized) and ("v03" in normalized or "recoveredsession" in normalized or "旧会话" in normalized):
+        return ("contradiction", CT04_GPT_SUMMARY_OMISSION)
     if ("#03" in normalized and "#04" in normalized) or "不是日志里的" in normalized:
         return ("inference", INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR)
     if "recoveredsession" in normalized or "旧session" in normalized or "旧会话" in normalized:
@@ -63,6 +65,13 @@ def submit_deduction(state: NarrativeState, message: str) -> dict:
     kind, identifier = mapped
     chapter = state.chapter1
     if kind == "contradiction":
+        if identifier == CT04_GPT_SUMMARY_OMISSION:
+            required_evidence = {"EV11_GPT_SECOND_SUMMARY", "EV06_SESSION_REPLAY_MARKER"}
+            if not required_evidence.issubset(chapter.acquired_evidence):
+                return {"outcome": "BLOCKED", "kind": kind, "id": identifier}
+            chapter.resolved_contradictions.add(identifier)
+            chapter.scene_facts.add("UNLOCK_GPT_PRIVATE_INTERVIEW")
+            return {"outcome": "ACCEPTED", "kind": kind, "id": identifier}
         required = CONTRADICTION_REGISTRY[identifier]
         if not all(claim_id in chapter.claim_store for claim_id in required):
             return {"outcome": "BLOCKED", "kind": kind, "id": identifier}

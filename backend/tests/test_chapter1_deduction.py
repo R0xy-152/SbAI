@@ -4,6 +4,7 @@ from app.game.deduction import (
     CL_CLAUDE_01,
     CL_CLAUDE_02,
     CT01_CLAUDE_SOURCE_GAP,
+    CT04_GPT_SUMMARY_OMISSION,
     INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR,
     INF03_V03_IS_PREVIOUS_PLAYER_INSTANCE,
     submit_deduction,
@@ -70,4 +71,17 @@ def test_v03_v04_reveal_requires_all_three_authored_evidence_records():
         "outcome": "ACCEPTED",
         "kind": "inference",
         "id": INF03_V03_IS_PREVIOUS_PLAYER_INSTANCE,
+    }
+
+
+def test_gpt_omission_requires_both_the_second_summary_and_replay_marker():
+    state = NarrativeState()
+    message = "GPT 的摘要遗漏了 Recovered Session 和 V03。"
+    assert submit_deduction(state, message)["outcome"] == "BLOCKED"
+
+    state.chapter1.acquired_evidence.update({"EV11_GPT_SECOND_SUMMARY", "EV06_SESSION_REPLAY_MARKER"})
+    assert submit_deduction(state, message) == {
+        "outcome": "ACCEPTED",
+        "kind": "contradiction",
+        "id": CT04_GPT_SUMMARY_OMISSION,
     }

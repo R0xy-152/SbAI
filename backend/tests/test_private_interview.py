@@ -1,6 +1,6 @@
 """Private interview challenge tests (docs/05)."""
 
-from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CT01_CLAUDE_SOURCE_GAP
+from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CT01_CLAUDE_SOURCE_GAP, CT04_GPT_SUMMARY_OMISSION
 from app.game.private_interview import submit_challenge
 from app.narrative.state import NarrativeState
 from app.persistence.repository import JsonSessionRepository, PersistedSession
@@ -28,13 +28,11 @@ def test_claude_knowledge_gap_requires_exact_claim_and_evidence_but_can_retry():
 
 def test_gpt_omission_and_doubao_split_are_backend_checked():
     state = NarrativeState()
-    state.chapter1.acquired_evidence.update({"EV01_NOTE_V03", "EV02_ADMIN_SESSION_0317"})
-    state.chapter1.evidence_selections.append(
-        {"character_id": "chatgpt", "evidence_ids": ["EV02_ADMIN_SESSION_0317"]}
-    )
+    state.chapter1.resolved_contradictions.add(CT04_GPT_SUMMARY_OMISSION)
     state.chapter1.claim_store["CL_DB_01"] = {}
 
-    assert submit_challenge(state, "chatgpt", [], ["EV01_NOTE_V03"])["outcome"] == "UNLOCKED"
+    assert submit_challenge(state, "chatgpt", [], ["EV06_SESSION_REPLAY_MARKER"])["outcome"] == "UNLOCKED"
+    assert {"CL_GPT_03", "CL_GPT_04"}.issubset(state.chapter1.claim_store)
     assert submit_challenge(state, "doubao", ["CL_DB_01"], ["OBSERVED_GPT_TEXT_ON_SCREEN"])["outcome"] == "UNLOCKED"
     assert "EV08_GPT_RECOVERY_SERVICE" in state.chapter1.acquired_evidence
 

@@ -637,6 +637,8 @@ class GameOrchestrator:
                 "doubao": "doubao" in chapter.available_characters
                 and "CL_DB_01" in chapter.claim_store
                 and "doubao" not in chapter.private_interview_completed,
+                "chatgpt": "CT04_GPT_SUMMARY_OMISSION" in chapter.resolved_contradictions
+                and "chatgpt" not in chapter.private_interview_completed,
             },
             "available_characters": sorted(chapter.available_characters),
         }
