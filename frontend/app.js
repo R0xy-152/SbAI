@@ -26,6 +26,8 @@ const investigationButtons =
 const paperPanel = document.querySelector("#paper-panel");
 const paperClose = document.querySelector("#paper-close");
 const rubbingSurface = document.querySelector("#rubbing-surface");
+const deductionForm = document.querySelector("#deduction-form");
+const deductionInput = document.querySelector("#deduction-message");
 
 // TV-16: per-character display (docs/01 §10.1-10.2). Claude's portrait is a
 // temporary validation fixture (docs/06 §28: Fixture ≠ Production Content).
@@ -446,7 +448,9 @@ form.addEventListener("submit", async (event) => {
       animation: data.animation,
     });
     dialogueText.textContent = data.dialogue;
-    status.textContent = "已收到角色回应。";
+    status.textContent = data.claim_refs?.length
+      ? "已收到角色回应；关键证词已记录。"
+      : "已收到角色回应。";
   } catch (error) {
     status.textContent = "发送失败，请重试。";
     input.value = submitted; // restore the text so the player can retry
@@ -455,6 +459,36 @@ form.addEventListener("submit", async (event) => {
     input.focus();
   }
 });
+
+if (deductionForm && deductionInput) {
+  deductionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const message = deductionInput.value.trim();
+    if (!message || !sessionId) {
+      status.textContent = "先获得相关证词后再提交推理。";
+      return;
+    }
+    try {
+      const response = await fetch(`${API_BASE}/api/game/deduction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, message }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      if (result.outcome === "ACCEPTED") {
+        deductionInput.value = "";
+        status.textContent = "推理成立：Claude 的信息来源存在断层，已解锁私审挑战。";
+      } else if (result.outcome === "BLOCKED") {
+        status.textContent = "推理还缺少关键证词或证据。";
+      } else {
+        status.textContent = "暂时无法确认这条推理；请换一种更具体的说法。";
+      }
+    } catch (_error) {
+      status.textContent = "推理提交失败，请重试。";
+    }
+  });
+}
 
 // TV-17: the active opening line (docs/01 §4) — spoken by the backend without
 // player input. On load the frontend asks for it once; the backend is

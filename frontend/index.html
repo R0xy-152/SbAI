@@ -71,6 +71,12 @@
         <ol id="evidence-list" class="evidence-list"></ol>
       </section>
 
+      <form id="deduction-form" class="deduction-form" novalidate>
+        <label for="deduction-message">指出证词中的矛盾</label>
+        <input id="deduction-message" type="text" maxlength="240" placeholder="例如：你没看到 DeepSeek，为什么说是她开的？" />
+        <button type="submit">提交推理</button>
+      </form>
+
       <form id="player-form" class="player-input" novalidate>
         <label class="sr-only" for="player-message">输入要对 DeepSeek 说的话</label>
         <input
@@ -90,4 +96,3 @@
     <script src="./app.js"></script>
   </body>
 </html>
-

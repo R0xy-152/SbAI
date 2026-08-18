@@ -218,6 +218,19 @@ body { margin: 0; min-width: 320px; }
   padding-bottom: .4rem;
 }
 
+.deduction-form {
+  width: min(1080px, calc(100% - 2rem));
+  justify-self: center;
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  margin-bottom: .5rem;
+  color: #d7effa;
+  font-size: .9rem;
+}
+.deduction-form input { min-width: 0; flex: 1; padding: .55rem .7rem; border: 1px solid rgba(211, 234, 255, .45); border-radius: 4px; color: #f6f9ff; background: rgba(7, 12, 24, .88); font: inherit; }
+.deduction-form button { border: 1px solid rgba(135, 214, 244, .7); border-radius: 4px; padding: .55rem .8rem; color: #dff7ff; background: rgba(30, 48, 78, .85); cursor: pointer; font: inherit; }
+
 .player-input input {
   min-width: 0;
   flex: 1;

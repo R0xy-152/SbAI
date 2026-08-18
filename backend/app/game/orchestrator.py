@@ -609,6 +609,9 @@ class GameOrchestrator:
             "scene_id": state.current_scene,
             "hotspots": dict(chapter.hotspot_states),
             "acquired_evidence": sorted(chapter.acquired_evidence),
+            "claims": sorted(chapter.claim_store),
+            "resolved_contradictions": sorted(chapter.resolved_contradictions),
+            "private_interview_rights": sorted(chapter.private_interview_rights),
         }
 
     def _load_known_state(self, session_id: str) -> NarrativeState:

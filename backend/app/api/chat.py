@@ -37,6 +37,7 @@ class ChatResponse(BaseModel):
     # TV-16: story-semantic directives from a committed narrative event
     # (docs/03 §13.6), e.g. ["SHOW_CHARACTER claude"]; empty on noop turns.
     presentation: list[str] = []
+    claim_refs: list[str] = []
 
 
 class OpeningRequest(BaseModel):
@@ -92,6 +93,7 @@ def chat(
         # Each committed event's directive is one string, e.g. "SHOW_CHARACTER
         # claude" (docs/03 §13.6), so the Frontend can parse kind + target.
         presentation=[" ".join(result.presentation)] if result.presentation else [],
+        claim_refs=result.response.claim_refs,
     )
 
 
@@ -111,6 +113,7 @@ def opening(
         emotion=result.response.emotion,
         animation=result.response.animation_proposal,
         presentation=[" ".join(result.presentation)] if result.presentation else [],
+        claim_refs=result.response.claim_refs,
     )
 
 
