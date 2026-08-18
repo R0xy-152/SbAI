@@ -612,6 +612,10 @@ class GameOrchestrator:
             "claims": sorted(chapter.claim_store),
             "resolved_contradictions": sorted(chapter.resolved_contradictions),
             "private_interview_rights": sorted(chapter.private_interview_rights),
+            "private_interview_challenges": {
+                "claude": "CT01_CLAUDE_SOURCE_GAP" in chapter.resolved_contradictions
+                and "claude" not in chapter.private_interview_completed,
+            },
         }
 
     def _load_known_state(self, session_id: str) -> NarrativeState:

@@ -22,6 +22,8 @@ def test_claude_knowledge_gap_requires_exact_claim_and_evidence_but_can_retry():
     assert correct == {"outcome": "UNLOCKED", "character_id": "claude"}
     assert "claude" in state.chapter1.private_interview_rights
     assert "claude" in state.chapter1.private_interview_completed
+    assert {"CL_CLAUDE_03", "CL_CLAUDE_04"}.issubset(state.chapter1.claim_store)
+    assert "EV05_ARCHIVED_ACTOR_FRAGMENT" in state.chapter1.acquired_evidence
 
 
 def test_gpt_omission_and_doubao_split_are_backend_checked():

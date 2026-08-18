@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CT01_CLAUDE_SOURCE_GAP
+from app.narrative.chapter1_content import CLAIMS
 from app.narrative.state import NarrativeState
 
 
@@ -49,4 +50,16 @@ def submit_challenge(
         return {"outcome": "RETRY", "character_id": character_id}
     chapter.private_interview_rights.add(character_id)
     chapter.private_interview_completed.add(character_id)
+    if character_id == "claude":
+        for claim_id in ("CL_CLAUDE_03", "CL_CLAUDE_04"):
+            chapter.claim_store.setdefault(
+                claim_id,
+                {
+                    "character_id": "claude",
+                    "fact_refs": [],
+                    "statement_type": "private",
+                    "text": CLAIMS[claim_id],
+                },
+            )
+        chapter.acquired_evidence.add("EV05_ARCHIVED_ACTOR_FRAGMENT")
     return {"outcome": "UNLOCKED", "character_id": character_id}

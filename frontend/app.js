@@ -28,6 +28,8 @@ const paperClose = document.querySelector("#paper-close");
 const rubbingSurface = document.querySelector("#rubbing-surface");
 const deductionForm = document.querySelector("#deduction-form");
 const deductionInput = document.querySelector("#deduction-message");
+const claudePrivateInterview = document.querySelector("#claude-private-interview");
+const claudePrivateSubmit = document.querySelector("#claude-private-submit");
 
 // TV-16: per-character display (docs/01 §10.1-10.2). Claude's portrait is a
 // temporary validation fixture (docs/06 §28: Fixture ≠ Production Content).
@@ -337,6 +339,9 @@ function applyInvestigationState(state) {
     const hotspotState = state.hotspots?.[button.dataset.hotspotId];
     button.classList.toggle("is-completed", hotspotState === "completed");
   }
+  if (claudePrivateInterview) {
+    claudePrivateInterview.hidden = !state.private_interview_challenges?.claude;
+  }
 }
 
 async function loadInvestigationState() {
@@ -479,6 +484,7 @@ if (deductionForm && deductionInput) {
       if (result.outcome === "ACCEPTED") {
         deductionInput.value = "";
         status.textContent = "推理成立：Claude 的信息来源存在断层，已解锁私审挑战。";
+        loadInvestigationState().catch(() => {});
       } else if (result.outcome === "BLOCKED") {
         status.textContent = "推理还缺少关键证词或证据。";
       } else {
@@ -486,6 +492,39 @@ if (deductionForm && deductionInput) {
       }
     } catch (_error) {
       status.textContent = "推理提交失败，请重试。";
+    }
+  });
+}
+
+if (claudePrivateSubmit && claudePrivateInterview) {
+  claudePrivateSubmit.addEventListener("click", async () => {
+    if (!sessionId) return;
+    const selected = Array.from(
+      claudePrivateInterview.querySelectorAll("input[name='claude-claim']:checked"),
+      (input) => input.value,
+    );
+    try {
+      const response = await fetch(`${API_BASE}/api/game/private-interview/challenge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          character_id: "claude",
+          claim_ids: selected,
+          evidence_ids: [],
+        }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      if (result.outcome === "UNLOCKED") {
+        status.textContent = "Claude 私审完成：获得了 03:17 执行者残片。";
+        await loadInvestigationState();
+        loadEvidence().catch(() => {});
+      } else {
+        status.textContent = "这两条证词还不足以构成完整的信息断层。";
+      }
+    } catch (_error) {
+      status.textContent = "私审提交失败，请重试。";
     }
   });
 }

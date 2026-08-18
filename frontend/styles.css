@@ -231,6 +231,11 @@ body { margin: 0; min-width: 320px; }
 .deduction-form input { min-width: 0; flex: 1; padding: .55rem .7rem; border: 1px solid rgba(211, 234, 255, .45); border-radius: 4px; color: #f6f9ff; background: rgba(7, 12, 24, .88); font: inherit; }
 .deduction-form button { border: 1px solid rgba(135, 214, 244, .7); border-radius: 4px; padding: .55rem .8rem; color: #dff7ff; background: rgba(30, 48, 78, .85); cursor: pointer; font: inherit; }
 
+.private-interview { width: min(1080px, calc(100% - 2rem)); justify-self: center; display: grid; gap: .55rem; margin-bottom: .5rem; padding: .9rem 1.1rem; border: 1px solid rgba(255, 203, 130, .65); border-radius: 6px; color: #fff0d8; background: rgba(46, 29, 13, .9); }
+.private-interview[hidden] { display: none; }
+.private-interview p { margin: 0; color: #ffe5bc; }
+.private-interview button { justify-self: start; border: 1px solid rgba(255, 203, 130, .75); border-radius: 4px; padding: .45rem .75rem; color: #fff0d8; background: rgba(96, 57, 20, .85); cursor: pointer; font: inherit; }
+
 .player-input input {
   min-width: 0;
   flex: 1;

@@ -77,6 +77,14 @@
         <button type="submit">提交推理</button>
       </form>
 
+      <section id="claude-private-interview" class="private-interview" hidden aria-label="Claude私审">
+        <h2 class="history-title">Claude 私审：信息断层</h2>
+        <p>选择构成信息断层的两条公开证词。</p>
+        <label><input type="checkbox" name="claude-claim" value="CL_CLAUDE_01" /> “门是 DeepSeek 打开的。”</label>
+        <label><input type="checkbox" name="claude-claim" value="CL_CLAUDE_02" /> “我没有看到 DeepSeek 本人。”</label>
+        <button type="button" id="claude-private-submit">提交质询</button>
+      </section>
+
       <form id="player-form" class="player-input" novalidate>
         <label class="sr-only" for="player-message">输入要对 DeepSeek 说的话</label>
         <input
