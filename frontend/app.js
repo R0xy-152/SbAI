@@ -472,6 +472,9 @@ form.addEventListener("submit", async (event) => {
     status.textContent = data.claim_refs?.length
       ? "已收到角色回应；关键证词已记录。"
       : "已收到角色回应。";
+    if ((data.presentation || []).some((directive) => directive.startsWith("SHOW_CHARACTER"))) {
+      loadInvestigationState().catch(() => {});
+    }
   } catch (error) {
     status.textContent = "发送失败，请重试。";
     input.value = submitted; // restore the text so the player can retry

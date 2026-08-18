@@ -23,6 +23,7 @@ assert.match(html, /id="deduction-form"/);
 assert.match(js, /api\/game\/deduction/);
 assert.match(html, /id="claude-private-interview"/);
 assert.match(js, /api\/game\/private-interview\/challenge/);
+assert.match(js, /loadInvestigationState\(\)\.catch/);
 assert.match(js, /applyPresentation\(data\.presentation\)/);
 
 console.log("CH1 investigation UI wiring: PASS");
