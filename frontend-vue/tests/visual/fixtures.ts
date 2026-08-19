@@ -95,11 +95,12 @@ export async function chatRound(page: Page, text: string): Promise<void> {
   await waitInputUnlocked(page)
 }
 
-/** 调查桌上的纸（inspect + 自动拓印 → EV01）。完成后按钮仍在（后端
- * available_hotspots 保留已完成热点供复查，docs/12 §41），以拓印消息为准。 */
+/** 调查桌上的纸（inspect + 自动拓印 → EV01），docs/14 T2 起经选项气泡执行
+ *（后端下发 label=「桌上的纸」的 investigate 选项，payload.steps 两步）。完成后
+ * 该选项消失（D3：已完成热点不下发）。 */
 export async function inspectPaper(page: Page): Promise<void> {
-  await page.getByRole('button', { name: '调查桌上的纸' }).click()
-  await page.getByText('纸面拓印完成').waitFor({ timeout: 30_000 })
+  await page.getByRole('button', { name: '桌上的纸', exact: true }).click()
+  await page.getByText('调查完成，获得新线索。').waitFor({ timeout: 30_000 })
 }
 
 /** 确定性 Gate 驱动 Claude 出现（D6：任何消息不得含 03:17 字样）。 */
@@ -122,7 +123,7 @@ export async function driveClaudeAppears(
       const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('img'))
       const has = (s: string) =>
         imgs.some((i) => i.src.includes(s) && i.complete && i.naturalWidth > 0)
-      return has('deepseek_main.png') && has('claude-main.png')
+      return has('deepseek_main.png') && has('claude_main.png')
     },
     { timeout: 60_000 },
   )

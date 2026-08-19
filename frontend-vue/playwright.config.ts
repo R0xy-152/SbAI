@@ -14,10 +14,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   expect: {
-    // 0.5% 容差：吸收字体渲染噪声（通常<0.1%），仍能检测 UI 元素级变化
-    //（切换器删除约 1.3%，此前 2% 容差会把它放行）。
+    // 0.15% 容差：吸收字体渲染噪声（通常<0.1%），仍能检测 UI 元素级变化。
+    // 教训：切换器删除约 1.3%（2% 容差放过）；docs/14 T2 选项气泡条约 0.16%
+    //（0.5% 容差放过）——每次新增小元素必须复查阈值，基线重拍前先删旧图。
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.005,
+      maxDiffPixelRatio: 0.0015,
       animations: 'disabled',
       caret: 'hide',
     },

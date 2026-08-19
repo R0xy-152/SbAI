@@ -37,6 +37,8 @@ export interface LoadResult {
       interaction_type: string
     }>
     hotspots: Record<string, string>
+    /** docs/14 T2：Load 恢复后同样对账当前合法选项（D3）。 */
+    options: GameOption[]
   }
   history: {
     session_id: string
@@ -44,8 +46,8 @@ export interface LoadResult {
   }
 }
 
-// 复用 game.ts 的权威角色在场类型（同一契约，docs/13 §9.2）
-import type { PresentationStateView } from './game'
+// 复用 game.ts 的权威角色在场 / 选项类型（同一契约，docs/13 §9.2 / docs/14）
+import type { GameOption, PresentationStateView } from './game'
 
 const PLAYER_KEY = 'gal_player_id'
 

@@ -59,6 +59,24 @@ export interface PresentationStateView {
   input_mode: 'locked' | 'investigation'
 }
 
+/** docs/14 §2.1：后端权威「可用选项」（D3 未解锁/已完成不下发）。payload
+ * 是既有执行端点的参数（如 {steps}、{character_id}），前端不解释、只回传
+ *（D7）。kind 全量常量由后端定义；T2 前端只处理 investigate / chat_routing。 */
+export interface GameOption {
+  id: string
+  label: string
+  kind:
+    | 'chat_routing'
+    | 'investigate'
+    | 'evidence_present'
+    | 'deduction'
+    | 'private_interview'
+    | 'recovery'
+    | 'narrative'
+  payload: Record<string, unknown>
+  hint?: string | null
+}
+
 /** Liveness probe（docs/13 Task 1 验收：Vue 可请求 FastAPI health）。 */
 export async function checkBackendHealth(): Promise<boolean> {
   const { data } = await http.get<{ status: string }>('/api/health')
@@ -76,16 +94,20 @@ export async function createOpening(sessionId: string | null): Promise<OpeningRe
 }
 
 /** 玩家输入 → 一轮角色回应（docs/13 §27 Task 4：Player Input / Streaming /
- * Response / Presentation Directive）。不传 character_id：玩家发言是公共对
- * 话（后端 heard_by = 全体在场角色），回应者由后端 SpeakerSelector 权威决定。
- * 附带 player_id 供后端 checkpoint 自动存档（Task 8：Claude Appeared）。 */
+ * Response / Presentation Directive）。默认不传 character_id：玩家发言是公共
+ * 对话（后端 heard_by = 全体在场角色），回应者由后端 SpeakerSelector 权威决定。
+ * characterId 仅在 chat_routing 选项激活时透传（docs/14 D5：走既有 Presence
+ * Gate，替代已删除的切换器）。附带 player_id 供后端 checkpoint 自动存档
+ *（Task 8：Claude Appeared）。 */
 export async function sendChat(
   sessionId: string,
   message: string,
+  characterId?: string,
 ): Promise<ChatResponse> {
   const { data } = await http.post<ChatResponse>('/chat', {
     session_id: sessionId,
     message,
+    character_id: characterId ?? null,
     player_id: getPlayerId(),
   })
   return data
@@ -122,7 +144,8 @@ export async function sendInvestigationAction(
   return data
 }
 
-/** 权威舞台对账（docs/12 §39 Task 1：presentation_state 是后端决定的在场事实）。 */
+/** 权威舞台对账（docs/12 §39 Task 1：presentation_state 是后端决定的在场事实；
+ * docs/14 T1 起同通道下发当前合法 options，D3 未解锁不下发）。 */
 export async function fetchGameState(sessionId: string): Promise<{
   presentation_state: PresentationStateView
   available_hotspots: Array<{
@@ -132,6 +155,7 @@ export async function fetchGameState(sessionId: string): Promise<{
     interaction_type: string
   }>
   hotspots: Record<string, string>
+  options: GameOption[]
 }> {
   const { data } = await http.get('/game/state', { params: { session_id: sessionId } })
   return data

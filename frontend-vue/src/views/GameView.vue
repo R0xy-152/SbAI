@@ -24,7 +24,7 @@ import {
   sendChat,
   sendInvestigationAction,
 } from '../api/game'
-import type { ChatResponse } from '../api/game'
+import type { ChatResponse, GameOption } from '../api/game'
 import type { LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
@@ -33,6 +33,7 @@ import SavePanel from '../components/save/SavePanel.vue'
 import LoadPanel from '../components/save/LoadPanel.vue'
 import SystemMenu from '../components/system/SystemMenu.vue'
 import HistoryPanel from '../components/system/HistoryPanel.vue'
+import OptionsPanel from '../components/game/standard/OptionsPanel.vue'
 
 const presentation = usePresentationStore()
 const game = useGameStore()
@@ -95,7 +96,16 @@ async function reconcileStage() {
   try {
     const state = await fetchGameState(sessionId.value)
     applyPresentationStateView(presentation.state, state.presentation_state)
-    availableHotspots.value = state.available_hotspots ?? []
+    options.value = state.options ?? []
+    // 粘性路由自动复位（D5）：路由对象离场 → 对应 chat_routing 选项消失
+    if (routedCharacter.value) {
+      const stillRoutable = options.value.some(
+        (o) =>
+          o.kind === 'chat_routing' &&
+          o.payload?.character_id === routedCharacter.value,
+      )
+      if (!stillRoutable) routedCharacter.value = null
+    }
   } catch (e) {
     console.warn('[GameView] reconcile stage failed', e)
   }
@@ -125,7 +135,7 @@ async function onPlayerMessage(text?: unknown) {
   presentation.state.dialogue.text = ''
   setInputMode(false)
   try {
-    const data = await sendChat(sessionId.value, text.trim())
+    const data = await sendChat(sessionId.value, text.trim(), routedCharacter.value ?? undefined)
     currentResponse.value = data
     // 结构化指令 → 舞台（CHARACTER_SHOW / EMOTION / GLITCH 等）
     applyChatResponse(presentation.state, data)
@@ -164,47 +174,68 @@ function onDialogProceed() {
   }
 }
 
-// 调查纸（03:17 前置：EV01_NOTE_V03）。可调查性来自后端权威
-// available_hotspots（docs/13 §9.2：前端不从剧情条件推断；拓印完成后该
-// hotspot 从列表消失，Load 后同样正确恢复）。
-const investigationBusy = ref(false)
-const investigationMsg = ref('')
-const availableHotspots = ref<Array<{ hotspot_id: string }>>([])
-const paperAvailable = computed(() =>
-  availableHotspots.value.some((h) => h.hotspot_id === 'CH1_NOTE_01'),
-)
+// 选项功能（docs/14 T2）：后端权威下发当前合法选项（D3），前端只回传
+// payload（D7）。investigate 逐步骤执行 payload.steps；chat_routing 是粘性
+// 路由（用户确认：再点同一气泡取消；角色离场自动复位，见 reconcileStage）。
+const options = ref<GameOption[]>([])
+const optionBusy = ref(false)
+const feedback = ref<string | null>(null)
+const routedCharacter = ref<string | null>(null)
 
-async function inspectPaper() {
-  if (!sessionId.value || investigationBusy.value) return
-  investigationBusy.value = true
-  investigationMsg.value = ''
-  try {
-    const res = await sendInvestigationAction(sessionId.value, 'INSPECT_HOTSPOT', 'CH1_NOTE_01')
-    if (res.state?.presentation_state) {
-      applyPresentationStateView(presentation.state, res.state.presentation_state)
+const routeLabel = computed(() => {
+  if (!routedCharacter.value) return null
+  return `正在与 ${roleNameOf(routedCharacter.value)} 对话：再点同一气泡回到公共对话`
+})
+
+async function executeOption(option: GameOption) {
+  if (!sessionId.value || optionBusy.value || llmBusy.value) return
+  feedback.value = null
+  // D5 对话路由：仅本地切换目标，下一条玩家消息经 sendChat 透传 character_id
+  if (option.kind === 'chat_routing') {
+    const cid = option.payload?.character_id
+    if (typeof cid === 'string') {
+      routedCharacter.value = routedCharacter.value === cid ? null : cid
     }
-    if (res.state?.available_hotspots) {
-      availableHotspots.value = res.state.available_hotspots
-    }
-    // 纸面拓印：inspect 后立即可做 PAPER_RUBBING_COMPLETE（后端要求先 inspect）
-    const rubbed = await sendInvestigationAction(
-      sessionId.value,
-      'PAPER_RUBBING_COMPLETE',
-      'CH1_NOTE_01',
-    )
-    if (rubbed.evidence_id) {
-      investigationMsg.value = '纸面拓印完成，获得了「03:17 的笔记」线索。'
-    } else if (rubbed.outcome === 'ALREADY_COMPLETED') {
-      investigationMsg.value = '这张纸已经拓印过了。'
-    }
-    if (rubbed.state?.available_hotspots) {
-      availableHotspots.value = rubbed.state.available_hotspots
-    }
-  } catch (e) {
-    investigationMsg.value = e instanceof Error ? e.message : '调查失败，请重试。'
-  } finally {
-    investigationBusy.value = false
+    return
   }
+  // investigate：payload.steps 逐条执行既有权威端点（/api/game/action）
+  if (option.kind === 'investigate') {
+    optionBusy.value = true
+    try {
+      const steps = Array.isArray(option.payload?.steps) ? option.payload.steps : []
+      let last: Awaited<ReturnType<typeof sendInvestigationAction>> | null = null
+      for (const step of steps) {
+        const action = (step as { action?: unknown })?.action
+        const hotspotId = (step as { hotspot_id?: unknown })?.hotspot_id
+        if (typeof action !== 'string' || typeof hotspotId !== 'string') continue
+        last = await sendInvestigationAction(
+          sessionId.value,
+          action as 'INSPECT_HOTSPOT' | 'PAPER_RUBBING_COMPLETE',
+          hotspotId,
+        )
+        if (last.state?.presentation_state) {
+          applyPresentationStateView(presentation.state, last.state.presentation_state)
+        }
+      }
+      // 先对账（选项随热点完成而消失，D3），再给反馈，避免测试先看到文案
+      await reconcileStage()
+      if (last) {
+        feedback.value =
+          last.outcome === 'ALREADY_COMPLETED'
+            ? '已经调查过了。'
+            : last.evidence_id
+              ? '调查完成，获得新线索。'
+              : '调查完成。'
+      }
+    } catch (e) {
+      feedback.value = e instanceof Error ? e.message : '调查失败，请重试。'
+    } finally {
+      optionBusy.value = false
+    }
+    return
+  }
+  // 其余 kind（evidence_present / deduction / private_interview / recovery /
+  // narrative）为 T3/T4 预留：后端届时才下发，当前不处理（D7）。
 }
 
 async function startOpening() {
@@ -231,7 +262,7 @@ async function startOpening() {
     } else {
       setInputMode(true)
     }
-    // 初始热点（调查纸）由后端权威 available_hotspots 决定（docs/13 §9.2）
+    // 初始选项（调查纸等）由后端权威 options 决定（docs/14 T2，D3）
     void reconcileStage()
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
@@ -267,7 +298,9 @@ function applyLoadedSession(result: LoadResult) {
   if (view) {
     applyPresentationStateView(presentation.state, view)
   }
-  availableHotspots.value = result.state?.available_hotspots ?? []
+  options.value = result.state?.options ?? []
+  // 新 Active Session：本地粘性路由状态不复用
+  routedCharacter.value = null
   // 恢复最后一句角色台词（画面回到对话流，docs/13 §19.2 restore order 末端）
   const messages = result.history?.messages ?? []
   const lastCharacter = [...messages]
@@ -334,26 +367,17 @@ onUnmounted(() => {
     <!-- 角色舞台 -->
     <GameRolesStage class="pointer-events-none absolute inset-0 z-1" />
 
-    <!-- 调查纸入口（03:17 前置；可调查性来自后端 available_hotspots，docs/13 §9.2） -->
-    <div
-      v-if="paperAvailable"
-      class="absolute bottom-40 left-4 z-20 flex flex-col gap-2 rounded-lg border border-white/15 bg-black/60 p-3 text-sm text-[#d7effa]"
-    >
-      <button
-        class="rounded bg-[#123c63]/80 px-3 py-1.5 hover:bg-[#1b527f] disabled:opacity-50"
-        :disabled="investigationBusy"
-        @click="inspectPaper"
-      >
-        {{ investigationBusy ? '调查中…' : '调查桌上的纸' }}
-      </button>
-      <span v-if="investigationMsg" class="max-w-[240px] text-xs text-[#a9e8ff]/80">
-        {{ investigationMsg }}
-      </span>
-    </div>
-
-
-    <!-- 对话框（底部） -->
-    <div class="absolute inset-x-0 bottom-0 z-10">
+    <!-- 对话框（底部）+ 选项气泡条（docs/14 §2.2：选项在对话框上方，D6；
+         选项由后端权威下发，可调查性不再由前端 hotspot 推断） -->
+    <div class="absolute inset-x-0 bottom-0 z-10 flex flex-col">
+      <OptionsPanel
+        :options="options"
+        :busy="optionBusy || llmBusy"
+        :feedback="feedback"
+        :route-label="routeLabel"
+        :active-route-id="routedCharacter ? 'chat_routing:' + routedCharacter : null"
+        @select="executeOption"
+      />
       <GameDialog
         class="mx-auto"
         @player-continued="onPlayerMessage"
