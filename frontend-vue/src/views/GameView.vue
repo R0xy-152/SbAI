@@ -21,10 +21,13 @@ import {
   createOpening,
   fetchGameState,
   fetchHistory,
+  presentEvidence,
   sendChat,
   sendInvestigationAction,
+  submitDeduction,
+  submitPrivateInterviewChallenge,
 } from '../api/game'
-import type { ChatResponse, GameOption } from '../api/game'
+import type { ChatResponse, GameOption, PresentationAction } from '../api/game'
 import type { LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
@@ -34,6 +37,7 @@ import LoadPanel from '../components/save/LoadPanel.vue'
 import SystemMenu from '../components/system/SystemMenu.vue'
 import HistoryPanel from '../components/system/HistoryPanel.vue'
 import OptionsPanel from '../components/game/standard/OptionsPanel.vue'
+import SubActionPanel from '../components/game/standard/SubActionPanel.vue'
 
 const presentation = usePresentationStore()
 const game = useGameStore()
@@ -128,6 +132,11 @@ function playNextScriptLine(): boolean {
 // 玩家发送
 async function onPlayerMessage(text?: unknown) {
   if (!sessionId.value || typeof text !== 'string' || !text.trim() || busy.value) return
+  // D2 一次性推理模式：下一条消息提交推理端点而非对话（判定仍走后端）
+  if (pendingDeduction.value) {
+    await submitPlayerDeduction(text.trim())
+    return
+  }
   busy.value = true
   error.value = null
   // 进入 AI 回复态前清空旧台词：GameDialog 的 watch 依赖 dialogue.text +
@@ -174,13 +183,22 @@ function onDialogProceed() {
   }
 }
 
-// 选项功能（docs/14 T2）：后端权威下发当前合法选项（D3），前端只回传
+// 选项功能（docs/14 T2/T3）：后端权威下发当前合法选项（D3），前端只回传
 // payload（D7）。investigate 逐步骤执行 payload.steps；chat_routing 是粘性
-// 路由（用户确认：再点同一气泡取消；角色离场自动复位，见 reconcileStage）。
+// 路由（用户确认：再点同一气泡取消；角色离场自动复位，见 reconcileStage）；
+// deduction 是引导式提示 + 主输入框一次性推理模式（D2，判定仍走既有端点）；
+// evidence_present / private_interview 弹小面板（D6），组装后回传既有端点。
 const options = ref<GameOption[]>([])
 const optionBusy = ref(false)
 const feedback = ref<string | null>(null)
 const routedCharacter = ref<string | null>(null)
+
+// D2 一次性推理模式：非空时下一条主输入框消息提交到 /api/game/deduction
+const pendingDeduction = ref<GameOption | null>(null)
+// D6 小面板：当前打开需要上下文的选项（evidence_present / private_interview）
+const activePanel = ref<GameOption | null>(null)
+const panelBusy = ref(false)
+const panelMessage = ref<string | null>(null)
 
 const routeLabel = computed(() => {
   if (!routedCharacter.value) return null
@@ -190,12 +208,29 @@ const routeLabel = computed(() => {
 async function executeOption(option: GameOption) {
   if (!sessionId.value || optionBusy.value || llmBusy.value) return
   feedback.value = null
+  // 点其它选项会退出推理模式 / 面板状态，避免通道混淆
+  if (option.kind !== 'deduction') pendingDeduction.value = null
   // D5 对话路由：仅本地切换目标，下一条玩家消息经 sendChat 透传 character_id
   if (option.kind === 'chat_routing') {
     const cid = option.payload?.character_id
     if (typeof cid === 'string') {
       routedCharacter.value = routedCharacter.value === cid ? null : cid
     }
+    return
+  }
+  // deduction（D2）：系统台词展示引导提示；玩家随后自由输入推理原文
+  if (option.kind === 'deduction') {
+    const hint = typeof option.hint === 'string' && option.hint ? option.hint : option.label
+    setSpeakerLine('system', hint)
+    presentation.state.status = 'streaming'
+    pendingDeduction.value = option
+    feedback.value = '推理模式：下一条输入将作为推理提交。'
+    return
+  }
+  // evidence_present / private_interview（D6）：弹小面板
+  if (option.kind === 'evidence_present' || option.kind === 'private_interview') {
+    activePanel.value = option
+    panelMessage.value = null
     return
   }
   // investigate：payload.steps 逐条执行既有权威端点（/api/game/action）
@@ -234,8 +269,104 @@ async function executeOption(option: GameOption) {
     }
     return
   }
-  // 其余 kind（evidence_present / deduction / private_interview / recovery /
-  // narrative）为 T3/T4 预留：后端届时才下发，当前不处理（D7）。
+  // 其余 kind（recovery / narrative）为 T4 预留：后端届时才下发（D7）。
+}
+
+// D2 一次性推理提交（判定走后端 /api/game/deduction；前端只透传原文）。
+async function submitPlayerDeduction(message: string) {
+  pendingDeduction.value = null
+  if (!sessionId.value) return
+  busy.value = true
+  error.value = null
+  presentation.state.dialogue.text = ''
+  setInputMode(false)
+  try {
+    const result = await submitDeduction(sessionId.value, message)
+    const accepted =
+      result.outcome === 'ACCEPTED' || result.outcome === 'ALREADY_ACCEPTED'
+    feedback.value = accepted
+      ? result.outcome === 'ACCEPTED'
+        ? '推理成立。'
+        : '这条推理已被接受过了。'
+      : result.outcome === 'BLOCKED'
+        ? '推理还缺少关键证据或证词。'
+        : '暂时无法确认这条推理，请换一种更具体的说法。'
+    // 推理成立可能带回演出序列（GPT 登场 / 最终揭示，docs/12 §33）
+    const actions = Array.isArray(result.presentation_actions)
+      ? (result.presentation_actions as PresentationAction[])
+      : []
+    if (actions.length) {
+      applyChatResponse(presentation.state, {
+        session_id: sessionId.value,
+        character_id: 'system',
+        dialogue: '',
+        message_count: 0,
+        emotion: 'neutral',
+        animation: 'none',
+        presentation: [],
+        presentation_actions: actions,
+        claim_refs: [],
+        script_sequence: [],
+      })
+    }
+    const seq = Array.isArray(result.script_sequence)
+      ? (result.script_sequence as ChatResponse['script_sequence'])
+      : []
+    scriptQueue.value = seq
+    scriptIndex = 0
+    if (seq.length > 0) {
+      playNextScriptLine()
+    } else {
+      setInputMode(true)
+    }
+    await reconcileStage()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+    setInputMode(true)
+  } finally {
+    busy.value = false
+  }
+}
+
+// D6 小面板提交：按 kind 回传既有权威端点（D7）。
+async function onPanelSubmit(payload: {
+  character_id: string
+  claim_ids: string[]
+  evidence_ids: string[]
+}) {
+  if (!sessionId.value || !activePanel.value || panelBusy.value) return
+  const option = activePanel.value
+  panelBusy.value = true
+  panelMessage.value = null
+  try {
+    if (option.kind === 'evidence_present') {
+      const evidenceId = payload.evidence_ids[0]
+      if (!evidenceId) return
+      await presentEvidence(sessionId.value, payload.character_id, evidenceId)
+      feedback.value = '已出示证据。'
+      activePanel.value = null
+    } else if (option.kind === 'private_interview') {
+      const result = await submitPrivateInterviewChallenge(
+        sessionId.value,
+        payload.character_id,
+        payload.claim_ids,
+        payload.evidence_ids,
+      )
+      if (result.outcome === 'UNLOCKED' || result.outcome === 'ALREADY_UNLOCKED') {
+        feedback.value =
+          result.outcome === 'UNLOCKED' ? '私审完成。' : '该角色私审已解锁。'
+        activePanel.value = null
+      } else {
+        panelMessage.value = '质询未成立，请重新选择。'
+        return
+      }
+    }
+    await reconcileStage()
+  } catch (e) {
+    panelMessage.value = e instanceof Error ? e.message : '提交失败，请重试。'
+  } finally {
+    panelBusy.value = false
+  }
 }
 
 async function startOpening() {
@@ -299,8 +430,10 @@ function applyLoadedSession(result: LoadResult) {
     applyPresentationStateView(presentation.state, view)
   }
   options.value = result.state?.options ?? []
-  // 新 Active Session：本地粘性路由状态不复用
+  // 新 Active Session：本地粘性路由 / 推理 / 面板状态不复用
   routedCharacter.value = null
+  pendingDeduction.value = null
+  activePanel.value = null
   // 恢复最后一句角色台词（画面回到对话流，docs/13 §19.2 restore order 末端）
   const messages = result.history?.messages ?? []
   const lastCharacter = [...messages]
@@ -424,6 +557,16 @@ onUnmounted(() => {
       v-if="systemPanel === 'history'"
       :session-id="sessionId"
       @close="systemPanel = null"
+    />
+
+    <!-- 选项小面板（docs/14 §2.2 D6：出示证据 / 私审质询） -->
+    <SubActionPanel
+      v-if="activePanel"
+      :option="activePanel"
+      :busy="panelBusy"
+      :message="panelMessage"
+      @close="activePanel = null"
+      @submit="onPanelSubmit"
     />
   </div>
 </template>

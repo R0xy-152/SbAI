@@ -11,10 +11,18 @@ from app.game.investigation import (
     CH1_C02_DOOR,
     CH1_CHARACTER_REGISTRY,
     CH1_NOTE_01,
+    CH1_TERMINAL_MAIN,
     INSPECT_HOTSPOT,
     PAPER_RUBBING_COMPLETE,
 )
-from app.game.options import KIND_CHAT_ROUTING, KIND_INVESTIGATE, build_options
+from app.game.options import (
+    KIND_CHAT_ROUTING,
+    KIND_DEDUCTION,
+    KIND_EVIDENCE_PRESENT,
+    KIND_INVESTIGATE,
+    KIND_PRIVATE_INTERVIEW,
+    build_options,
+)
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
 from app.persistence.repository import JsonSessionRepository
@@ -141,3 +149,126 @@ def test_state_view_and_load_carry_options(tmp_path):
     )
     gv = orch.gameview_state(sid)
     assert "options" in gv["state"]
+
+# ── T3：evidence_present / deduction / private_interview（docs/14 §2.3） ──
+
+
+def test_evidence_present_unlocks_after_impossible_event_resolved(tmp_path):
+    """出示选项仅在 FIRST_IMPOSSIBLE_EVENT_RESOLVED（EV02 调查触发）后下发。"""
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    assert not any(o.kind == KIND_EVIDENCE_PRESENT for o in build_options(state))
+    # 调查主终端 → EV02 → RESOLVE_IMPOSSIBLE_EVENT → 出示解锁
+    orch.handle_investigation_action(sid, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN)
+    # 注意：handle_* 会从仓库重载 state 对象，须重新获取再构建选项
+    state = orch._state.state_for(sid)
+    options = build_options(state)
+    present = next(o for o in options if o.kind == KIND_EVIDENCE_PRESENT)
+    assert present.id == "evidence_present"
+    assert present.payload["characters"] == ["claude", "deepseek"]
+    evidence_ids = {e["id"] for e in present.payload["evidence"]}
+    assert "EV01_NOTE_V03" in evidence_ids
+    assert all(e["title"] for e in present.payload["evidence"])
+
+
+def test_deduction_ct01_requires_both_claims(tmp_path):
+    """CT01 提示选项只在两条公开证词齐备且矛盾未解决时下发（D3）。"""
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    assert not any(o.kind == KIND_DEDUCTION for o in build_options(state))
+    state.chapter1.claim_store["CL_CLAUDE_01"] = {"character_id": "claude"}
+    assert not any(o.kind == KIND_DEDUCTION for o in build_options(state))
+    state.chapter1.claim_store["CL_CLAUDE_02"] = {"character_id": "claude"}
+    ct01 = next(
+        o for o in build_options(state) if o.id == "deduction:CT01_CLAUDE_SOURCE_GAP"
+    )
+    assert ct01.kind == KIND_DEDUCTION
+    assert ct01.payload == {"target": "CT01_CLAUDE_SOURCE_GAP"}
+    assert "没亲眼看到" in ct01.hint
+
+
+def test_deduction_inference_gates_and_acceptance(tmp_path):
+    """INF01 在证据门满足后出现；已接受的推理不再下发；其余推理不提前出现。"""
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    state.chapter1.acquired_evidence.update(
+        {"EV04_CURRENT_DEEPSEEK_REGISTRY", "EV05_ARCHIVED_ACTOR_FRAGMENT"}
+    )
+    ids = _ids(build_options(state))
+    assert "deduction:INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR" in ids
+    assert "deduction:INF02_0317_FROM_OLD_SESSION" not in ids
+    assert "deduction:INF03_V03_IS_PREVIOUS_PLAYER_INSTANCE" not in ids
+    state.chapter1.accepted_inferences.add("INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR")
+    assert "deduction:INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR" not in _ids(
+        build_options(state)
+    )
+
+
+def test_deduction_ct04_requires_evidence(tmp_path):
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    state.chapter1.acquired_evidence.update(
+        {"EV06_SESSION_REPLAY_MARKER", "EV11_GPT_SECOND_SUMMARY"}
+    )
+    assert "deduction:CT04_GPT_SUMMARY_OMISSION" in _ids(build_options(state))
+
+
+def test_private_interview_options_follow_challenges(tmp_path):
+    """私审选项与既有 private_interview_challenges 判定一致；完成后消失。"""
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    assert not any(o.kind == KIND_PRIVATE_INTERVIEW for o in build_options(state))
+    state.chapter1.resolved_contradictions.add("CT01_CLAUDE_SOURCE_GAP")
+    claude = next(
+        o for o in build_options(state) if o.id == "private_interview:claude"
+    )
+    assert claude.kind == KIND_PRIVATE_INTERVIEW
+    assert [c["id"] for c in claude.payload["claims"]] == [
+        "CL_CLAUDE_01",
+        "CL_CLAUDE_02",
+    ]
+    assert all(c["text"] for c in claude.payload["claims"])
+    state.chapter1.resolved_contradictions.add("CT04_GPT_SUMMARY_OMISSION")
+    gpt = next(
+        o for o in build_options(state) if o.id == "private_interview:chatgpt"
+    )
+    assert gpt.payload["evidence"][0]["id"] == "EV06_SESSION_REPLAY_MARKER"
+    state.chapter1.available_characters.add("doubao")
+    state.chapter1.claim_store["CL_DB_01"] = {"character_id": "doubao"}
+    doubao = next(
+        o for o in build_options(state) if o.id == "private_interview:doubao"
+    )
+    assert doubao.payload["claims"][0]["preselected"] is True
+    assert [o["id"] for o in doubao.payload["observation_options"]] == [
+        "OBSERVED_GPT_TEXT_ON_SCREEN",
+        "GPT_CHARACTER_PRESENT",
+    ]
+    # 完成后选项消失（D3）
+    state.chapter1.private_interview_completed.add("claude")
+    assert "private_interview:claude" not in _ids(build_options(state))
+

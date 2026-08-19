@@ -170,9 +170,45 @@ export async function fetchHistory(sessionId: string): Promise<{
   return data
 }
 
+/** 出示证据（docs/14 T3：evidence_present 选项走既有权威端点）。 */
+export async function presentEvidence(
+  sessionId: string,
+  characterId: string,
+  evidenceId: string,
+): Promise<{
+  session_id: string
+  event: string
+  character_id: string
+  evidence: Record<string, unknown>
+}> {
+  const { data } = await http.post('/game/present', {
+    session_id: sessionId,
+    character_id: characterId,
+    evidence_id: evidenceId,
+  })
+  return data
+}
+
+/** 私审质询（docs/14 T3：private_interview 选项走既有挑战端点；
+ * claim_ids / evidence_ids 由小面板按后端 payload 组装回传，D7）。 */
+export async function submitPrivateInterviewChallenge(
+  sessionId: string,
+  characterId: string,
+  claimIds: string[],
+  evidenceIds: string[],
+): Promise<Record<string, unknown>> {
+  const { data } = await http.post('/game/private-interview/challenge', {
+    session_id: sessionId,
+    character_id: characterId,
+    claim_ids: claimIds,
+    evidence_ids: evidenceIds,
+  })
+  return data
+}
+
 /** 推理提交（docs/13 Task 8：INF01 / INF03 checkpoint 由后端在 Narrative
- * commit 后自动存档；前端只附带 player_id）。第一章调查主线当前无 UI，先
- * 供后端 / API 测试与后续调查面板使用。 */
+ * commit 后自动存档；前端只附带 player_id）。docs/14 T3 起由「质疑…」
+ * 提示选项 + 主输入框一次性推理模式调用。 */
 export async function submitDeduction(
   sessionId: string,
   message: string,
