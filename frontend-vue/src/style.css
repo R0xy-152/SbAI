@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --gal-bg: #10131d;
+  --gal-panel: #071018;
+  --gal-accent: #87d6f4;
+  --gal-text: #f4f8ff;
+  --gal-sub: #d7effa;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--gal-bg);
+  color: var(--gal-text);
+  font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+}

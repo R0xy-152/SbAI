@@ -9,3 +9,6 @@ backend/data/
 
 # Node
 node_modules/
+
+# Claude Code worktrees (isolated checkouts) — never committed
+.claude/worktrees/

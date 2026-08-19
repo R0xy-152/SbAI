@@ -134,6 +134,12 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(game_router)
 
+    # Liveness probe consumed by the Vue frontend (docs/13 Task 1: Vue 可请求
+    # FastAPI health endpoint). Does not touch any game runtime state.
+    @app.get("/api/health")
+    def health() -> dict:
+        return {"status": "ok", "service": "gal-backend"}
+
     # Serve the static frontend from the repo root so the game can be validated
     # in a browser without a separate static server. API routes are registered
     # before this mount and therefore take precedence.

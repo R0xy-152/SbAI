@@ -1,0 +1,28 @@
+{
+  "name": "gal-frontend-vue",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Gal 游戏 Vue 3 表现层（docs/13），无 Tauri 依赖",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit --skipLibCheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit --skipLibCheck"
+  },
+  "dependencies": {
+    "axios": "^1.16.0",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.13",
+    "vue-router": "5.0.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.0",
+    "@types/node": "^25.7.0",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "tailwindcss": "^4.3.0",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3",
+    "vue-tsc": "^2.1.10"
+  }
+}

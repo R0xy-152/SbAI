@@ -1,0 +1,10 @@
+# docs/13 §30：最终本地运行使用 Docker Compose（frontend-vue / backend / postgres）。
+# 当前阶段仅提供 frontend-vue 服务（Task 1 验收：Docker Compose 可启动 Vue Frontend）。
+# backend / postgres 服务待 Task 6（Backend Save Snapshot 接 PostgreSQL）时加入。
+# 注意：本机若无 Docker，验收需在装有 Docker 的环境执行。
+services:
+  frontend-vue:
+    build:
+      context: ./frontend-vue
+    ports:
+      - "8080:80"
