@@ -25,6 +25,16 @@
 | `src/composables/ui/useTypeWriter.ts` | `frontend-vue/src/components/game/standard/useTypeWriter.ts` | 原样移植（依赖 TypeWriter） |
 | `src/composables/useDialogAppearance.ts` | `frontend-vue/src/components/game/standard/useDialogAppearance.ts` | 去掉 settings store 依赖（改读本项目 Mock store）；去掉滚轮历史/空格隐藏/思考自动隐藏（docs/13 §11.4 无需） |
 
+| `src/components/effects/CursorEffects.vue` | `frontend-vue/src/components/effects/CursorEffects.vue` | settings store 换为本项目 settings store（globalMouseTrailEnabled / clickAnimationEnabled，默认开启）；弹窗抑制选择器适配为 .gal-modal-mask；渲染逻辑（双缓冲 + 脏矩形 + lighter 合成）原样保留（docs/15 §5.1） |
+| `src/components/game/standard/animations/MeteorAnimation.vue` | `frontend-vue/src/components/effects/MeteorAnimation.vue` | 原样适配（无 Tauri/外部依赖）；保留模板缓存、贝塞尔尾巴、30fps 帧率限制、页面隐藏暂停（docs/15 §4.3） |
+| `src/components/game/standard/animations/StarAnimation.vue` | `frontend-vue/src/components/effects/StarAnimation.vue` | 原样适配；保留离屏预渲染发光贴图缓存、30fps 帧率限制、页面隐藏暂停（docs/15 §4.3） |
+| `src/components/game/standard/particles/StarField.vue` | `frontend-vue/src/components/game/standard/particles/StarField.vue` | 原样适配；新增无 2d context 时静默降级；`<script setup>` 加 `lang="ts"` + `@ts-nocheck`（保持原 JS 不加类型标注）（docs/15 §6.3） |
+| `src/components/game/standard/particles/Rain.vue`（含 `hooks/useRain.ts` + `config/rain.ts`） | `frontend-vue/src/components/game/standard/particles/Rain.vue` | 雨滴工厂内联合并；其余原样适配（docs/15 §6.3） |
+| `src/components/game/standard/particles/Sakura.vue`（含 `config/sakura.ts`） | `frontend-vue/src/components/game/standard/particles/Sakura.vue` | 配置内联合并；其余原样适配（docs/15 §6.3） |
+| `src/components/game/standard/particles/Snow.vue`（含 `config/snow.ts`） | `frontend-vue/src/components/game/standard/particles/Snow.vue` | 配置内联合并；其余原样适配（docs/15 §6.3） |
+| `src/components/game/standard/particles/hooks/useFallingParticle.ts`（含 `types/falling.ts`） | `frontend-vue/src/components/game/standard/particles/useFallingParticle.ts` | 类型内联合并；createParticle 回调简化为单参（docs/15 §6.3） |
+| `src/components/game/standard/particles/Fireworks.vue` | `frontend-vue/src/components/game/standard/particles/Fireworks.vue` | **自研简化实现**：仅概念参考「火箭升空 → 爆炸粒子 + 拖尾」演出，不复制源码（LingChat 版依赖指针交互/音频，本项目只需氛围层，docs/15 §3） |
+
 > 参考（未复制，仅用于理解行为）：`src/controllers/emotion/config.ts`、`src/stores/modules/ui/ui.ts`、`src/stores/modules/game/state.ts`、`src/components/base/index.ts`。它们定义了「emotion → animation/bubble」「UI Store 视口字段」「角色结构」的契约，本项目在 `frontend-vue/src/adapters/lingchat-compat.ts` 中实现等价的最小 Mock（docs/13 §11.2：替换 LingChat emotion vocab / useGameStore / useUIStore 数据来源）。
 
 ## 本项目许可证
