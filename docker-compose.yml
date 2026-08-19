@@ -19,8 +19,10 @@ services:
       GAL_PROVIDER: mock
       GAL_SAVE_BACKEND: postgres
       GAL_POSTGRES_DSN: postgresql://gal:gal@postgres:5432/gal
+    # T2review P1-15：backend 只绑定宿主 loopback（前端 nginx 经 Compose 内网
+    # 反代 /api），不发布到所有网络接口。
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,8 +35,7 @@ services:
       POSTGRES_USER: gal
       POSTGRES_PASSWORD: gal
       POSTGRES_DB: gal
-    ports:
-      - "5432:5432"
+    # T2review P1-15：postgres 仅在 Compose 内网可见，不发布宿主端口。
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

@@ -74,11 +74,19 @@ def build_provider(character_id: str) -> LLMProvider:
 def create_app() -> FastAPI:
     app = FastAPI(title="Gal Backend", version="0.2.0")
 
-    # Local dev fixture: permissive CORS so the frontend can also be opened
-    # from another origin during validation. Not a production policy.
+    # T2review P0 修复：CORS 不再对任意 Origin 开放。开发默认放行本地 vite
+    #（:5173）；额外来源经 GAL_CORS_ORIGINS（逗号分隔）显式授权。
+    cors_origins = [
+        origin.strip()
+        for origin in os.environ.get("GAL_CORS_ORIGINS", "").split(",")
+        if origin.strip()
+    ] or [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -166,10 +174,19 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"status": "ok", "service": "gal-backend"}
 
-    # Serve the static frontend from the repo root so the game can be validated
-    # in a browser without a separate static server. API routes are registered
-    # before this mount and therefore take precedence.
-    app.mount("/", StaticFiles(directory=REPO_ROOT, html=True), name="static")
+    # T2review P0 修复：绝不再把 REPO_ROOT 挂到根 URL（仓库内 .env、会话
+    # JSON 等敏感文件不可经静态路由暴露）。只对明确的素材/前端资源目录建立
+    # allow-list 挂载（docs/13 Task 9 Step 3 的三棵树）。API 路由先注册、
+    # 优先级高于挂载。
+    app.mount("/char", StaticFiles(directory=REPO_ROOT / "char"), name="char-assets")
+    app.mount(
+        "/backgroud", StaticFiles(directory=REPO_ROOT / "backgroud"), name="background-assets"
+    )
+    app.mount(
+        "/frontend-deprecated",
+        StaticFiles(directory=REPO_ROOT / "frontend-deprecated", html=True),
+        name="legacy-frontend",
+    )
 
     return app
 

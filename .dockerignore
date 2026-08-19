@@ -1,5 +1,8 @@
 # backend Docker build context is the repo root (backend/Dockerfile).
 # Keep the image lean and never ship secrets / local runtime data.
+# T2review P0：任何 .env 都不得进入镜像。
+.env
+**/.env
 backend/.venv/
 backend/data/
 backend/.pytest_cache/
