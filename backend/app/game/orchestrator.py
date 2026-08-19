@@ -27,6 +27,7 @@ from app.game import recovery
 from app.game.security_review import SELF_PROOFS
 from app.narrative.chapter1_script import CONFIRM_KEEP_CHATGPT, DELEGATE_CLEANUP, DELETE_CLAUDE, DELETE_DEEPSEEK, DELETE_DOUBAO, OPEN_SECURITY_REVIEW, REJECT_CLEANUP, TESTIFY_CLAUDE, TESTIFY_CHATGPT, TESTIFY_DEEPSEEK, TESTIFY_DOUBAO
 from app.game.investigation import InvestigationResult, InvestigationRuntime
+from app.game.options import build_options
 from app.game.memory import (
     MemoryRejected,
     MemoryService,
@@ -746,8 +747,7 @@ class GameOrchestrator:
             evidence=evidence_view(evidence_id, acquired=True, presented_to=presented_to),
         )
 
-    @staticmethod
-    def _investigation_state_view(state: NarrativeState) -> dict:
+    def _investigation_state_view(self, state: NarrativeState) -> dict:
         chapter = state.chapter1
         presentation_unlocked = "FIRST_IMPOSSIBLE_EVENT_RESOLVED" in state.revealed_facts
         return {
@@ -768,6 +768,11 @@ class GameOrchestrator:
                 and "chatgpt" not in chapter.private_interview_completed,
             },
             "available_characters": sorted(chapter.available_characters),
+            # docs/14 T1：当前合法选项（D3 未解锁不下发）；payload 由前端回传
+            "options": [
+                o.to_dict()
+                for o in build_options(state, self._characters.default_character)
+            ],
             "evidence_presentation": {
                 "unlocked": presentation_unlocked,
                 "character_ids": sorted(chapter.available_characters)
