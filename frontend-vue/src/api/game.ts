@@ -206,6 +206,73 @@ export async function submitPrivateInterviewChallenge(
   return data
 }
 
+/** Recovery 开始（docs/14 T4：recovery 选项走既有权威端点，session_id 为
+ * 查询参数，与后端路由签名一致）。 */
+export async function startRecovery(sessionId: string): Promise<Record<string, unknown>> {
+  const { data } = await http.post('/game/recovery/start', null, {
+    params: { session_id: sessionId },
+  })
+  return data
+}
+
+/** Recovery 单步操作（PREVIEW/VERIFY/PROTECT/REPAIR/OPTIMIZE × 节点）。 */
+export async function recoveryAction(
+  sessionId: string,
+  action: string,
+  target: string,
+  actor: string,
+): Promise<Record<string, unknown>> {
+  const { data } = await http.post('/game/recovery/action', {
+    session_id: sessionId,
+    action,
+    target,
+    actor,
+  })
+  return data
+}
+
+/** 进入 Security Review（docs/14 T4 narrative 选项）。 */
+export async function securityReviewStart(sessionId: string): Promise<Record<string, unknown>> {
+  const { data } = await http.post('/game/security-review/start', null, {
+    params: { session_id: sessionId },
+  })
+  return data
+}
+
+/** Security Review 自证（按后端权威顺序逐个听取）。 */
+export async function securityReviewTestify(
+  sessionId: string,
+  characterId: string,
+): Promise<Record<string, unknown>> {
+  const { data } = await http.post('/game/security-review/testify', {
+    session_id: sessionId,
+    character_id: characterId,
+  })
+  return data
+}
+
+/** Security Review 清理抉择（DELETE_* / DELEGATE / CONFIRM_KEEP_CHATGPT）。 */
+export async function securityReviewCleanup(
+  sessionId: string,
+  action: string,
+): Promise<Record<string, unknown>> {
+  const { data } = await http.post('/game/security-review/cleanup', {
+    session_id: sessionId,
+    action,
+  })
+  return data
+}
+
+/** 拒绝清理（To Be Continued）。 */
+export async function securityReviewRejectCleanup(
+  sessionId: string,
+): Promise<Record<string, unknown>> {
+  const { data } = await http.post('/game/security-review/reject-cleanup', null, {
+    params: { session_id: sessionId },
+  })
+  return data
+}
+
 /** 推理提交（docs/13 Task 8：INF01 / INF03 checkpoint 由后端在 Narrative
  * commit 后自动存档；前端只附带 player_id）。docs/14 T3 起由「质疑…」
  * 提示选项 + 主输入框一次性推理模式调用。 */

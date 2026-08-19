@@ -22,8 +22,14 @@ import {
   fetchGameState,
   fetchHistory,
   presentEvidence,
+  recoveryAction,
+  securityReviewCleanup,
+  securityReviewRejectCleanup,
+  securityReviewStart,
+  securityReviewTestify,
   sendChat,
   sendInvestigationAction,
+  startRecovery,
   submitDeduction,
   submitPrivateInterviewChallenge,
 } from '../api/game'
@@ -269,7 +275,82 @@ async function executeOption(option: GameOption) {
     }
     return
   }
-  // 其余 kind（recovery / narrative）为 T4 预留：后端届时才下发（D7）。
+  // recovery（T4）：进入 Recovery / 单步节点操作，均走既有权威端点
+  if (option.kind === 'recovery') {
+    optionBusy.value = true
+    try {
+      if (option.payload?.action === 'start') {
+        await startRecovery(sessionId.value)
+        feedback.value = '已进入 Recovery。'
+      } else {
+        const action = option.payload?.action
+        const target = option.payload?.target
+        const actor = option.payload?.actor
+        if (typeof action !== 'string' || typeof target !== 'string' || typeof actor !== 'string') return
+        const result = await recoveryAction(sessionId.value, action, target, actor)
+        feedback.value =
+          result.outcome === 'RETRY'
+            ? '该节点需要先校验（Claude VERIFY）后才能修复。'
+            : 'Recovery 操作已应用。'
+      }
+      await reconcileStage()
+    } catch (e) {
+      feedback.value = e instanceof Error ? e.message : 'Recovery 操作失败，请重试。'
+    } finally {
+      optionBusy.value = false
+    }
+    return
+  }
+  // narrative（T4 结局）：进入 Security Review / 听取自证 / 清理抉择（Bad End）
+  if (option.kind === 'narrative') {
+    optionBusy.value = true
+    try {
+      const action = option.payload?.action
+      if (action === 'security_review_start') {
+        await securityReviewStart(sessionId.value)
+        feedback.value = 'Security Review 开始。'
+      } else if (action === 'testify') {
+        const cid = option.payload?.character_id
+        if (typeof cid !== 'string') return
+        const result = await securityReviewTestify(sessionId.value, cid)
+        const statement = typeof result.statement === 'string' ? result.statement : ''
+        if (statement) {
+          setSpeakerLine(cid, statement)
+          presentation.state.status = 'streaming'
+        }
+        feedback.value = `已听取 ${roleNameOf(cid)} 的自证。`
+      } else if (action === 'delete') {
+        const cid = option.payload?.character_id
+        if (typeof cid !== 'string') return
+        const cleanupAction = (
+          { deepseek: 'DELETE_DEEPSEEK', claude: 'DELETE_CLAUDE', doubao: 'DELETE_DOUBAO' } as Record<
+            string,
+            string
+          >
+        )[cid]
+        if (!cleanupAction) return
+        await securityReviewCleanup(sessionId.value, cleanupAction)
+        feedback.value = `已删除 ${roleNameOf(cid)}。`
+      } else if (action === 'confirm_keep_chatgpt') {
+        await securityReviewCleanup(sessionId.value, 'CONFIRM_KEEP_CHATGPT')
+        feedback.value = '清理完成（Bad End：同意）。'
+      } else if (action === 'delegate') {
+        await securityReviewCleanup(sessionId.value, 'DELEGATE')
+        feedback.value = '已委托 ChatGPT 执行清理（Bad End：委托）。'
+      } else if (action === 'reject_cleanup') {
+        await securityReviewRejectCleanup(sessionId.value)
+        feedback.value = '已拒绝清理（To Be Continued）。'
+      } else {
+        return
+      }
+      await reconcileStage()
+    } catch (e) {
+      feedback.value = e instanceof Error ? e.message : '操作失败，请重试。'
+    } finally {
+      optionBusy.value = false
+    }
+    return
+  }
 }
 
 // D2 一次性推理提交（判定走后端 /api/game/deduction；前端只透传原文）。
