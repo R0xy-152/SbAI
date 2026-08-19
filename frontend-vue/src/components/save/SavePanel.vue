@@ -8,6 +8,7 @@ import ManualSaveSlot from './ManualSaveSlot.vue'
 // 输入自定义标题后保存。自动存档由 Task 8 在 checkpoint 自动写入（此处
 // 只读展示）。操作走 saves store → Save API，snapshot 由 Backend Capture
 //（docs/13 §14.2）。LLM 中间态下保存禁用（docs/13 §22）由父级把 busy 传入。
+// docs/15 §8：统一皮肤（.gal-modal-mask + .gal-panel + .gal-btn）。
 const props = defineProps<{
   sessionId: string
   /** LLM thinking/streaming 中间态（docs/13 §22：保存 disabled）。 */
@@ -63,14 +64,11 @@ async function onSave(slot: number) {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-30 flex items-center justify-center bg-black/70"
-    @click.self="emit('close')"
-  >
-    <div class="flex max-h-[85vh] w-[min(92vw,560px)] flex-col rounded-xl border border-white/15 bg-[#0b1424]/95 p-5 text-[#f4f8ff] shadow-2xl">
+  <div class="gal-modal-mask" @click.self="emit('close')">
+    <div class="gal-panel max-h-[85vh] w-[min(92vw,560px)] p-5">
       <header class="mb-4 flex items-center justify-between">
-        <h2 class="text-lg font-bold text-[#dff7ff]">保存</h2>
-        <button class="text-sm text-[#d7effa]/70 hover:text-[#dff7ff]" @click="emit('close')">关闭</button>
+        <h2 class="text-lg font-bold tracking-[0.15em] text-[#dff7ff] drop-shadow">保存</h2>
+        <button class="gal-link-btn" @click="emit('close')">关闭</button>
       </header>
 
       <main class="flex flex-col gap-3 overflow-y-auto pr-1">
@@ -103,7 +101,7 @@ async function onSave(slot: number) {
         <p :class="messageKind === 'err' ? 'text-red-300' : 'text-[#a9e8ff]/80'">
           {{ message || (props.busy ? '当前对话尚未完成，请稍后保存（docs/13 §22）。' : ' ') }}
         </p>
-        <button class="text-xs text-[#d7effa]/60 hover:text-[#dff7ff]" @click="emit('close')">返回</button>
+        <button class="gal-link-btn" @click="emit('close')">返回</button>
       </footer>
     </div>
   </div>

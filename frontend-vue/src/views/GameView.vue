@@ -671,26 +671,40 @@ onUnmounted(() => {
       />
     </div>
 
-    <!-- 顶部条：会话信息 + 系统菜单 + 返回标题（docs/13 §13 / Task 5） -->
+    <!-- 顶部条：会话信息 + 系统菜单 + 返回标题（docs/13 §13 / Task 5）。
+         docs/15 §8：pill 按钮组 + backdrop blur，与全站皮肤一致。 -->
     <header class="absolute left-0 top-0 z-20 flex items-center gap-3 px-4 py-2 text-sm text-[#d7effa]/70">
-      <span v-if="sessionId">会话 {{ sessionId.slice(0, 8) }}…</span>
-      <span v-else>未连接</span>
+      <span
+        v-if="sessionId"
+        class="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-[#a9e8ff]/85 backdrop-blur-sm"
+      >
+        会话 {{ sessionId.slice(0, 8) }}…
+      </span>
+      <span v-else class="rounded-full border border-white/10 bg-black/40 px-3 py-1 text-xs text-[#a9e8ff]/85 backdrop-blur-sm">
+        未连接
+      </span>
       <span v-if="error" class="ml-3 text-red-300">{{ error }}</span>
       <div class="ml-auto flex items-center gap-2">
         <button
-          class="rounded border border-white/15 px-2 py-1 text-xs text-[#d7effa]/80 hover:bg-white/10"
+          class="rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs text-[#d7effa]/85 backdrop-blur-sm transition-colors hover:bg-white/10"
           @click="systemPanel = 'menu'"
         >
           系统菜单
         </button>
         <button
-          class="rounded border border-white/15 px-2 py-1 text-xs text-[#d7effa]/80 hover:bg-white/10"
+          class="rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs text-[#d7effa]/85 backdrop-blur-sm transition-colors hover:bg-white/10"
           @click="router.push('/')"
         >
           返回标题
         </button>
       </div>
     </header>
+
+    <!-- 面板打开时的场景模糊层（docs/15 §8：backdrop blur，面板本身保持清晰） -->
+    <div
+      v-if="systemPanel"
+      class="pointer-events-none fixed inset-0 z-[25] bg-black/20 backdrop-blur-[6px]"
+    ></div>
 
     <!-- 系统菜单 / 面板（docs/13 §13；Save/Load 在 LLM 中间态禁用 §22） -->
     <SystemMenu v-if="systemPanel === 'menu'" @open="systemPanel = $event" @close="systemPanel = null" />

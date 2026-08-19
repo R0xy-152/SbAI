@@ -4,6 +4,7 @@ import { fetchHistory } from '../../api/game'
 
 // 游戏内「历史」面板（docs/13 §13.3）：展示当前 Session 合法的已显示对话
 // History（docs/01 §18）。History ≠ Character Memory，绝不展示 Memory 内容。
+// docs/15 §8：统一皮肤（.gal-modal-mask + .gal-panel）。
 const props = defineProps<{
   sessionId: string | null
 }>()
@@ -63,14 +64,11 @@ watch(
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-30 flex items-center justify-center bg-black/70"
-    @click.self="emit('close')"
-  >
-    <div class="flex max-h-[85vh] w-[min(92vw,640px)] flex-col rounded-xl border border-white/15 bg-[#0b1424]/95 p-5 text-[#f4f8ff] shadow-2xl">
+  <div class="gal-modal-mask" @click.self="emit('close')">
+    <div class="gal-panel max-h-[85vh] w-[min(92vw,640px)] p-5">
       <header class="mb-4 flex items-center justify-between">
-        <h2 class="text-lg font-bold text-[#dff7ff]">对话历史</h2>
-        <button class="text-sm text-[#d7effa]/70 hover:text-[#dff7ff]" @click="emit('close')">关闭</button>
+        <h2 class="text-lg font-bold tracking-[0.15em] text-[#dff7ff] drop-shadow">对话历史</h2>
+        <button class="gal-link-btn" @click="emit('close')">关闭</button>
       </header>
 
       <main class="flex-1 overflow-y-auto pr-1">

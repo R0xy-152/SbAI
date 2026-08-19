@@ -7,7 +7,8 @@ import ManualSaveSlot from './ManualSaveSlot.vue'
 // 读取面板（docs/13 §12.4 / §13.2）：读 Auto + 6 Manual。由 LoadView（标题
 // 进入，embedded 内嵌渲染）与游戏内系统菜单（overlay 弹出）共用：点击 slot
 // 触发 load(saveId) 回调，由父级决定「加载后如何进入 GameView」。删除仅
-// 手动 slot（docs/13 §20）。
+// 手动 slot（docs/13 §20）。docs/15 §8：统一皮肤（embedded 模式自身不带
+// 面板边框，由 LoadView 的 gal-panel 承载）。
 const props = defineProps<{
   /** true = 内嵌于 LoadView 页面流（非 overlay）。 */
   embedded?: boolean
@@ -60,16 +61,16 @@ async function onDelete(slot: number) {
 
 <template>
   <div
-    :class="embedded ? '' : 'fixed inset-0 z-30 flex items-center justify-center bg-black/70'"
+    :class="embedded ? '' : 'gal-modal-mask'"
     @click.self="!embedded && emit('close')"
   >
     <div
-      :class="embedded ? '' : 'w-[min(92vw,560px)] shadow-2xl'"
-      class="flex flex-col rounded-xl border border-white/15 bg-[#0b1424]/95 p-5 text-[#f4f8ff]"
+      :class="embedded ? 'flex flex-col' : 'gal-panel max-h-[85vh] w-[min(92vw,560px)] p-5'"
+      class="text-[#f4f8ff]"
     >
       <header v-if="!embedded" class="mb-4 flex items-center justify-between">
-        <h2 class="text-lg font-bold text-[#dff7ff]">读取存档</h2>
-        <button class="text-sm text-[#d7effa]/70 hover:text-[#dff7ff]" @click="emit('close')">关闭</button>
+        <h2 class="text-lg font-bold tracking-[0.15em] text-[#dff7ff] drop-shadow">读取存档</h2>
+        <button class="gal-link-btn" @click="emit('close')">关闭</button>
       </header>
 
       <main class="flex flex-col gap-3 overflow-y-auto pr-1">
@@ -97,7 +98,7 @@ async function onDelete(slot: number) {
         </p>
         <button
           v-if="!embedded"
-          class="text-xs text-[#d7effa]/60 hover:text-[#dff7ff]"
+          class="gal-link-btn"
           @click="emit('close')"
         >
           返回
