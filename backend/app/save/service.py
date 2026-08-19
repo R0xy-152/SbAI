@@ -43,6 +43,27 @@ SCHEMA_VERSION = 1
 
 CHAPTER_ID = "ch1"
 
+# T2review P1-4：Load 前的快照不变量白名单。
+KNOWN_PHASES = {
+    "opening",
+    "investigation",
+    "recovery_required",
+    "recovery",
+    "security_review",
+    "bad_end",
+    "to_be_continued",
+}
+KNOWN_SCENES = {
+    "binding_room",
+    "ROOM_A",
+    "RECOVERY_REQUIRED",
+    "RECOVERY_CORE",
+    "SECURITY_REVIEW",
+    "BOUNDARY_BREACH",
+    "BAD_END_CHAT",
+}
+KNOWN_CHARACTERS = {"deepseek", "claude", "chatgpt", "doubao"}
+
 # docs/13 §19.3 / §26.3: an unsupported snapshot schema is a distinct, loud
 # failure — the player must not get "best-effort restored and keep playing".
 logger = logging.getLogger(__name__)
@@ -230,6 +251,34 @@ class SaveSnapshotService:
 
     # ── Load ──────────────────────────────────────────────────────────────
 
+    def _validate_snapshot_invariants(self, snapshot: dict) -> None:
+        """T2review P1-4：Load 前在不可变快照上校验不变量——篡改角色可用性 /
+        phase / scene / 消息形状的快照一律拒绝，不允许「先写入后验证」。"""
+        narrative = snapshot.get("narrative")
+        if not isinstance(narrative, dict):
+            raise SaveLoadError("snapshot narrative is missing")
+        chapter1 = narrative.get("chapter1")
+        if not isinstance(chapter1, dict):
+            raise SaveLoadError("snapshot chapter1 is missing")
+        phase = chapter1.get("phase")
+        if phase not in KNOWN_PHASES:
+            raise SaveLoadError(f"unknown chapter phase: {phase!r}")
+        scene = narrative.get("current_scene")
+        if scene not in KNOWN_SCENES:
+            raise SaveLoadError(f"unknown scene: {scene!r}")
+        available = set(chapter1.get("available_characters") or [])
+        if not available.issubset(KNOWN_CHARACTERS):
+            raise SaveLoadError("available_characters contains unknown ids")
+        messages = snapshot.get("messages")
+        if not isinstance(messages, list):
+            raise SaveLoadError("messages is not a list")
+        for message in messages:
+            if (
+                not isinstance(message, dict)
+                or message.get("role") not in {"player", "character"}
+            ):
+                raise SaveLoadError("invalid message record")
+
     def load_save(
         self, orchestrator: GameOrchestrator, player_id: str, save_id: str
     ) -> dict:
@@ -243,6 +292,7 @@ class SaveSnapshotService:
                 f"save schema_version {save.schema_version} is not supported "
                 f"(current {SCHEMA_VERSION})"
             )
+        self._validate_snapshot_invariants(save.snapshot)
         new_session_id = orchestrator.import_snapshot(save.snapshot)
         return {
             "session_id": new_session_id,

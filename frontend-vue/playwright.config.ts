@@ -33,7 +33,9 @@ export default defineConfig({
       command: '.venv\\Scripts\\python.exe -m uvicorn app.main:app --port 8000',
       cwd: '../backend',
       port: 8000,
-      reuseExistingServer: !process.env.CI,
+      // T2review P2-6：默认不复用既有服务（旧代码服务器会让测试静默绿过，
+      // docs/14 T2/T4 排障实录）；需复用时显式 PW_REUSE_SERVERS=1。
+      reuseExistingServer: process.env.PW_REUSE_SERVERS === '1',
       timeout: 120_000,
       env: { ...process.env, GAL_PROVIDER: 'mock' },
     },
@@ -41,7 +43,8 @@ export default defineConfig({
       command: 'npm run dev -- --port 5173 --strictPort',
       cwd: '.',
       port: 5173,
-      reuseExistingServer: !process.env.CI,
+      // T2review P2-6：同 backend——默认不复用，避免命中旧代码服务。
+      reuseExistingServer: process.env.PW_REUSE_SERVERS === '1',
       timeout: 120_000,
     },
   ],

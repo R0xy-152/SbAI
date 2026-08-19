@@ -9,6 +9,8 @@ Private Interview progress, Scene / Presence / Emotion, and the script cursor.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.characters.base import CharacterMood, CharacterResponse, MemoryProposal
@@ -24,7 +26,12 @@ from app.game.deduction import (
 from app.game.private_interview import submit_challenge
 from app.persistence.repository import JsonSessionRepository
 from app.save.repository import JsonSaveRepository, MANUAL
-from app.save.service import SCHEMA_VERSION, SaveSchemaError, SaveSnapshotService
+from app.save.service import (
+    SCHEMA_VERSION,
+    SaveLoadError,
+    SaveSchemaError,
+    SaveSnapshotService,
+)
 from app.script.fixture import build_script_nodes
 from app.script.service import ScriptService
 
@@ -563,6 +570,30 @@ def test_auto_save_write_failure_keeps_checkpoint_pending(tmp_path, monkeypatch)
     assert "AS_CH1_OPENING_COMPLETE" in orchestrator._state.state_for(
         session_id
     ).narrative_flags
+
+
+def test_load_rejects_tampered_snapshot(tmp_path):
+    """P1-4：篡改 phase / 角色可用性的存档在 Load 前被拒绝，不创建会话。"""
+    orchestrator = _orchestrator(repository=JsonSessionRepository(tmp_path / "sess"))
+    service, repo = _service(tmp_path)
+    session_id = _orchestrator_helper_run(orchestrator)
+    save = service.save_manual(orchestrator, "p1", session_id, 1)
+    path = repo._path("p1", save.id)
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["snapshot"]["narrative"]["chapter1"]["phase"] = "hacked"
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(SaveLoadError, match="unknown chapter phase"):
+        service.load_save(orchestrator, "p1", save.id)
+
+    data["snapshot"]["narrative"]["chapter1"]["phase"] = "investigation"
+    data["snapshot"]["narrative"]["chapter1"]["available_characters"] = [
+        "evil",
+        "deepseek",
+    ]
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(SaveLoadError, match="unknown ids"):
+        service.load_save(orchestrator, "p1", save.id)
 
 
 def test_investigation_gates_behave_identically_after_load(tmp_path):

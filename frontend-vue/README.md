@@ -42,14 +42,12 @@ cd ..
 docker compose up --build    # 需本机装有 Docker；见根 docker-compose.yml
 ```
 
-## 任务状态
+## 任务状态（T2review P2-7：校准 docs 漂移）
 
-- [x] Task 1 骨架（本目录即产物）
-- [ ] Task 2 迁入 LingChat Standard Game UI
-- [ ] Task 3 去 Tauri / LingChat Runtime 依赖
-- [ ] Task 4 接入现有 FastAPI Game Runtime
-- [ ] Task 5 Title Screen
-- [ ] Task 6 Backend Save Snapshot
-- [ ] Task 7 Save / Load UI
-- [ ] Task 8 Auto Save
-- [ ] Task 9 视觉回归与 React Cutover
+- [x] docs/13 Task 0-9 全部完成（含 Task 9 视觉回归与 **旧前端 Cutover**——
+  本项目无 React，旧前端是 vanilla HTML/JS，现冻结于 frontend-deprecated/）
+- [x] docs/14 选项功能 T0-T4 全部完成（OptionsPanel 气泡条 + 出示/推理/
+  私审/Recovery/Security Review 全链路，E2E 覆盖）
+
+验证入口：`npm run test:unit` / `test:visual` / `test:e2e`（后端需
+`GAL_PROVIDER=mock`；Playwright webServer 自起，默认不复用既有服务）。
