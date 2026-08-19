@@ -9,6 +9,10 @@ backend/data/
 
 # Node
 node_modules/
+frontend-vue/dist/
+
+# LingChat 参考源码（AGPL 原始文件，仅作迁移参考，不入库）
+.lingchat-src/
 
 # Claude Code worktrees (isolated checkouts) — never committed
 .claude/worktrees/

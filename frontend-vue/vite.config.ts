@@ -13,6 +13,20 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
+      // 仓库根静态资源（docs/13 §8.3）：背景/角色立绘由后端 FastAPI 托管在
+      // 仓库根（backend/main.py `app.mount("/", StaticFiles(REPO_ROOT))`）。
+      '/char': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/backgroud': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '/frontend': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
     },
   },
 })

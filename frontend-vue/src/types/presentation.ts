@@ -3,6 +3,32 @@
 export interface SceneLighting {
   brightness?: number
   hue?: number
+  // 场景光照（LingChat currentScene.lighting 的完整契约，docs/13 §11 保留光照叠层）
+  background?: {
+    brightness?: number
+    contrast?: number
+    saturation?: number
+    glow_radius?: number
+    glow_color?: string
+    sepia?: number
+  }
+  character?: {
+    brightness?: number
+    contrast?: number
+    saturation?: number
+    glow_radius?: number
+    glow_color?: string
+    sepia?: number
+  }
+  overlay_enabled?: boolean
+  overlay_target?: 'background' | 'character' | 'both'
+  blend_mode?: string
+  light_x?: number
+  light_y?: number
+  overlay_color1?: string
+  overlay_color2?: string
+  overlay_radius?: number
+  overlay_opacity?: number
 }
 
 export interface PresentedCharacter {
