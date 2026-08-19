@@ -20,6 +20,7 @@
       "runtimeExecutable": "D:\\gal\\frontend-vue\\node_modules\\.bin\\vite.cmd",
       "runtimeArgs": [],
       "port": 5173,
+      "autoPort": true,
       "cwd": "D:\\gal\\frontend-vue",
       "url": "http://localhost:5173"
     }

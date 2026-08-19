@@ -7,7 +7,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   server: {
-    port: 5173,
+    // 不硬编码 port：由 launch.json autoPort 分配，避免与本机其他会话冲突。
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
