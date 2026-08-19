@@ -137,7 +137,10 @@ test('第一章主线可运行（docs/13 §7.2 验收链路）', async ({ page }
   await page.locator('button').filter({ hasText: '存档位 1' }).first().click()
   await page.waitForURL('**/game')
 
-  // 断言恢复（docs/13 §19.1：Load 创建新 Active Session）
+  // 断言恢复（docs/13 §19.1：Load 创建新 Active Session）。
+  // docs/15 §8：路由淡入过渡（out-in）使 GameView 挂载晚于 URL 变化，
+  // 等待 session 落盘后再断言（此前直接 evaluate 存在竞态）。
+  await page.waitForFunction(() => localStorage.getItem('gal_session_id') !== null)
   const newSession = await page.evaluate(() => localStorage.getItem('gal_session_id'))
   expect(newSession).toBeTruthy()
   expect(newSession).not.toBe(oldSession)

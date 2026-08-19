@@ -23,12 +23,14 @@ function returnTitle() {
       <h2 class="mb-1 text-center text-base font-bold tracking-[0.2em] text-[#dff7ff] drop-shadow">
         系统菜单
       </h2>
-      <button class="gal-btn" @click="emit('open', 'save')">保存</button>
-      <button class="gal-btn" @click="emit('open', 'load')">读取</button>
-      <button class="gal-btn" @click="emit('open', 'history')">历史</button>
-      <button class="gal-btn" @click="router.push('/settings')">设置</button>
-      <button class="gal-btn gal-btn-danger" @click="returnTitle">返回标题</button>
-      <button class="gal-btn mt-1" @click="emit('close')">关闭</button>
+      <!-- sys-menu-btn：E2E 定位类（docs/13 §26.4 用其区分顶栏同名按钮），
+           样式由 gal-btn 承担（docs/15 §8 统一皮肤） -->
+      <button class="gal-btn sys-menu-btn" @click="emit('open', 'save')">保存</button>
+      <button class="gal-btn sys-menu-btn" @click="emit('open', 'load')">读取</button>
+      <button class="gal-btn sys-menu-btn" @click="emit('open', 'history')">历史</button>
+      <button class="gal-btn sys-menu-btn" @click="router.push('/settings')">设置</button>
+      <button class="gal-btn gal-btn-danger sys-menu-btn" @click="returnTitle">返回标题</button>
+      <button class="gal-btn sys-menu-btn mt-1" @click="emit('close')">关闭</button>
     </div>
   </div>
 </template>

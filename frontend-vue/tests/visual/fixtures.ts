@@ -4,8 +4,32 @@ import { type Page } from '@playwright/test'
 // 打字机时序：mock 的 AI 回声逐字回显上下文（很长），不等待其完整打出；
 // 确定性 script 行短且文本固定，用 waitTyped 精确比对到完整行。
 
-/** 冻结 CSS 动画/过渡，避免截图中间帧抖动（docs/13 §26.2 风险 2/3）。 */
+/** 冻结 CSS 动画/过渡，避免截图中间帧抖动（docs/13 §26.2 风险 2/3）。
+ *  docs/15 §9.3：同时注入「特效全关」设置 —— canvas 粒子（星星/流星/场景粒子/
+ *  光标特效）不受 CSS 冻结控制，必须经设置关闭才能获得确定性基线；加载演出
+ *  关闭保证时序稳定。 */
 export async function freezeAnimations(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem(
+        'gal_settings',
+        JSON.stringify({
+          textSpeed: 1,
+          bgmVolume: 0.6,
+          sfxVolume: 0.8,
+          mainMenuStarsEnabled: false,
+          mainMenuMeteorsEnabled: false,
+          globalMouseTrailEnabled: false,
+          clickAnimationEnabled: false,
+          sceneEffectsEnabled: false,
+          loadingTransitionEnabled: false,
+          uiZoom: 1,
+        }),
+      )
+    } catch {
+      // 存储不可用时忽略（测试仍可继续，仅特效开关未注入）
+    }
+  })
   await page.addStyleTag({
     content:
       '*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important;}',
