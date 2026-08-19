@@ -4,14 +4,15 @@ import { characterAssetUrl, type CharacterAssetKey } from '../api/assets'
 // 当前 repo 素材约定：
 //   deepseek → /char/deepseek/pic/deepseek_main.png
 //   chatgpt  → /char/chatgpt/pic/chatgpt_main.png（2026-08-19 正式立绘）
-//   claude   → /frontend-deprecated/public/characters/claude-main.png
+//   claude   → /char/claude/pic/claude_main.png（2026-08-19 迁入 char/ 约定；
+//              旧图仍留在 frontend-deprecated 供冻结旧前端使用）
 //   doubao   → placeholder SVG（暂无正式立绘）
 // 差分表情（emotion 专属立绘）当前无素材，单图 + 前端滤镜；后续若引入
 // spriteKey + emotion 差分，在本层扩展，不让组件感知资源细节。
 const CHARACTER_EMOTION_ASSET: Record<string, string> = {
   deepseek: '/char/deepseek/pic/deepseek_main.png',
   chatgpt: '/char/chatgpt/pic/chatgpt_main.png',
-  claude: '/frontend-deprecated/public/characters/claude-main.png',
+  claude: '/char/claude/pic/claude_main.png',
   doubao: '/frontend-deprecated/public/characters/claude-placeholder.svg',
 }
 
