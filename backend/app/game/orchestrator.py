@@ -646,7 +646,7 @@ class GameOrchestrator:
             outcome=result.outcome,
             hotspot_id=result.hotspot_id,
             evidence_id=result.evidence_id,
-            state=self._investigation_state_view(state),
+            state=self._investigation_state_view(state, session.session_id),
             presentation=presentation,
             presentation_actions=tuple(directive_to_actions(presentation)),
         )
@@ -659,7 +659,9 @@ class GameOrchestrator:
                 self._restore_session(persisted)
         if self._sessions.get(session_id) is None:
             raise ValueError(f"unknown session: {session_id}")
-        return self._investigation_state_view(self._state.state_for(session_id))
+        return self._investigation_state_view(
+            self._state.state_for(session_id), session_id
+        )
 
     def get_evidence(self, session_id: str) -> list[dict]:
         """List only evidence the player has actually acquired."""
@@ -792,9 +794,38 @@ class GameOrchestrator:
             evidence=evidence_view(evidence_id, acquired=True, presented_to=presented_to),
         )
 
-    def _investigation_state_view(self, state: NarrativeState) -> dict:
+    @staticmethod
+    def _mood_emotion(mood) -> str:
+        """T2review P1-8/P1-9：把持久化 mood 映射回 named emotion，
+        presentation_state 不再固定返回 neutral（Save/Load 后表情可恢复）。"""
+        if mood is None:
+            return "neutral"
+        positive = getattr(mood, "positive", 0.5)
+        excitement = getattr(mood, "excitement", 0.2)
+        if excitement > 0.7:
+            return "surprised"
+        if excitement > 0.45:
+            return "happy" if positive >= 0.5 else "angry"
+        if positive < 0.35:
+            return "annoyed"
+        return "neutral"
+
+    def _character_emotion(self, session_id: str | None, character_id: str) -> str:
+        if session_id is None:
+            return "neutral"
+        moods = self._character_state.snapshot(session_id) or {}
+        return self._mood_emotion(moods.get(character_id))
+
+    def _investigation_state_view(
+        self, state: NarrativeState, session_id: str | None = None
+    ) -> dict:
         chapter = state.chapter1
         presentation_unlocked = "FIRST_IMPOSSIBLE_EVENT_RESOLVED" in state.revealed_facts
+        # T2review P1-10：在场角色 = available_characters；唯一例外是 opening
+        # 阶段（BEGIN_CHAPTER 前 deepseek 已登台说开场词）。
+        stage_characters = set(chapter.available_characters)
+        if chapter.phase == "opening":
+            stage_characters.add(self._characters.default_character)
         return {
             "scene_id": state.current_scene,
             "available_hotspots": InvestigationRuntime.available_hotspots(state),
@@ -829,17 +860,17 @@ class GameOrchestrator:
             # T2review P1-10：Bad End 权威状态不再自相矛盾——在场角色就是
             # available_characters（bad_end 只剩 ChatGPT，与 docs/08 保留 GPT
             # 对话一致，不强行加回 DeepSeek）；Bad End 聊天继续，只有
-            # to_be_continued 结局锁定输入。
+            # to_be_continued 结局锁定输入（stage_characters 见函数头）。
             "presentation_state": {
                 "scene": state.current_scene,
                 "characters": [
                     {
                         "character_id": cid,
                         "visible": True,
-                        "emotion": "neutral",
+                        "emotion": self._character_emotion(session_id, cid),
                         "slot": None,
                     }
-                    for cid in sorted(chapter.available_characters)
+                    for cid in sorted(stage_characters)
                 ],
                 "input_mode": (
                     "locked"
@@ -1207,7 +1238,7 @@ class GameOrchestrator:
         """
         state = self._load_known_state(session_id)
         return {
-            "state": self._investigation_state_view(state),
+            "state": self._investigation_state_view(state, session_id),
             # Frontend LoadResult contract (docs/13 §20.3)：history 携带
             # session_id + messages，与 GET /api/chat/history 同形，
             # 供 GameView 恢复最后一句已显示台词。

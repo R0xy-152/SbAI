@@ -38,6 +38,8 @@ export interface PresentedCharacter {
   scale: number
   offsetX: number
   offsetY: number
+  /** 显式 slot（LEFT/RIGHT/…）：百分比站位，覆盖自动排位（T2review P1-13）。 */
+  slot?: string | null
   animation?: string | null
 }
 

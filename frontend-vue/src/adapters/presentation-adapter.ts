@@ -35,6 +35,7 @@ function ensureCharacter(state: PresentationState, characterId: string): void {
       scale: 1,
       offsetX: 0,
       offsetY: 0,
+      slot: null,
       animation: null,
     }
   }
@@ -49,7 +50,8 @@ export function applyPresentationAction(state: PresentationState, action: Presen
       ensureCharacter(state, action.character_id)
       state.characters[action.character_id].visible = true
       if (action.slot) {
-        state.characters[action.character_id].offsetX = SLOT_PCT[action.slot]
+        // T2review P1-13：slot 是百分比站位，不再混入 offsetX（px）语义
+        state.characters[action.character_id].slot = action.slot
       }
       if (action.emotion) {
         state.characters[action.character_id].emotion = action.emotion
@@ -76,7 +78,7 @@ export function applyPresentationAction(state: PresentationState, action: Presen
       if (!action.character_id) return false
       ensureCharacter(state, action.character_id)
       if (action.emotion) state.characters[action.character_id].emotion = action.emotion
-      if (action.slot) state.characters[action.character_id].offsetX = SLOT_PCT[action.slot]
+      if (action.slot) state.characters[action.character_id].slot = action.slot
       if (action.scale != null) state.characters[action.character_id].scale = action.scale
       if (action.offset_x != null) state.characters[action.character_id].offsetX = action.offset_x
       if (action.offset_y != null) state.characters[action.character_id].offsetY = action.offset_y
@@ -138,7 +140,7 @@ export function applyPresentationStateView(
     const target = state.characters[c.character_id]
     target.visible = c.visible
     if (c.emotion) target.emotion = c.emotion
-    if (c.slot && SLOT_PCT[c.slot]) target.offsetX = SLOT_PCT[c.slot]
+    if (c.slot && SLOT_PCT[c.slot]) target.slot = c.slot
   }
   // 权威在场名单驱动 presentCharacterIds（顺序稳定：按 view.characters 顺序）
   state.presentCharacterIds = (view.characters ?? [])
@@ -151,7 +153,11 @@ export function applyPresentationStateView(
       state.characters[id].visible = false
     }
   }
-  state.status = view.input_mode === 'locked' ? 'transitioning' : 'idle'
+  // T2review P1-8：对账不得打断正在进行的打字/思考状态（否则表情被抹掉、
+  // 打字未结束时 Save/Load 提前恢复可用）。
+  if (state.status !== 'streaming' && state.status !== 'thinking') {
+    state.status = view.input_mode === 'locked' ? 'transitioning' : 'idle'
+  }
 }
 
 /** 一轮 ChatResponse → Store：说话角色 + 台词 + 结构化指令 + 剧本演出行。 */

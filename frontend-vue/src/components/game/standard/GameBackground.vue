@@ -74,6 +74,8 @@ const bgOverlayStyle = computed(() => {
   background-position: center center;
   background-attachment: fixed;
   background-repeat: no-repeat;
-  z-index: -2;
+  /* T2review P1-12：负 z-index 会把背景压到 GameView 黑色根节点之后，
+     视觉基线因此把纯黑固化为「正确」。改回正常流内堆叠（角色舞台 z-1 在其上）。 */
+  z-index: 0;
 }
 </style>

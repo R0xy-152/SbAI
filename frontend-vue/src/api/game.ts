@@ -79,7 +79,8 @@ export interface GameOption {
 
 /** Liveness probe（docs/13 Task 1 验收：Vue 可请求 FastAPI health）。 */
 export async function checkBackendHealth(): Promise<boolean> {
-  const { data } = await http.get<{ status: string }>('/api/health')
+  // T2review P2-2：baseURL 已含 /api，此前 /api/health 会请求 /api/api/health。
+  const { data } = await http.get<{ status: string }>('/health')
   return data.status === 'ok'
 }
 

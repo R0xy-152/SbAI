@@ -53,6 +53,13 @@ const router = useRouter()
 const SESSION_KEY = 'gal_session_id'
 const BG = '/backgroud/background1.png'
 
+// T2review P1-7：请求 fencing——viewEpoch 标识当前画面会话代次；任何 await
+// 返回后若 epoch 已变（Load / New Game / 卸载），丢弃响应，不再写入 Pinia。
+let viewEpoch = 0
+const invalidateView = () => {
+  viewEpoch++
+}
+
 // 无角色切换器：玩家发言是公共对话（后端 _public_audience 记录 heard_by =
 // 全体在场角色，docs/13 §9.2），回应者由后端 SpeakerSelector 权威决定；
 // 交互选择 / 私审 / 关键剧情节点经「选项功能」实现（见 docs/14 计划）。
@@ -103,8 +110,10 @@ function setInputMode(canType: boolean) {
 // 对账权威角色在场（docs/12 §39 Task 1）：每次响应/调查后调用。
 async function reconcileStage() {
   if (!sessionId.value) return
+  const epoch = viewEpoch
   try {
     const state = await fetchGameState(sessionId.value)
+    if (epoch !== viewEpoch) return
     applyPresentationStateView(presentation.state, state.presentation_state)
     options.value = state.options ?? []
     // 粘性路由自动复位（D5）：路由对象离场 → 对应 chat_routing 选项消失
@@ -145,12 +154,14 @@ async function onPlayerMessage(text?: unknown) {
   }
   busy.value = true
   error.value = null
+  const epoch = viewEpoch
   // 进入 AI 回复态前清空旧台词：GameDialog 的 watch 依赖 dialogue.text +
   // currentStatus 触发打字机，若留着上一句会先把旧台词重打一遍。
   presentation.state.dialogue.text = ''
   setInputMode(false)
   try {
     const data = await sendChat(sessionId.value, text.trim(), routedCharacter.value ?? undefined)
+    if (epoch !== viewEpoch) return
     currentResponse.value = data
     // 结构化指令 → 舞台（CHARACTER_SHOW / EMOTION / GLITCH 等）
     applyChatResponse(presentation.state, data)
@@ -242,6 +253,7 @@ async function executeOption(option: GameOption) {
   // investigate：payload.steps 逐条执行既有权威端点（/api/game/action）
   if (option.kind === 'investigate') {
     optionBusy.value = true
+    const epoch = viewEpoch
     try {
       const steps = Array.isArray(option.payload?.steps) ? option.payload.steps : []
       let last: Awaited<ReturnType<typeof sendInvestigationAction>> | null = null
@@ -258,8 +270,10 @@ async function executeOption(option: GameOption) {
           applyPresentationStateView(presentation.state, last.state.presentation_state)
         }
       }
+      if (epoch !== viewEpoch) return
       // 先对账（选项随热点完成而消失，D3），再给反馈，避免测试先看到文案
       await reconcileStage()
+      if (epoch !== viewEpoch) return
       if (last) {
         feedback.value =
           last.outcome === 'ALREADY_COMPLETED'
@@ -278,6 +292,7 @@ async function executeOption(option: GameOption) {
   // recovery（T4）：进入 Recovery / 单步节点操作，均走既有权威端点
   if (option.kind === 'recovery') {
     optionBusy.value = true
+    const epoch = viewEpoch
     try {
       if (option.payload?.action === 'start') {
         await startRecovery(sessionId.value)
@@ -288,6 +303,7 @@ async function executeOption(option: GameOption) {
         const actor = option.payload?.actor
         if (typeof action !== 'string' || typeof target !== 'string' || typeof actor !== 'string') return
         const result = await recoveryAction(sessionId.value, action, target, actor)
+        if (epoch !== viewEpoch) return
         feedback.value =
           result.outcome === 'RETRY'
             ? '该节点需要先校验（Claude VERIFY）后才能修复。'
@@ -304,6 +320,7 @@ async function executeOption(option: GameOption) {
   // narrative（T4 结局）：进入 Security Review / 听取自证 / 清理抉择（Bad End）
   if (option.kind === 'narrative') {
     optionBusy.value = true
+    const epoch = viewEpoch
     try {
       const action = option.payload?.action
       if (action === 'security_review_start') {
@@ -313,6 +330,7 @@ async function executeOption(option: GameOption) {
         const cid = option.payload?.character_id
         if (typeof cid !== 'string') return
         const result = await securityReviewTestify(sessionId.value, cid)
+        if (epoch !== viewEpoch) return
         const statement = typeof result.statement === 'string' ? result.statement : ''
         if (statement) {
           setSpeakerLine(cid, statement)
@@ -359,10 +377,12 @@ async function submitPlayerDeduction(message: string) {
   if (!sessionId.value) return
   busy.value = true
   error.value = null
+  const epoch = viewEpoch
   presentation.state.dialogue.text = ''
   setInputMode(false)
   try {
     const result = await submitDeduction(sessionId.value, message)
+    if (epoch !== viewEpoch) return
     const accepted =
       result.outcome === 'ACCEPTED' || result.outcome === 'ALREADY_ACCEPTED'
     feedback.value = accepted
@@ -419,11 +439,13 @@ async function onPanelSubmit(payload: {
   const option = activePanel.value
   panelBusy.value = true
   panelMessage.value = null
+  const epoch = viewEpoch
   try {
     if (option.kind === 'evidence_present') {
       const evidenceId = payload.evidence_ids[0]
       if (!evidenceId) return
       await presentEvidence(sessionId.value, payload.character_id, evidenceId)
+      if (epoch !== viewEpoch) return
       feedback.value = '已出示证据。'
       activePanel.value = null
     } else if (option.kind === 'private_interview') {
@@ -433,6 +455,7 @@ async function onPanelSubmit(payload: {
         payload.claim_ids,
         payload.evidence_ids,
       )
+      if (epoch !== viewEpoch) return
       if (result.outcome === 'UNLOCKED' || result.outcome === 'ALREADY_UNLOCKED') {
         feedback.value =
           result.outcome === 'UNLOCKED' ? '私审完成。' : '该角色私审已解锁。'
@@ -451,8 +474,11 @@ async function onPanelSubmit(payload: {
 }
 
 async function startOpening() {
+  const epoch = viewEpoch
   try {
     const opening = await createOpening(sessionId.value)
+    if (epoch !== viewEpoch) return
+    invalidateView()  // 新会话 = 新画面代次，作废旧代次的在途响应
     sessionId.value = opening.session_id
     localStorage.setItem(SESSION_KEY, opening.session_id)
     if (opening.dialogue) {
@@ -504,6 +530,7 @@ async function onLoadFromGame(saveId: string) {
 // Load 消费（docs/13 §20.3 / §19.1）：Backend 已创建新 Active Session 并
 // 返回 initial GameViewState；此处就地渲染，不重新走 Opening。
 function applyLoadedSession(result: LoadResult) {
+  invalidateView()  // Load 切换会话：作废一切在途响应
   sessionId.value = result.session_id
   localStorage.setItem(SESSION_KEY, result.session_id)
   const view = result.state?.presentation_state
@@ -542,8 +569,10 @@ onMounted(async () => {
   const stored = localStorage.getItem(SESSION_KEY)
   if (stored) {
     sessionId.value = stored
+    const epoch = viewEpoch
     try {
       await reconcileStage()
+      if (epoch !== viewEpoch) return
       // 恢复最后一句角色台词（docs/13 §27：Session restore 后画面回到对话流）
       const history = await fetchHistory(stored)
       const lastCharacter = [...history.messages]
@@ -569,7 +598,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // 无清理：会话持久化由后端完成
+  // T2review P1-7：卸载即作废在途请求；会话持久化由后端完成
+  invalidateView()
 })
 </script>
 

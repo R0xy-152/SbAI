@@ -35,6 +35,10 @@ interface MockRole {
   scale: number
   offsetY: number
   offsetX: number
+  /** 显式 slot：百分比站位，覆盖自动排位（T2review P1-13）。 */
+  slot?: string | null
+  /** 后端下发的 named animation（shake / fade_in / fade_out，P1-11）。 */
+  animation?: string | null
   show: boolean
   character_folder: string
   clothesName: string
@@ -90,16 +94,30 @@ const layoutPosition = computed(() => {
   return ((myIndex + 1) / (totalCount + 1)) * 100
 })
 
+// T2review P1-13：slot 是百分比站位——显式 slot 覆盖自动排位；offsetX 只
+// 承载手动偏移（同样按百分比语义），不再把百分比当 px 叠加。
+const SLOT_LEFT: Record<string, number> = {
+  LEFT: 25,
+  CENTER_LEFT: 40,
+  CENTER: 50,
+  CENTER_RIGHT: 60,
+  RIGHT: 75,
+}
+
 const containerStyle = computed(() => {
   const autoLeft = layoutPosition.value
-  const manualOffset = role.value.offsetX || 0
+  const explicitSlot = role.value.slot
+  const leftValue =
+    explicitSlot && SLOT_LEFT[explicitSlot] != null
+      ? `${SLOT_LEFT[explicitSlot]}%`
+      : `calc(${autoLeft}% + ${role.value.offsetX || 0}%)`
   const objectFit = computedObjectFit.value
   const widthClause = typeof objectFit === 'string' && objectFit.startsWith('auto')
     ? 'auto'
     : 'auto'
 
   return {
-    left: `calc(${autoLeft}% + ${manualOffset}px)`,
+    left: leftValue,
     top: `${role.value.offsetY - narrowScreenYCompensation.value - wideScreenYCompensation.value}px`,
     transform: `translateX(-50%) scale(${role.value.scale})`,
     opacity: `${role.value.show ? 1 : 0}`,
@@ -176,6 +194,22 @@ const handleAnimationEnd = () => {
     activeAnimationClass.value = 'normal'
   }
 }
+
+// T2review P1-11：消费后端下发的 named animation（shake / fade_in / fade_out）。
+const ANIMATION_CLASS: Record<string, string> = {
+  shake: 'shake',
+  fade_in: 'fade-in',
+  fade_out: 'fade-out',
+}
+
+watch(
+  () => role.value.animation,
+  (animation) => {
+    if (!animation || animation === 'none') return
+    const cls = ANIMATION_CLASS[animation]
+    if (cls) activeAnimationClass.value = cls
+  },
+)
 </script>
 
 <style scoped>

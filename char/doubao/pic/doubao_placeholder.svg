@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 768" width="512" height="768">
+  <rect width="512" height="768" fill="#1a2233"/>
+  <circle cx="256" cy="260" r="150" fill="#2e3b52"/>
+  <path d="M106 768 Q256 470 406 768 Z" fill="#2e3b52"/>
+  <text x="256" y="430" text-anchor="middle" fill="#d7effa" font-family="sans-serif" font-size="44">豆包</text>
+  <text x="256" y="480" text-anchor="middle" fill="#a9e8ff" font-family="sans-serif" font-size="24">立绘占位</text>
+</svg>

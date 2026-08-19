@@ -9,6 +9,7 @@
 // 所有数据只描述「当前应如何展示」，全部由 GameView 注入。
 
 import { usePresentationStore } from '../stores/presentation'
+import { useSettingsStore as useRealSettingsStore } from '../stores/settings'
 import { resolveCharacterAsset } from '../adapters/asset-resolver'
 
 // ── 角色元数据（角色名等；后端 Game Truth 在 Task 4 接入后优先） ──
@@ -94,6 +95,8 @@ export const useGameStore = () => {
       scale: c?.scale ?? 1,
       offsetY: c?.offsetY ?? 0,
       offsetX: c?.offsetX ?? 0,
+      slot: c?.slot ?? null,
+      animation: c?.animation ?? null,
       show: c?.visible ?? false,
       character_folder: meta?.character_folder ?? characterId,
       clothesName: 'default',
@@ -169,7 +172,10 @@ export const useUIStore = () => {
       return window.innerWidth
     },
     get typeWriterSpeed() {
-      return 50
+      // T2review P2-3：文字速度来自设置 store（默认 1x），不再硬编码 50。
+      const settings = useRealSettingsStore()
+      const speed = settings.textSpeed && settings.textSpeed > 0 ? settings.textSpeed : 1
+      return Math.max(10, Math.round(50 / speed))
     },
     get currentBackgroundTransition() {
       return 300
