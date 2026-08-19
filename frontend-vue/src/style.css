@@ -1,12 +1,18 @@
 @import "tailwindcss";
 
+/* docs/15 §8：全站视觉统一 —— 共享皮肤 token 与基础类。
+   Title/Save/Load/Settings 与游戏内 UI 共用同一套颜色/辉光/面板语言，
+   避免「五个独立 Web 页面」观感（docs/13 §27.3）。 */
 :root {
   color-scheme: dark;
   --gal-bg: #10131d;
   --gal-panel: #071018;
+  --gal-panel-2: #0b1424;
   --gal-accent: #87d6f4;
+  --gal-accent-2: #04bcff;
   --gal-text: #f4f8ff;
   --gal-sub: #d7effa;
+  --gal-glow: rgba(135, 214, 244, 0.55);
 }
 
 html,
@@ -19,5 +25,214 @@ body,
 body {
   background: var(--gal-bg);
   color: var(--gal-text);
-  font-family: "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  font-family:
+    "PingFang SC",
+    "HarmonyOS Sans SC",
+    "Source Han Sans SC",
+    "Noto Sans SC",
+    "Microsoft YaHei",
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 通用页壳：Title / Load / Settings 共享背景皮肤（docs/15 §8） ── */
+.gal-page {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--gal-panel);
+}
+
+.gal-page-bg {
+  position: absolute;
+  inset: 0;
+  background-image: url("/backgroud/background_title.png");
+  background-size: cover;
+  background-position: center;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.gal-page-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(7, 12, 24, 0.6),
+    rgba(7, 12, 24, 0.15) 35%,
+    rgba(7, 12, 24, 0.8)
+  );
+}
+
+/* ── 面板 / 遮罩 ── */
+.gal-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 8, 18, 0.55);
+  backdrop-filter: blur(12px) brightness(0.9);
+  -webkit-backdrop-filter: blur(12px) brightness(0.9);
+}
+
+.gal-panel {
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.9rem;
+  border: 1px solid rgba(211, 234, 255, 0.16);
+  background: linear-gradient(180deg, rgba(11, 20, 36, 0.97), rgba(7, 16, 30, 0.97));
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 0 24px rgba(135, 214, 244, 0.07);
+  color: var(--gal-text);
+}
+
+/* ── 按钮（游戏内一致：深蓝底 + 细亮边 + 悬停辉光） ── */
+.gal-btn {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border: 1px solid rgba(211, 234, 255, 0.35);
+  border-radius: 0.5rem;
+  background: rgba(7, 12, 24, 0.8);
+  color: var(--gal-sub);
+  font-size: 0.95rem;
+  cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.gal-btn:hover:not(:disabled) {
+  background: rgba(30, 48, 78, 0.92);
+  border-color: rgba(135, 214, 244, 0.65);
+  color: #eaf8ff;
+  box-shadow: 0 0 14px rgba(135, 214, 244, 0.25);
+}
+
+.gal-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gal-btn-primary {
+  border-color: rgba(4, 188, 255, 0.5);
+  background: rgba(10, 44, 78, 0.8);
+  color: #aef;
+}
+
+.gal-btn-danger {
+  color: #ff9d9d;
+}
+
+/* ── 小链接按钮 ── */
+.gal-link-btn {
+  border: none;
+  background: transparent;
+  color: rgba(215, 239, 250, 0.7);
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: color 0.2s ease;
+}
+
+.gal-link-btn:hover {
+  color: var(--gal-text);
+}
+
+/* ── 标题页电影感菜单按钮（docs/15 §4.4） ── */
+.title-btn {
+  background: transparent;
+  border: none;
+  color: #fff;
+  padding: 0.3em 0.2em;
+  font-weight: 700;
+  font-size: clamp(28px, 3vw, 52px);
+  line-height: 1.25;
+  letter-spacing: 0.18em;
+  white-space: nowrap;
+  cursor: pointer;
+  text-align: justify;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+  transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+
+.title-btn:hover:not(:disabled) {
+  color: #f0f0f0;
+  transform: translateY(-8px) scale(1.05);
+  text-shadow:
+    0 0 6px rgba(255, 255, 255, 0.45),
+    0 2px 10px rgba(135, 214, 244, 0.5);
+}
+
+.title-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.title-btn--ultra {
+  font-size: clamp(40px, 4vw, 72px);
+}
+
+/* ── 设置页开关（自定义 checkbox 轨道） ── */
+.gal-toggle {
+  appearance: none;
+  position: relative;
+  width: 2.6rem;
+  height: 1.4rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(211, 234, 255, 0.3);
+  background: rgba(7, 12, 24, 0.9);
+  cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease;
+  flex-shrink: 0;
+}
+
+.gal-toggle::after {
+  content: "";
+  position: absolute;
+  top: 0.12rem;
+  left: 0.12rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  background: #b9d9ea;
+  transition: transform 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28), background 0.25s ease;
+}
+
+.gal-toggle:checked {
+  background: rgba(4, 188, 255, 0.35);
+  border-color: rgba(4, 188, 255, 0.6);
+}
+
+.gal-toggle:checked::after {
+  transform: translateX(1.2rem);
+  background: #aef;
+  box-shadow: 0 0 8px rgba(135, 214, 244, 0.6);
+}
+
+/* ── 设置页滑杆 ── */
+.gal-range {
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 9999px;
+  background: rgba(211, 234, 255, 0.25);
+  outline: none;
+}
+
+.gal-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: var(--gal-accent);
+  box-shadow: 0 0 8px var(--gal-glow);
+  cursor: pointer;
 }
