@@ -17,7 +17,7 @@ const game = useGameStore()
 const saves = useSavesStore()
 const ui = useUiStore()
 
-const BG = '/backgroud/background1.png'
+const BG = '/backgroud/background_title.png'
 const newGameBusy = ref(false)
 const newGameError = ref<string | null>(null)
 const continueBusy = ref(false)
