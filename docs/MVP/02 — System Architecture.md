@@ -110,10 +110,14 @@ Agent 在进行架构设计或代码实现时，应遵循：
 ## 4.1 Frontend
 
 ```text
-Next.js
-React
+Vue 3
+Vite
 TypeScript
+Pinia
+TailwindCSS
 ```
+
+> **迁移状态（docs/13 Task 0）：** 现有 `frontend/`（原生 HTML + CSS + JS）已冻结，不再新增 UI 功能，只允许修复阻塞当前运行的 P0 bug；不删除，保持当前可运行 commit 可回退。正式前端将迁移为 Vue 3（见上），Vue 核心链路验收通过后再删除旧前端。
 
 职责：
 
@@ -1400,7 +1404,7 @@ Streaming
 架构：
 
 Browser
-→ Next.js Web Client
+→ Vue 3 Web Client
 → FastAPI Backend
 → PostgreSQL
 
