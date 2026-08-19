@@ -42,11 +42,9 @@ const router = useRouter()
 const SESSION_KEY = 'gal_session_id'
 const BG = '/backgroud/background1.png'
 
-// 角色切换器（docs/13 §27：Claude 可对话 —— 经 SpeakerSelector 在 mock 下只会
-// 返回 deepseek，前端显式选择可对话角色，Availability 仍由后端 Presence Gate 把关）。
-const AVAILABLE_ROLE_IDS = ['deepseek', 'claude', 'chatgpt', 'doubao'] as const
-type RoleId = (typeof AVAILABLE_ROLE_IDS)[number]
-const selectedRole = ref<RoleId>('deepseek')
+// 无角色切换器：玩家发言是公共对话（后端 _public_audience 记录 heard_by =
+// 全体在场角色，docs/13 §9.2），回应者由后端 SpeakerSelector 权威决定；
+// 交互选择 / 私审 / 关键剧情节点经「选项功能」实现（见 docs/14 计划）。
 
 const sessionId = ref<string | null>(null)
 const canInput = ref(false)
@@ -127,7 +125,7 @@ async function onPlayerMessage(text?: unknown) {
   presentation.state.dialogue.text = ''
   setInputMode(false)
   try {
-    const data = await sendChat(sessionId.value, text.trim(), selectedRole.value)
+    const data = await sendChat(sessionId.value, text.trim())
     currentResponse.value = data
     // 结构化指令 → 舞台（CHARACTER_SHOW / EMOTION / GLITCH 等）
     applyChatResponse(presentation.state, data)
@@ -353,22 +351,6 @@ onUnmounted(() => {
       </span>
     </div>
 
-    <!-- 角色切换器（Claude 可对话） -->
-    <div class="absolute right-4 top-4 z-20 flex gap-2 rounded-lg border border-white/15 bg-black/60 p-2">
-      <button
-        v-for="id in AVAILABLE_ROLE_IDS"
-        :key="id"
-        class="rounded px-2.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-        :class="
-          selectedRole === id
-            ? 'bg-[#04bcff]/30 text-[#9ff]'
-            : 'text-[#d7effa]/70 hover:bg-white/10'
-        "
-        @click="selectedRole = id"
-      >
-        {{ roleNameOf(id) }}
-      </button>
-    </div>
 
     <!-- 对话框（底部） -->
     <div class="absolute inset-x-0 bottom-0 z-10">

@@ -61,7 +61,7 @@ export interface PresentationStateView {
 
 /** Liveness probe（docs/13 Task 1 验收：Vue 可请求 FastAPI health）。 */
 export async function checkBackendHealth(): Promise<boolean> {
-  const { data } = await http.get<{ status: string }>('/health')
+  const { data } = await http.get<{ status: string }>('/api/health')
   return data.status === 'ok'
 }
 
@@ -76,18 +76,17 @@ export async function createOpening(sessionId: string | null): Promise<OpeningRe
 }
 
 /** 玩家输入 → 一轮角色回应（docs/13 §27 Task 4：Player Input / Streaming /
- * Response / Presentation Directive）。附带 player_id 供后端 checkpoint 自动
- * 存档（Task 8：Claude Appeared）。 */
+ * Response / Presentation Directive）。不传 character_id：玩家发言是公共对
+ * 话（后端 heard_by = 全体在场角色），回应者由后端 SpeakerSelector 权威决定。
+ * 附带 player_id 供后端 checkpoint 自动存档（Task 8：Claude Appeared）。 */
 export async function sendChat(
   sessionId: string,
   message: string,
-  characterId?: string,
 ): Promise<ChatResponse> {
   const { data } = await http.post<ChatResponse>('/chat', {
     session_id: sessionId,
     message,
     player_id: getPlayerId(),
-    ...(characterId ? { character_id: characterId } : {}),
   })
   return data
 }

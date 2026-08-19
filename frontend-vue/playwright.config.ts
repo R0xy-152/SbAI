@@ -14,8 +14,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   expect: {
+    // 0.5% 容差：吸收字体渲染噪声（通常<0.1%），仍能检测 UI 元素级变化
+    //（切换器删除约 1.3%，此前 2% 容差会把它放行）。
     toHaveScreenshot: {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.005,
       animations: 'disabled',
       caret: 'hide',
     },
