@@ -15,6 +15,13 @@ from dataclasses import dataclass
 # §5.1). NarrativeState.current_scene defaults to the same value.
 DEFAULT_SCENE = "binding_room"
 
+# Registered ambient particle effects a scene may request (docs/15 §6.1).
+# Frontend renders the matching particle layer; unknown values are rejected
+# at config time — presentation-only, never fed to character context.
+KNOWN_BACKGROUND_EFFECTS = frozenset(
+    {"StarField", "Rain", "Sakura", "Snow", "Fireworks"}
+)
+
 
 @dataclass(frozen=True)
 class Scene:
@@ -24,6 +31,9 @@ class Scene:
     wall_code: str = "0317"
     # Legal non-visual perceptions (docs/04 §20.1), e.g. sounds she can hear.
     sounds: tuple[str, ...] = ()
+    # Ambient particle layer for this room (docs/15 §6.1): presentation-only
+    # visual fact; None = no particles. Never included in character context.
+    background_effect: str | None = None
 
 
 class SceneRegistry:
@@ -40,7 +50,21 @@ class SceneRegistry:
 
     def __init__(self, scenes: dict[str, Scene] | None = None) -> None:
         scenes = dict(scenes or {})
-        scenes.setdefault(DEFAULT_SCENE, Scene(scene_id=DEFAULT_SCENE))
+        # docs/15 §6.1：默认场景（封闭房间）挂星空粒子氛围层；其余场景由内容
+        # 团队按场景配置，未配置 = None（不渲染）。
+        scenes.setdefault(
+            DEFAULT_SCENE,
+            Scene(scene_id=DEFAULT_SCENE, background_effect="StarField"),
+        )
+        for scene in scenes.values():
+            if (
+                scene.background_effect is not None
+                and scene.background_effect not in KNOWN_BACKGROUND_EFFECTS
+            ):
+                raise ValueError(
+                    f"unknown background_effect {scene.background_effect!r} "
+                    f"for scene {scene.scene_id!r}"
+                )
         self._scenes = scenes
 
     def resolve(self, scene_id: str) -> Scene:

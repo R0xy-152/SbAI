@@ -1,5 +1,5 @@
 <template>
-  <!-- 背景图 + 背景光照滤镜（docs/13 §11.1：粒子/音乐/环境音第一轮不迁移） -->
+  <!-- 背景图 + 背景光照滤镜（docs/13 §11.1；docs/15 §6 第二轮补齐粒子层） -->
   <div
     v-if="backgroundSrc"
     class="absolute inset-0"
@@ -13,6 +13,26 @@
       object-fit="cover"
       :duration="uiStore.currentBackgroundTransition"
     />
+  </div>
+
+  <!-- 场景粒子层（docs/15 §6.2）：按后端权威 background_effect 渲染五种粒子
+       之一；sceneEffectsEnabled=false 或 effect 为 null 时整层不渲染。
+       isolation:isolate 建立独立层叠上下文，粒子 z-index 不会逃逸盖 UI。 -->
+  <div
+    v-if="sceneEffectsEnabled && currentEffect"
+    class="pointer-events-none absolute inset-0"
+    style="isolation: isolate"
+  >
+    <StarField
+      v-if="currentEffect === 'StarField'"
+      :enabled="true"
+      :star-count="200"
+      :scroll-speed="0.2"
+    />
+    <Rain v-else-if="currentEffect === 'Rain'" :enabled="true" :intensity="1" />
+    <Sakura v-else-if="currentEffect === 'Sakura'" :enabled="true" :intensity="1" />
+    <Snow v-else-if="currentEffect === 'Snow'" :enabled="true" :intensity="1" />
+    <Fireworks v-else-if="currentEffect === 'Fireworks'" :enabled="true" :intensity="1" />
   </div>
 
   <!-- 背景光照叠加层（在背景上方、角色下方） -->
@@ -31,12 +51,19 @@
 // 第一轮不迁移、无相关素材；仅保留背景图 + 光照滤镜。
 import { computed } from 'vue'
 import { useUIStore, useGameStore } from '../../../adapters/lingchat-compat'
+import { useSettingsStore } from '../../../stores/settings'
 import ImageAcrossFade from './ui/ImageAcrossFade.vue'
+import { StarField, Rain, Sakura, Snow, Fireworks } from './particles'
 
 const uiStore = useUIStore()
 const gameStore = useGameStore()
+const settingsStore = useSettingsStore()
 
 const backgroundSrc = computed(() => uiStore.currentBackground || '')
+
+// docs/15 §6.2：场景粒子氛围层（后端权威 effect + 设置总开关）
+const currentEffect = computed(() => uiStore.currentBackgroundEffect || '')
+const sceneEffectsEnabled = computed(() => settingsStore.sceneEffectsEnabled)
 
 // 背景光照滤镜
 const bgLightingFilter = computed(() => {

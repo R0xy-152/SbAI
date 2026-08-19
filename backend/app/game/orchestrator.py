@@ -863,6 +863,11 @@ class GameOrchestrator:
             # to_be_continued 结局锁定输入（stage_characters 见函数头）。
             "presentation_state": {
                 "scene": state.current_scene,
+                # docs/15 §6.1：场景粒子氛围层由 Backend 权威下发（Frontend 不对
+                # effect 做剧情推断）；经 SceneRegistry 按 current_scene 解析。
+                "background_effect": self._scenes.resolve(
+                    state.current_scene
+                ).background_effect,
                 "characters": [
                     {
                         "character_id": cid,

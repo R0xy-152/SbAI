@@ -50,6 +50,8 @@ export interface ChatResponse {
  * presentation_state 字段）。前端展示完全对账于此，不从剧情条件推断。 */
 export interface PresentationStateView {
   scene: string
+  /** 场景粒子氛围层（docs/15 §6.1，Backend 权威下发；null = 不渲染） */
+  background_effect?: string | null
   characters: Array<{
     character_id: string
     visible: boolean

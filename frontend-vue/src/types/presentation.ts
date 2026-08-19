@@ -46,6 +46,8 @@ export interface PresentedCharacter {
 export interface PresentationState {
   scene: {
     backgroundId: string | null
+    /** 场景粒子氛围层（docs/15 §6.1：StarField/Rain/Sakura/Snow/Fireworks/null） */
+    backgroundEffect?: string | null
     lighting?: SceneLighting
   }
   characters: Record<string, PresentedCharacter>

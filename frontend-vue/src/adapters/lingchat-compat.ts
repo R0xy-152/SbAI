@@ -184,7 +184,8 @@ export const useUIStore = () => {
       return presentation.state.scene.backgroundId
     },
     get currentBackgroundEffect() {
-      return ''
+      // docs/15 §6.1：场景粒子氛围层（后端权威），GameBackground 按此渲染
+      return presentation.state.scene.backgroundEffect ?? ''
     },
     get currentBackgroundMusic() {
       return 'None'

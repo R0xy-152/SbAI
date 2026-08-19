@@ -10,6 +10,8 @@ field.
 
 from __future__ import annotations
 
+import pytest
+
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
 from app.game.orchestrator import GameOrchestrator
 from app.game.scene import Scene, SceneRegistry
@@ -135,3 +137,37 @@ def test_restore_recovers_changed_scene(tmp_path):
     assert orchestrator_b._state.state_for(session_id).current_scene == "yard"
     assert "9999" in runtime_b.environments[0]
     assert "0317" not in runtime_b.environments[0]
+
+
+def test_background_effect_default_and_neutral_resolve():
+    # docs/15 §6.1：默认场景（封闭房间）注册星空粒子氛围层；未配置场景
+    # resolve 出中性 Scene（background_effect=None，不渲染粒子）。
+    registry = SceneRegistry()
+    assert registry.resolve("binding_room").background_effect == "StarField"
+    assert registry.resolve("yard").background_effect is None
+
+
+def test_background_effect_unknown_value_rejected():
+    # docs/15 §6.1：effect 走白名单，配置期拒绝未知值（Fail Closed）。
+    with pytest.raises(ValueError):
+        SceneRegistry(
+            {"binding_room": Scene(scene_id="binding_room", background_effect="Lava")}
+        )
+
+
+def test_presentation_state_carries_background_effect():
+    # docs/15 §6.1：presentation_state.background_effect 由 current_scene 权威
+    # 解析（binding_room → StarField），Frontend 不自行推断。
+    registry = SceneRegistry(
+        {
+            "binding_room": Scene(
+                scene_id="binding_room", background_effect="StarField"
+            )
+        }
+    )
+    runtime = _RecordingRuntime()
+    orchestrator = _orchestrator(runtime, ["noop"], registry)
+    session_id = orchestrator.handle_turn(None, "随便聊聊").session_id
+    state = orchestrator._state.state_for(session_id)
+    view = orchestrator._investigation_state_view(state)
+    assert view["presentation_state"]["background_effect"] == "StarField"

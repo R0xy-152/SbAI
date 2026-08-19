@@ -133,6 +133,10 @@ export function applyPresentationStateView(
     // 背景素材按绑定房间处理，避免 ROOM_A 等 scene 映射到不存在的图。
     state.scene.backgroundId = '/backgroud/background1.png'
   }
+  // docs/15 §6.1：场景粒子氛围层由后端权威下发（前端不推断）
+  if (view.background_effect !== undefined) {
+    state.scene.backgroundEffect = view.background_effect
+  }
   const authoritativeIds = new Set<string>()
   for (const c of view.characters ?? []) {
     authoritativeIds.add(c.character_id)
