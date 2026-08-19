@@ -230,7 +230,10 @@ export const useUIStore = () => {
       return presentation.state.dialogue.speakerName ?? ''
     },
     get showCharacterSubtitle() {
-      return ''
+      // docs/15：副标题 = ROLE_META 的角色描述（LingChat GameDialog 的
+      // character-sub 行，第一轮被裁剪，第二轮补齐）
+      const id = presentation.state.dialogue.speakerId
+      return id ? (ROLE_META[id]?.roleSubTitle ?? '') : ''
     },
     get showCharacterEmotion() {
       return presentation.state.dialogue.speakerId

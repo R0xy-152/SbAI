@@ -19,6 +19,13 @@
           >
             <div id="character">{{ uiStore.showCharacterTitle }}</div>
           </div>
+          <!-- 角色副标题（docs/15：LingChat character-sub 行，第二轮补齐） -->
+          <div
+            v-show="!uiStore.isNarrowScreen"
+            class="font-[inherit] text-xl font-bold text-[#6eb4ff] text-shadow-[inherit]"
+          >
+            <div id="character-sub">{{ uiStore.showCharacterSubtitle }}</div>
+          </div>
 
           <!-- 情绪标签 -->
           <div

@@ -94,6 +94,7 @@ StarAnimation / StarField 在特效开启时确实绘制，不依赖肉眼判断
 | 无特效开关 | ✅ 设置页 6 项开关，localStorage 持久化，旧数据兼容 |
 | 游戏内无场景粒子 | ✅ 五种粒子，后端权威 background_effect（binding_room→StarField） |
 | 无首次加载演出 | ✅ LoadingTransition（New Game 专用，2.4s~12s，opening 缓冲应用） |
+| 对话框缺 subtitle | ✅ character-sub 行补齐（ROLE_META.roleSubTitle，窄屏隐藏） |
 | 五页风格不统一 | ✅ 共享 token + .gal-panel/.gal-btn + 统一页壳（Load/Settings） |
 
 ## 4. 已知限制（如实记录）
