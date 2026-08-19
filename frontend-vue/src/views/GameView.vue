@@ -33,7 +33,7 @@ import {
   submitDeduction,
   submitPrivateInterviewChallenge,
 } from '../api/game'
-import type { ChatResponse, GameOption, PresentationAction } from '../api/game'
+import type { ChatResponse, GameOption, OpeningResponse, PresentationAction } from '../api/game'
 import type { LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
@@ -44,14 +44,20 @@ import SystemMenu from '../components/system/SystemMenu.vue'
 import HistoryPanel from '../components/system/HistoryPanel.vue'
 import OptionsPanel from '../components/game/standard/OptionsPanel.vue'
 import SubActionPanel from '../components/game/standard/SubActionPanel.vue'
+import LoadingTransition from '../components/effects/LoadingTransition.vue'
+import { useSettingsStore } from '../stores/settings'
 
 const presentation = usePresentationStore()
 const game = useGameStore()
 const saves = useSavesStore()
+const settings = useSettingsStore()
 const router = useRouter()
 
 const SESSION_KEY = 'gal_session_id'
 const BG = '/backgroud/background1.png'
+
+// docs/15 §7：首次加载演出仅「New Game」路径显示，且同一页面会话只播一次。
+let loadingShownThisSession = false
 
 // T2review P1-7：请求 fencing——viewEpoch 标识当前画面会话代次；任何 await
 // 返回后若 epoch 已变（Load / New Game / 卸载），丢弃响应，不再写入 Pinia。
@@ -69,6 +75,12 @@ const canInput = ref(false)
 const busy = ref(false)
 const error = ref<string | null>(null)
 const currentResponse = ref<ChatResponse | null>(null)
+
+// docs/15 §7：New Game 的 opening 响应在加载演出结束前先缓冲，避免打字机在
+// 遮罩后提前播放（LingChat 用 eventQueue 暂停，本项目改为缓冲应用）。
+const showLoading = ref(false)
+const openingReady = ref(false)
+const bufferedOpening = ref<OpeningResponse | null>(null)
 
 // 剧本序列逐行播放队列（03:17 / GPT / 豆包 / FINAL_REVEAL 等多行演出）
 const scriptQueue = ref<ChatResponse['script_sequence']>([])
@@ -478,10 +490,26 @@ async function startOpening() {
   try {
     const opening = await createOpening(sessionId.value)
     if (epoch !== viewEpoch) return
-    invalidateView()  // 新会话 = 新画面代次，作废旧代次的在途响应
-    sessionId.value = opening.session_id
-    localStorage.setItem(SESSION_KEY, opening.session_id)
-    if (opening.dialogue) {
+    if (showLoading.value) {
+      // 加载演出中：缓冲 opening，等演出结束再应用（docs/15 §7）
+      bufferedOpening.value = opening
+      openingReady.value = true
+      return
+    }
+    applyOpeningResponse(opening)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+    setInputMode(true)
+    // 出错也要让加载演出按最长时限揭幕，错误在演出后可见
+    if (showLoading.value) openingReady.value = true
+  }
+}
+
+function applyOpeningResponse(opening: OpeningResponse) {
+  invalidateView()  // 新会话 = 新画面代次，作废旧代次的在途响应
+  sessionId.value = opening.session_id
+  localStorage.setItem(SESSION_KEY, opening.session_id)
+  if (opening.dialogue) {
       setSpeakerLine(opening.character_id, opening.dialogue, opening.emotion)
       presentation.state.status = 'streaming'
       // 初始场景背景（binding_room → background1）；后续由 reconcileStage 对账
@@ -502,10 +530,6 @@ async function startOpening() {
     }
     // 初始选项（调查纸等）由后端权威 options 决定（docs/14 T2，D3）
     void reconcileStage()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-    setInputMode(true)
-  }
 }
 
 // 游戏内 Load（docs/13 §20.3）：Backend 创建新 Active Session，返回
@@ -558,12 +582,30 @@ function applyLoadedSession(result: LoadResult) {
   game.pendingLoad = null
 }
 
+function onLoadingComplete() {
+  showLoading.value = false
+  loadingShownThisSession = true
+  const opening = bufferedOpening.value
+  bufferedOpening.value = null
+  if (opening) {
+    applyOpeningResponse(opening)
+  }
+}
+
 onMounted(async () => {
   // 0. 优先消费 Load 结果（docs/13 §20.3：LoadView/TitleView 暂存的 new
   // Active Session + GameViewState）
   if (game.pendingLoad) {
     applyLoadedSession(game.pendingLoad)
     return
+  }
+  // 0.5 首次加载演出：仅无存量会话的新游戏入口（docs/15 §7）
+  if (
+    !localStorage.getItem(SESSION_KEY) &&
+    settings.loadingTransitionEnabled &&
+    !loadingShownThisSession
+  ) {
+    showLoading.value = true
   }
   // 1. 恢复已有会话（localStorage）—— refresh 后 Session restore（docs/13 §27）
   const stored = localStorage.getItem(SESSION_KEY)
@@ -679,5 +721,8 @@ onUnmounted(() => {
       @close="activePanel = null"
       @submit="onPanelSubmit"
     />
+
+    <!-- 首次加载演出（docs/15 §7：New Game 专用；ready = opening 数据就绪） -->
+    <LoadingTransition v-if="showLoading" :ready="openingReady" @complete="onLoadingComplete" />
   </div>
 </template>

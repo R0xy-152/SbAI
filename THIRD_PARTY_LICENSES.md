@@ -40,6 +40,7 @@
 | `src/components/views/menu/base/StartLine.vue` | `frontend-vue/src/components/title/StartLine.vue` | 原样适配（docs/15 §4） |
 | `src/components/views/menu/base/StartItem.vue` | `frontend-vue/src/components/title/StartItem.vue` | 视觉样式收敛到全局 .title-btn/.title-btn--ultra（style.css）；保留 class="title-btn" 兼容 E2E 选择器（docs/15 §4.4） |
 | `src/components/views/menu/base/StartLogo.vue` | `frontend-vue/src/components/title/StartLogo.vue` | **未复用素材与代码**：LingChat 版为图片 Logo（素材不迁移，docs/13 §4.4），本项目自制 CSS 渐变+辉光文字 Logo（docs/15 §4.5） |
+| `src/components/views/LoadingTransition.vue` | `frontend-vue/src/components/effects/LoadingTransition.vue` | i18n 改内联中文；进度事件源从 eventQueue 改为父组件 ready prop（opening 数据就绪）；最短展示 2.4s/最长 12s；WebAudio 合成音效保留（autoplay 失败静默）；网格/扫描线/粒子/进度圈/猫爪遮罩揭幕保留（docs/15 §7） |
 
 > 参考（未复制，仅用于理解行为）：`src/controllers/emotion/config.ts`、`src/stores/modules/ui/ui.ts`、`src/stores/modules/game/state.ts`、`src/components/base/index.ts`。它们定义了「emotion → animation/bubble」「UI Store 视口字段」「角色结构」的契约，本项目在 `frontend-vue/src/adapters/lingchat-compat.ts` 中实现等价的最小 Mock（docs/13 §11.2：替换 LingChat emotion vocab / useGameStore / useUIStore 数据来源）。
 
