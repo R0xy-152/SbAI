@@ -20,7 +20,9 @@ from app.game.options import (
     KIND_DEDUCTION,
     KIND_EVIDENCE_PRESENT,
     KIND_INVESTIGATE,
+    KIND_NARRATIVE,
     KIND_PRIVATE_INTERVIEW,
+    KIND_RECOVERY,
     build_options,
 )
 from app.game.orchestrator import GameOrchestrator
@@ -271,4 +273,120 @@ def test_private_interview_options_follow_challenges(tmp_path):
     # 完成后选项消失（D3）
     state.chapter1.private_interview_completed.add("claude")
     assert "private_interview:claude" not in _ids(build_options(state))
+
+# ── T4：recovery / narrative（docs/14 §2.3 收尾与结局） ──
+
+
+def test_recovery_start_option_when_required(tmp_path):
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    state.chapter1.phase = "recovery_required"
+    ids = _ids(build_options(state))
+    assert "recovery:start" in ids
+    start = next(o for o in build_options(state) if o.id == "recovery:start")
+    assert start.kind == KIND_RECOVERY
+    assert start.payload == {"action": "start"}
+
+
+def test_recovery_active_legal_operations(tmp_path):
+    """active 期只下发当前合法的节点操作：REPAIR 须先 VERIFY（D3）。"""
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    state.chapter1.phase = "recovery"
+    state.chapter1.recovery_status = "active"
+    from app.game.recovery import NODES as RECOVERY_NODES
+
+    state.chapter1.recovery = {
+        "nodes": {n: "CORRUPTED" for n in RECOVERY_NODES},
+        "protected": [],
+        "gpt_delegated_privilege": 0,
+        "human_credential_restored": False,
+    }
+    options = build_options(state)
+    ids = set(_ids(options))
+    assert "recovery:PREVIEW:CORE" in ids
+    assert "recovery:VERIFY:CORE" in ids
+    assert "recovery:PROTECT:CORE" in ids
+    assert "recovery:OPTIMIZE:CORE" in ids
+    assert "recovery:REPAIR:CORE" not in ids  # 未 VERIFY 不可修复
+    repair_payload = next(
+        o for o in options if o.id == "recovery:VERIFY:CORE"
+    ).payload
+    assert repair_payload == {"action": "VERIFY", "target": "CORE", "actor": "claude"}
+    state.chapter1.recovery["nodes"]["CORE"] = "UNVERIFIED"
+    ids2 = set(_ids(build_options(state)))
+    assert "recovery:REPAIR:CORE" in ids2
+    assert "recovery:VERIFY:CORE" not in ids2
+
+
+def test_narrative_security_review_testify_order(tmp_path):
+    """Security Review 自证选项按固定顺序逐个下发（D3：只给下一位）。"""
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    state.chapter1.phase = "security_review"
+    state.chapter1.security_review_open = True
+    ids = set(_ids(build_options(state)))
+    assert "narrative:testify:deepseek" in ids
+    assert "narrative:testify:claude" not in ids
+    state.chapter1.testified_characters = ["deepseek"]
+    ids2 = set(_ids(build_options(state)))
+    assert "narrative:testify:claude" in ids2
+    assert "narrative:testify:deepseek" not in ids2
+
+
+def test_narrative_cleanup_branch_by_holder(tmp_path):
+    """清理抉择按 admin_holder 分支：player=删除+确认；chatgpt=委托。"""
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    state.chapter1.phase = "security_review"
+    state.chapter1.security_review_open = True
+    state.chapter1.testified_characters = ["deepseek", "claude", "doubao", "chatgpt"]
+    state.chapter1.admin_holder = "player"
+    ids = set(_ids(build_options(state)))
+    assert "narrative:delete:deepseek" in ids
+    assert "narrative:delete:claude" in ids
+    assert "narrative:delete:doubao" in ids
+    assert "narrative:reject_cleanup" in ids
+    assert "narrative:confirm_keep_chatgpt" not in ids  # 未删完不可确认
+    state.chapter1.deleted_characters = {"deepseek", "claude", "doubao"}
+    assert "narrative:confirm_keep_chatgpt" in set(_ids(build_options(state)))
+    state.chapter1.deleted_characters = set()
+    state.chapter1.admin_holder = "chatgpt"
+    ids2 = set(_ids(build_options(state)))
+    assert "narrative:delegate" in ids2
+    assert "narrative:delete:deepseek" not in ids2
+
+
+def test_narrative_review_start_after_resolved(tmp_path):
+    orch = _orchestrator(tmp_path)
+    inspected = orch.handle_investigation_action(None, INSPECT_HOTSPOT, CH1_NOTE_01)
+    sid = inspected.session_id
+    orch.handle_investigation_action(sid, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    orch.handle_turn(sid, "你好")
+    orch.handle_turn(sid, "然后呢？")
+    state = orch._state.state_for(sid)
+    state.chapter1.phase = "recovery"
+    state.chapter1.recovery_status = "resolved"
+    assert "narrative:security_review_start" in _ids(build_options(state))
+
 

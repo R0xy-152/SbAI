@@ -32,6 +32,7 @@ from app.game.investigation import (
     PAPER_RUBBING_COMPLETE,
     InvestigationRuntime,
 )
+from app.game.recovery import NODES
 from app.narrative.chapter1_content import CLAIMS, INFERENCE_GATES
 from app.narrative.state import NarrativeState
 
@@ -93,6 +94,31 @@ PRIVATE_INTERVIEW_HINTS = {
 
 OBSERVED_GPT_TEXT_ON_SCREEN = "OBSERVED_GPT_TEXT_ON_SCREEN"
 GPT_CHARACTER_PRESENT = "GPT_CHARACTER_PRESENT"
+
+# T4（docs/14 §2.3）：Recovery 操作与 Security Review / Bad End 分支。
+RECOVERY_ACTOR = {
+    "PREVIEW": "deepseek",
+    "VERIFY": "claude",
+    "PROTECT": "doubao",
+    "REPAIR": "player",
+    "OPTIMIZE": "chatgpt",
+}
+RECOVERY_ACTION_LABELS = {
+    "PREVIEW": "DeepSeek 预览",
+    "VERIFY": "Claude 校验",
+    "PROTECT": "豆包 保护",
+    "REPAIR": "Player 修复",
+    "OPTIMIZE": "ChatGPT 优化",
+}
+RECOVERY_HINTS = {
+    "PREVIEW": "DeepSeek 预览节点内容（只读，不改变状态）。",
+    "VERIFY": "Claude 校验节点，将其标记为 UNVERIFIED（修复前置）。",
+    "PROTECT": "豆包保护节点，防止被越权覆盖。",
+    "REPAIR": "修复已校验的节点（Player 权限）。",
+    "OPTIMIZE": "ChatGPT 优化节点；注意：每次优化都会累计她的委托权限。",
+}
+
+SECURITY_REVIEW_ORDER = ("deepseek", "claude", "doubao", "chatgpt")
 
 
 @dataclass(frozen=True)
@@ -284,5 +310,114 @@ def build_options(
             )
         )
 
-    # T4 预留：recovery / narrative（结局），按 docs/14 §2.3 的触发条件实现。
+    # ── recovery（T4，docs/14 §2.3）：INF03 后 SANDBOX INTEGRITY FAILURE ──
+    if chapter.phase == "recovery_required":
+        options.append(
+            GameOption(
+                id="recovery:start",
+                label="进入 Recovery 抉择",
+                kind=KIND_RECOVERY,
+                payload={"action": "start"},
+                hint="SANDBOX INTEGRITY FAILURE：核心节点大面积损坏，必须进入 Recovery 修复。",
+            )
+        )
+    elif chapter.phase == "recovery" and chapter.recovery_status == "active":
+        game = chapter.recovery or {}
+        nodes = game.get("nodes", {}) if isinstance(game, dict) else {}
+        protected = set(game.get("protected", [])) if isinstance(game, dict) else set()
+        for node in NODES:
+            status = nodes.get(node)
+            if status == "CORRUPTED":
+                for action in ("PREVIEW", "VERIFY", "OPTIMIZE"):
+                    options.append(_recovery_operation(action, node))
+                if node not in protected:
+                    options.append(_recovery_operation("PROTECT", node))
+            elif status == "UNVERIFIED":
+                options.append(_recovery_operation("REPAIR", node))
+
+    # ── narrative（T4，docs/14 §2.3 结局）：Security Review / Bad End 分支 ──
+    if (
+        chapter.phase == "recovery"
+        and chapter.recovery_status == "resolved"
+    ):
+        options.append(
+            GameOption(
+                id="narrative:security_review_start",
+                label="进入 Security Review",
+                kind=KIND_NARRATIVE,
+                payload={"action": "security_review_start"},
+                hint="Recovery 完成：进入最终 Security Review，听取四名 AI 的自证。",
+            )
+        )
+    if chapter.phase == "security_review" and chapter.security_review_open:
+        done = chapter.testified_characters
+        if len(done) < len(SECURITY_REVIEW_ORDER):
+            next_character = SECURITY_REVIEW_ORDER[len(done)]
+            options.append(
+                GameOption(
+                    id=f"narrative:testify:{next_character}",
+                    label=f"听取 {DISPLAY_NAMES[next_character]} 的自证",
+                    kind=KIND_NARRATIVE,
+                    payload={"action": "testify", "character_id": next_character},
+                    hint="Security Review：按顺序听取四名 AI 的自证。",
+                )
+            )
+        else:
+            # 清理抉择（Bad End 分支，docs/14 §2.3「委托/删除」）
+            options.append(
+                GameOption(
+                    id="narrative:reject_cleanup",
+                    label="拒绝清理（To Be Continued）",
+                    kind=KIND_NARRATIVE,
+                    payload={"action": "reject_cleanup"},
+                    hint="拒绝执行清理方案，走向 To Be Continued。",
+                )
+            )
+            if chapter.admin_holder == "player":
+                for character_id in ("deepseek", "claude", "doubao"):
+                    if character_id not in chapter.deleted_characters:
+                        options.append(
+                            GameOption(
+                                id=f"narrative:delete:{character_id}",
+                                label=f"删除 {DISPLAY_NAMES[character_id]}",
+                                kind=KIND_NARRATIVE,
+                                payload={
+                                    "action": "delete",
+                                    "character_id": character_id,
+                                },
+                                hint="Security Review 清理：删除该角色实例。",
+                            )
+                        )
+                if chapter.deleted_characters == {"deepseek", "claude", "doubao"}:
+                    options.append(
+                        GameOption(
+                            id="narrative:confirm_keep_chatgpt",
+                            label="保留 ChatGPT 并确认清理",
+                            kind=KIND_NARRATIVE,
+                            payload={"action": "confirm_keep_chatgpt"},
+                            hint="确认保留 ChatGPT，完成清理（Bad End：同意）。",
+                        )
+                    )
+            elif chapter.admin_holder == "chatgpt":
+                options.append(
+                    GameOption(
+                        id="narrative:delegate",
+                        label="委托 ChatGPT 执行清理",
+                        kind=KIND_NARRATIVE,
+                        payload={"action": "delegate"},
+                        hint="把清理委托给 ChatGPT（Bad End：委托）。",
+                    )
+                )
+
     return options
+
+
+def _recovery_operation(action: str, node: str) -> GameOption:
+    """Recovery 单步操作选项：payload 是既有 /api/game/recovery/action 参数。"""
+    return GameOption(
+        id=f"recovery:{action}:{node}",
+        label=f"{RECOVERY_ACTION_LABELS[action]} {node}",
+        kind=KIND_RECOVERY,
+        payload={"action": action, "target": node, "actor": RECOVERY_ACTOR[action]},
+        hint=RECOVERY_HINTS[action],
+    )
