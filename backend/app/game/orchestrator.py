@@ -21,6 +21,7 @@ from app.game.context import CONTEXT_BUILDERS
 from app.game.evidence import EVIDENCE_REGISTRY, evidence_view
 from app.game.deduction import CLAIM_REGISTRY, submit_deduction
 from app.game.private_interview import submit_challenge
+from app.game.speaker_selector import SpeakerSelector
 from app.game import recovery
 from app.game.security_review import SELF_PROOFS
 from app.narrative.chapter1_script import CONFIRM_KEEP_CHATGPT, DELEGATE_CLEANUP, DELETE_CLAUDE, DELETE_DEEPSEEK, DELETE_DOUBAO, OPEN_SECURITY_REVIEW, REJECT_CLEANUP, TESTIFY_CLAUDE, TESTIFY_CHATGPT, TESTIFY_DEEPSEEK, TESTIFY_DOUBAO
@@ -36,13 +37,18 @@ from app.game.state.service import StateService
 from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.game.validation import ResponseRejected, validate_response
-from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.chapter1_script import BEGIN_CHAPTER, Chapter1ScriptRuntime
+from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.inquiry import Inquiry, NOOP as INQUIRY_NOOP, Chapter1InquiryInterpreter
 from app.narrative.state import NarrativeState
 from app.persistence.repository import PersistedSession, SessionRepository
+from app.presentation.actions import PresentationAction, directive_to_actions
 from app.providers.base import ProviderError
+from app.script.chapter1 import PHASE_TRANSITIONS
+from app.script.chapter1_content import CH1_N03_CLAUDE_INCIDENT_SEQUENCE, ScriptSequenceLine
+from app.script.runtime import ScriptIntent, ScriptPlan, ScriptRuntime
+from app.script.schema import ScriptError
 from app.script.service import ScriptService
 
 logger = logging.getLogger(__name__)
@@ -77,6 +83,11 @@ class TurnResult:
     # deterministic backend facts, separate from the model's animation
     # proposal.
     presentation: tuple[str, ...] = ()
+    script_sequence: tuple[ScriptSequenceLine, ...] = ()
+    # docs/12 §13: the structured presentation channel produced directly by the
+    # Script Runtime / legacy directive mapping. Frontends prefer this over the
+    # flat legacy strings.
+    presentation_actions: tuple[PresentationAction, ...] = ()
 
 
 @dataclass
@@ -87,6 +98,7 @@ class InvestigationActionResult:
     evidence_id: str | None
     state: dict
     presentation: tuple[str, ...] = ()
+    presentation_actions: tuple[PresentationAction, ...] = ()
 
 
 @dataclass
@@ -116,7 +128,13 @@ class GameOrchestrator:
         # (if any) a turn must speak instead of the LLM. None keeps the
         # pre-script behaviour for existing direct-construction tests.
         script: ScriptService | None = None,
+        # Script Runtime (docs/12 §32-33): when given, the fixed beats (03:17
+        # incident, GPT/豆包 arrivals, final reveal) are driven by Script
+        # Sequences instead of the programmatic checks. None keeps the legacy
+        # programmatic path for existing direct-construction tests.
+        script_runtime: ScriptRuntime | None = None,
         inquiry_interpreter: Chapter1InquiryInterpreter | None = None,
+        speaker_selector: SpeakerSelector | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -149,7 +167,9 @@ class GameOrchestrator:
         # Presence Gate map (docs/03 §13.6): empty means the gate is off.
         self._availability = availability if availability is not None else {}
         self._script = script
+        self._script_runtime = script_runtime
         self._inquiry_interpreter = inquiry_interpreter
+        self._speaker_selector = speaker_selector
         self._investigation = InvestigationRuntime()
         self._chapter1_script = Chapter1ScriptRuntime()
 
@@ -163,6 +183,10 @@ class GameOrchestrator:
         # (Session Restore); an unknown id behaves exactly as before — a fresh
         # session is minted, never trusting a stale client id.
         session = self._resolve_session(session_id)
+        if character_id is None and self._speaker_selector is not None:
+            state = self._state.state_for(session.session_id)
+            available = set(state.chapter1.available_characters) or {self._characters.default_character}
+            character_id = self._speaker_selector.choose(message, available)
         character_id = self._characters.resolve(
             requested=character_id,
             last=session.current_character or None,
@@ -353,21 +377,57 @@ class GameOrchestrator:
         if approved and decision.kind == "event":
             self._engine.commit(self._state.state_for(session.session_id), decision)
         post_turn_state = self._state.get(session.session_id)
-        chapter_presentation = (
-            self._advance_after_character_turn(post_turn_state, character_id, approved)
-            if post_turn_state is not None
-            else ()
-        )
+        # Script layer (docs/12 §32-33): with a ScriptRuntime wired, the fixed
+        # beats run through Script Sequences; the legacy programmatic checks
+        # below are preserved verbatim when no runtime is given (transitional
+        # fallback for existing direct-construction tests).
+        chapter_presentation: tuple[str, ...] = ()
+        if self._script_runtime is None and post_turn_state is not None:
+            chapter_presentation = self._advance_after_character_turn(
+                post_turn_state, character_id, approved
+            )
         # Only a completed turn records messages: the player message and the
         # character reply enter history together, after the character output
         # succeeded, so a failed turn (provider timeout, invalid output) leaves
-        # history untouched and a retry never duplicates the player message
-        # (docs/05 §8). TV-09: the player message records who it was addressed
-        # to, so each character only hears its own thread (docs/04 §59-60).
+        # history untouched and a retry never duplicates the player message.
+        # Public player speech is audible to every character present *at this
+        # moment*. The recorded audience prevents a character who appears
+        # later from receiving earlier dialogue retroactively.
+        audience = self._public_audience(session.session_id, character_id)
         self._sessions.append_message(
             session.session_id,
-            {"role": "player", "content": message, "character_id": character_id},
+            {
+                "role": "player",
+                "content": message,
+                "character_id": character_id,
+                "heard_by": sorted(audience),
+            },
         )
+
+        incident_sequence: tuple[ScriptSequenceLine, ...] = ()
+        incident_presentation: tuple[str, ...] = ()
+        script_plan: ScriptPlan | None = None
+        if approved and post_turn_state is not None:
+            if self._script_runtime is not None:
+                # DSL path (docs/12 §32-33): one script window per approved
+                # turn. Narrative counts still tick the 03:17 A/B counter
+                # (docs/12 §29) and chatgpt's first landed turn opens the
+                # doubao arrival trigger (docs/12 §39 Task 6).
+                self._script_window_tick(post_turn_state, message)
+                if (
+                    character_id == "chatgpt"
+                    and "chatgpt" in post_turn_state.chapter1.available_characters
+                ):
+                    post_turn_state.narrative_flags.add("chatgpt_first_turn_done")
+                script_plan = self._run_script_tick(
+                    session.session_id, post_turn_state, message
+                )
+            else:
+                incident_sequence = self._maybe_start_0317_incident(
+                    post_turn_state, message
+                )
+                if incident_sequence:
+                    incident_presentation = ("SHOW_CHARACTER claude",)
         self._sessions.append_message(
             session.session_id,
             {
@@ -376,6 +436,15 @@ class GameOrchestrator:
                 "content": response.dialogue,
             },
         )
+        for line in incident_sequence + (script_plan.lines if script_plan is not None else ()):
+            self._sessions.append_message(
+                session.session_id,
+                {
+                    "role": "character",
+                    "character_id": line.speaker,
+                    "content": line.dialogue,
+                },
+            )
 
         # A once script node is consumed only when its line was actually
         # presented (validate-before-commit also applies to the script table,
@@ -398,7 +467,18 @@ class GameOrchestrator:
                 decision.presentation
                 if approved and decision.kind == "event"
                 else ()
-            ) + chapter_presentation,
+            ) + chapter_presentation + incident_presentation
+            + (script_plan.legacy_presentation if script_plan is not None else ()),
+            script_sequence=incident_sequence
+            + (script_plan.lines if script_plan is not None else ()),
+            presentation_actions=tuple(
+                directive_to_actions(
+                    (decision.presentation if approved and decision.kind == "event" else ())
+                    + chapter_presentation
+                    + incident_presentation
+                )
+                + list(script_plan.actions if script_plan is not None else ())
+            ),
         )
 
     def open_turn(self, session_id: str | None) -> TurnResult:
@@ -500,6 +580,7 @@ class GameOrchestrator:
             evidence_id=result.evidence_id,
             state=self._investigation_state_view(state),
             presentation=presentation,
+            presentation_actions=tuple(directive_to_actions(presentation)),
         )
 
     def get_investigation_state(self, session_id: str) -> dict:
@@ -531,6 +612,20 @@ class GameOrchestrator:
         state = self._load_known_state(session_id)
         self._assert_chapter_actions_available(state)
         result = submit_deduction(state, message)
+        # docs/12 §33: an accepted deduction may open an arrival/final beat in
+        # the same response (GPT after INF01, final reveal after INF03). The
+        # Script Runtime only proposes; Narrative committed already.
+        if self._script_runtime is not None and result.get("outcome") == "ACCEPTED":
+            plan = self._run_script_tick(session_id, state, message)
+            if plan is not None:
+                if plan.lines:
+                    result["script_sequence"] = [line.__dict__ for line in plan.lines]
+                if plan.legacy_presentation:
+                    result["presentation"] = [" ".join(plan.legacy_presentation)]
+                if plan.actions:
+                    result["presentation_actions"] = [
+                        action.model_dump() for action in plan.actions
+                    ]
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
         return result
@@ -608,6 +703,8 @@ class GameOrchestrator:
             raise ValueError(f"unknown evidence: {evidence_id}")
         if evidence_id not in chapter.acquired_evidence:
             raise ValueError("evidence has not been acquired")
+        if "FIRST_IMPOSSIBLE_EVENT_RESOLVED" not in state.revealed_facts:
+            raise ValueError("evidence presentation is not unlocked yet")
         if character_id not in chapter.available_characters:
             raise ValueError("character is not available")
         presented_to = chapter.presented_evidence.setdefault(evidence_id, set())
@@ -624,8 +721,10 @@ class GameOrchestrator:
     @staticmethod
     def _investigation_state_view(state: NarrativeState) -> dict:
         chapter = state.chapter1
+        presentation_unlocked = "FIRST_IMPOSSIBLE_EVENT_RESOLVED" in state.revealed_facts
         return {
             "scene_id": state.current_scene,
+            "available_hotspots": InvestigationRuntime.available_hotspots(state),
             "hotspots": dict(chapter.hotspot_states),
             "acquired_evidence": sorted(chapter.acquired_evidence),
             "claims": sorted(chapter.claim_store),
@@ -641,6 +740,31 @@ class GameOrchestrator:
                 and "chatgpt" not in chapter.private_interview_completed,
             },
             "available_characters": sorted(chapter.available_characters),
+            "evidence_presentation": {
+                "unlocked": presentation_unlocked,
+                "character_ids": sorted(chapter.available_characters)
+                if presentation_unlocked
+                else [],
+            },
+            # docs/12 §39 Task 1: authoritative on-stage presentation state, so
+            # the Frontend never infers who is on stage from plot conditions.
+            "presentation_state": {
+                "scene": state.current_scene,
+                "characters": [
+                    {
+                        "character_id": cid,
+                        "visible": True,
+                        "emotion": "neutral",
+                        "slot": None,
+                    }
+                    for cid in sorted(set(chapter.available_characters) | {"deepseek"})
+                ],
+                "input_mode": (
+                    "locked"
+                    if chapter.phase in ("bad_end", "to_be_continued")
+                    else "investigation"
+                ),
+            },
         }
 
     def _load_known_state(self, session_id: str) -> NarrativeState:
@@ -662,15 +786,19 @@ class GameOrchestrator:
     def _advance_first_case(self, state: NarrativeState) -> tuple[str, ...]:
         """Connect real exploration to the first authored investigation beat.
 
-        This is intentionally a tiny deterministic bridge: paper evidence
-        reveals Claude; the terminal log then resolves the first impossible
-        event. Neither step invokes a provider or unlocks later characters.
+        Paper evidence opens the formal pre-03:17 window. Claude's appearance
+        is deliberately deferred to the deterministic trigger in
+        ``_maybe_start_0317_incident`` (docs/12 §13-14).
         """
         chapter = state.chapter1
         presentation: list[str] = []
-        if "EV01_NOTE_V03" in chapter.acquired_evidence and "claude" not in chapter.available_characters:
-            self._chapter1_script.advance(state, "CLAUDE_APPEARS")
-            presentation.append("SHOW_CHARACTER claude")
+        if (
+            "EV01_NOTE_V03" in chapter.acquired_evidence
+            and "claude" not in chapter.available_characters
+            and "PRE_0317_WINDOW" not in state.narrative_flags
+        ):
+            state.narrative_flags.add("PRE_0317_WINDOW")
+            chapter.pre_0317_player_turns = 0
         if (
             "claude" in chapter.available_characters
             and "EV02_ADMIN_SESSION_0317" in chapter.acquired_evidence
@@ -678,6 +806,28 @@ class GameOrchestrator:
         ):
             self._chapter1_script.advance(state, "RESOLVE_IMPOSSIBLE_EVENT")
         return tuple(presentation)
+
+    def _maybe_start_0317_incident(
+        self, state: NarrativeState, player_message: str
+    ) -> tuple[ScriptSequenceLine, ...]:
+        """Start CH1-N03 after its A/B authored trigger, once only."""
+        chapter = state.chapter1
+        if (
+            "PRE_0317_WINDOW" not in state.narrative_flags
+            or "EV01_NOTE_V03" not in chapter.acquired_evidence
+            or "claude" in chapter.available_characters
+            or "EV_CH1_CLAUDE_APPEARS" in state.completed_events
+        ):
+            return ()
+        normalized = player_message.lower().replace(" ", "")
+        discusses_0317 = any(token in normalized for token in ("03:17", "0317", "三点十七"))
+        chapter.pre_0317_player_turns += 1
+        if not discusses_0317 and chapter.pre_0317_player_turns < 2:
+            return ()
+
+        self._chapter1_script.advance(state, "CLAUDE_APPEARS")
+        state.narrative_flags.discard("PRE_0317_WINDOW")
+        return CH1_N03_CLAUDE_INCIDENT_SEQUENCE
 
     @staticmethod
     def _advance_after_character_turn(
@@ -695,6 +845,106 @@ class GameOrchestrator:
             state.narrative_flags.add("doubao_has_appeared")
             return ("SHOW_CHARACTER doubao",)
         return ()
+
+    def _script_available(self, state: NarrativeState | None, character_id: str) -> bool:
+        """Character Availability predicate for script beats (docs/12 §17, §40.3).
+
+        system (narration) and the default character are always on stage;
+        everyone else must be legally unlocked in Narrative State. The Script
+        Runtime re-checks this before a character_show so a script can never
+        conjure an unavailable character (fail closed, docs/12 §40.3).
+        """
+        if state is None:
+            return False
+        if character_id == "system":
+            return True
+        if character_id == self._characters.default_character:
+            return True
+        return character_id in state.chapter1.available_characters
+
+    @staticmethod
+    def _script_window_tick(state: NarrativeState, player_message: str) -> None:
+        """Tick the authored 03:17 A/B counter (docs/12 §29).
+
+        Mirrors the legacy ``_maybe_start_0317_incident`` guard: inside the
+        PRE_0317_WINDOW, before Claude appeared, every approved player turn
+        counts. The trigger either fires on an explicit 03:17 ask or once the
+        counter reaches two — a player can never soft-lock by not asking the
+        exact question.
+        """
+        chapter = state.chapter1
+        if (
+            "PRE_0317_WINDOW" not in state.narrative_flags
+            or "EV01_NOTE_V03" not in chapter.acquired_evidence
+            or "claude" in chapter.available_characters
+            or "EV_CH1_CLAUDE_APPEARS" in state.completed_events
+        ):
+            return
+        chapter.pre_0317_player_turns += 1
+
+    def _route_script_intent(self, state: NarrativeState, intent: ScriptIntent) -> None:
+        """Route one Script Intent through the Narrative Runtime (docs/12 §33).
+
+        The script only declares *what it wants*; the Narrative State Machine
+        validates and commits. chatgpt's unlock is deliberately unroutable —
+        his availability belongs to the deduction runtime alone (docs/12 §33
+        boundary demonstration). An intent the Narrative Runtime rejects
+        (ScriptError) propagates before commit, leaving the cursor untouched.
+        """
+        if intent.kind == "unlock":
+            if intent.target == "claude":
+                self._chapter1_script.advance(state, "CLAUDE_APPEARS")
+                return
+            if intent.target == "doubao":
+                self._chapter1_script.advance(state, "DOUBAO_APPEARS")
+                return
+            raise ScriptError(
+                intent.script_id,
+                intent.step_index,
+                f"unlock {intent.target!r} is not routable (narrative-owned)",
+            )
+        if intent.kind == "phase_transition":
+            transition = PHASE_TRANSITIONS.get(intent.target)
+            if transition is None:
+                raise ScriptError(
+                    intent.script_id,
+                    intent.step_index,
+                    f"unknown phase transition {intent.target!r}",
+                )
+            transition(state)
+            return
+        raise ScriptError(
+            intent.script_id,
+            intent.step_index,
+            f"unknown script intent {intent.kind!r}",
+        )
+
+    def _run_script_tick(
+        self, session_id: str, state: NarrativeState, player_message: str
+    ) -> ScriptPlan | None:
+        """Run one script window for the session (docs/12 §32-33).
+
+        maybe_start → advance (read-only plan) → route intents through the
+        Narrative Runtime → commit. Advance never mutates; commit only advances
+        the cursor after routing succeeded, so a rejected intent leaves the
+        cursor untouched and the next turn retries cleanly (docs/12 §33).
+        """
+        runtime = self._script_runtime
+        if runtime is None:
+            return None
+        runtime.maybe_start(session_id, state, player_message)
+        if not runtime.is_active(session_id):
+            return None
+        plan = runtime.advance(
+            session_id,
+            state,
+            player_message=player_message,
+            available=lambda ch: self._script_available(state, ch),
+        )
+        for intent in plan.intents:
+            self._route_script_intent(state, intent)
+        runtime.commit(session_id, plan)
+        return plan
 
     @staticmethod
     def _presented_evidence_for(
@@ -783,6 +1033,8 @@ class GameOrchestrator:
             self._script.restore(
                 session.session_id, persisted.consumed_script_nodes
             )
+        if self._script_runtime is not None:
+            self._script_runtime.restore(session.session_id, persisted.script_cursor)
         self._character_state.restore(session.session_id, persisted.character_states)
         return session
 
@@ -807,22 +1059,33 @@ class GameOrchestrator:
                 if self._script is not None
                 else set()
             ),
+            script_cursor=(
+                self._script_runtime.snapshot(session_id)
+                if self._script_runtime is not None
+                else None
+            ),
             character_states=self._character_state.snapshot(session_id),
         )
 
-    def _heard_messages(self, messages: list[dict], character_id: str) -> list[dict]:
-        """The messages a character is entitled to hear (TV-09).
+    def _public_audience(self, session_id: str, character_id: str) -> set[str]:
+        """Return the authoritative audience for one public player turn."""
+        state = self._state.get(session_id)
+        present = set(state.chapter1.available_characters) if state is not None else set()
+        # DeepSeek is available from the opening but is not represented by a
+        # chapter flag. The selected responder is necessarily present too.
+        return present | {character_id}
 
-        A message is audible to a character when it is that character's own
-        reply, or a player message addressed to that character. A player
-        privately talking to one character is not heard by the others;
-        co-presence audibility ("同场默认可听见") is a later refinement
-        (docs/05 §21-22).
-        """
+    def _heard_messages(self, messages: list[dict], character_id: str) -> list[dict]:
+        """Return public lines heard while present plus this character's replies."""
         return [
             message
             for message in messages
-            if message.get("character_id") == character_id
+            if (
+                message.get("role") == "player"
+                and character_id
+                in message.get("heard_by", {message.get("character_id")})
+            )
+            or message.get("character_id") == character_id
         ]
 
     def _narrative_decision(

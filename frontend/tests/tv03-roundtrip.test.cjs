@@ -18,9 +18,10 @@ const switchButton = () => ({
 });
 const sprite = {
   dataset: {},
-  classList: { add: () => {}, remove: () => {}, contains: () => false },
+  classList: { add: () => {}, remove: () => {}, contains: () => false, toggle: () => {} },
   addEventListener: () => {},
   offsetWidth: 1,
+  style: { setProperty: () => {} },
 };
 
 global.window = {};
@@ -31,6 +32,7 @@ global.document = {
     "#dialogue-text": dialogue,
     "#form-status": status,
     "#character-sprite": sprite,
+    "#character-stage": { appendChild: () => {} },
     "#character-name": characterName,
     "#history-toggle": historyToggle,
     "#history-panel": historyPanel,
@@ -75,7 +77,6 @@ function submit(text) {
   assert.deepEqual(JSON.parse(captured.options.body), {
     message: "你好",
     session_id: null,
-    character_id: null,
   });
 
   // 2. The second request sends the stored session id.

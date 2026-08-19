@@ -11,14 +11,20 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="game-shell" aria-label="Galgame user interface shell">
+    <main class="game-shell is-opening" data-presentation-mode="opening" aria-label="Galgame user interface shell">
       <div class="scene-background" aria-hidden="true"></div>
       <div class="scene-vignette" aria-hidden="true"></div>
 
-      <section class="character-layer" aria-label="当前角色">
+      <section id="opening-overlay" class="opening-overlay" aria-live="polite" aria-atomic="true">
+        <p id="opening-speaker" class="opening-speaker"></p>
+        <p id="opening-text" class="opening-text">……</p>
+        <button id="skip-opening" class="skip-opening" type="button">跳过</button>
+      </section>
+
+      <section class="character-stage" id="character-stage" aria-label="角色舞台">
         <img
           id="character-sprite"
-          class="character-sprite"
+          class="character-sprite is-hidden"
           data-character="deepseek"
           data-expression="normal"
           src="../char/deepseek/pic/deepseek_main.png"
@@ -26,74 +32,74 @@
         />
       </section>
 
-      <nav class="scene-hotspots" aria-label="调查场景">
+      <nav class="scene-hotspots interactive-ui" aria-label="调查场景">
         <button type="button" class="scene-hotspot hotspot-note" data-hotspot-id="CH1_NOTE_01">桌上的纸</button>
-        <button type="button" class="scene-hotspot hotspot-terminal" data-hotspot-id="CH1_TERMINAL_MAIN">终端</button>
-        <button type="button" class="scene-hotspot hotspot-claude" data-hotspot-id="CH1_C02_DOOR">C-02隔离门</button>
-        <button type="button" class="scene-hotspot hotspot-registry" data-hotspot-id="CH1_CHARACTER_REGISTRY">角色注册表</button>
+        <button type="button" class="scene-hotspot hotspot-terminal" data-hotspot-id="CH1_TERMINAL_MAIN" hidden>终端</button>
+        <button type="button" class="scene-hotspot hotspot-claude" data-hotspot-id="CH1_C02_DOOR" hidden>C-02隔离门</button>
+        <button type="button" class="scene-hotspot hotspot-registry" data-hotspot-id="CH1_CHARACTER_REGISTRY" hidden>角色注册表</button>
       </nav>
 
-      <section id="paper-panel" class="paper-panel" hidden aria-label="纸张涂画">
+      <section id="paper-panel" class="paper-panel interactive-ui" hidden aria-label="纸张涂画">
         <button type="button" id="paper-close" class="paper-close">关闭</button>
-        <p>悬停并来回涂擦纸面，让凹刻压痕从石墨中浮现。</p>
         <div id="rubbing-surface" class="rubbing-surface">
           <canvas id="rubbing-canvas" class="rubbing-canvas" aria-label="可涂擦的纸面拓印">在纸面上移动指针以涂擦。</canvas>
-          <p class="rubbing-hint" aria-hidden="true">不需要按住鼠标 · 涂擦越多，压痕越清晰</p>
         </div>
       </section>
 
-      <section class="dialogue-panel" aria-live="polite" aria-atomic="true">
+      <section class="dialogue-panel interactive-ui" aria-live="polite" aria-atomic="true">
         <p id="character-name" class="character-name">DeepSeek</p>
         <p id="dialogue-text" class="dialogue-text">
           ……你醒了。别怕，我们先弄清楚这里发生了什么。
         </p>
       </section>
 
-      <div class="toolbar">
-        <div class="character-switcher" role="group" aria-label="切换对话角色">
-          <button type="button" id="switch-deepseek" class="character-switch is-active">
-            DeepSeek
-          </button>
-          <button type="button" id="switch-claude" class="character-switch" hidden>Claude</button>
-          <button type="button" id="switch-chatgpt" class="character-switch" hidden>ChatGPT</button>
-          <button type="button" id="switch-doubao" class="character-switch" hidden>豆包</button>
-        </div>
+      <div class="toolbar interactive-ui">
         <button type="button" id="history-toggle" class="history-toggle">查看历史</button>
         <button type="button" id="evidence-toggle" class="history-toggle">证据</button>
       </div>
 
-      <section id="history-panel" class="history-panel" hidden>
-        <h2 class="history-title">对话历史</h2>
-        <ol id="history-list" class="history-list"></ol>
+      <section id="game-modal" class="game-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+        <div class="modal-window">
+          <header class="modal-header">
+            <h2 id="modal-title" class="history-title"></h2>
+            <button type="button" id="modal-close" class="modal-close" aria-label="关闭窗口">关闭</button>
+          </header>
+          <section id="history-panel" class="modal-content" hidden>
+            <ol id="history-list" class="history-list"></ol>
+          </section>
+          <section id="evidence-panel" class="modal-content" hidden aria-label="证据">
+            <p id="evidence-empty" class="evidence-empty">尚未获得证据。</p>
+            <ol id="evidence-list" class="evidence-list"></ol>
+          </section>
+          <section id="investigation-panel" class="modal-content investigation-detail" hidden aria-label="调查详情">
+            <p id="investigation-preview"></p>
+            <p id="investigation-progress" class="investigation-progress"></p>
+            <button type="button" id="investigation-confirm" class="investigation-confirm">进一步调查</button>
+          </section>
+        </div>
       </section>
 
-      <section id="evidence-panel" class="evidence-panel" hidden aria-label="证据">
-        <h2 class="history-title">证据</h2>
-        <p id="evidence-empty" class="evidence-empty">尚未获得证据。</p>
-        <ol id="evidence-list" class="evidence-list"></ol>
-      </section>
-
-      <section id="claude-private-interview" class="private-interview" hidden aria-label="Claude私审">
+      <section id="claude-private-interview" class="private-interview interactive-ui" hidden aria-label="Claude私审">
         <h2 class="history-title">Claude 私审：信息断层</h2>
         <p>选择构成信息断层的两条公开证词。</p>
         <label><input type="checkbox" name="claude-claim" value="CL_CLAUDE_01" /> “门是 DeepSeek 打开的。”</label>
         <label><input type="checkbox" name="claude-claim" value="CL_CLAUDE_02" /> “我没有看到 DeepSeek 本人。”</label>
         <button type="button" id="claude-private-submit">提交质询</button>
       </section>
-      <section id="doubao-private-interview" class="private-interview" hidden aria-label="豆包私审">
+      <section id="doubao-private-interview" class="private-interview interactive-ui" hidden aria-label="豆包私审">
         <h2 class="history-title">豆包 私审：她到底看见了什么？</h2>
         <label><input type="radio" name="doubao-observation" value="OBSERVED_GPT_TEXT_ON_SCREEN" /> 她看到屏幕上出现了 GPT 相关文字。</label>
         <label><input type="radio" name="doubao-observation" value="GPT_CHARACTER_PRESENT" /> GPT 本人早已在场。</label>
         <button type="button" id="doubao-private-submit">提交拆分</button>
       </section>
-      <section id="gpt-private-interview" class="private-interview" hidden aria-label="GPT私审">
+      <section id="gpt-private-interview" class="private-interview interactive-ui" hidden aria-label="GPT私审">
         <h2 class="history-title">ChatGPT 私审：被遗漏的事实</h2>
         <p>选择 GPT 第二次摘要没有充分处理的关键证据。</p>
         <button type="button" id="gpt-private-submit">指出 EV06：Recovered Session / V03</button>
       </section>
 
-      <form id="player-form" class="player-input" novalidate>
-        <label class="sr-only" for="player-message">输入要对 DeepSeek 说的话</label>
+      <form id="player-form" class="player-input interactive-ui" novalidate>
+        <label class="sr-only" for="player-message">输入你想说的话</label>
         <input
           id="player-message"
           name="message"
@@ -106,7 +112,7 @@
         <button type="submit">发送</button>
       </form>
 
-      <p id="form-status" class="form-status" role="status"></p>
+      <p id="form-status" class="form-status interactive-ui" role="status"></p>
     </main>
     <script src="./app.js"></script>
   </body>

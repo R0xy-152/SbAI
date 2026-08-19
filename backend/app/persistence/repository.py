@@ -38,6 +38,10 @@ class PersistedSession:
     # before the script layer existed, so a restored session never re-fires its
     # opening line.
     consumed_script_nodes: set[str] = field(default_factory=set)
+    # Script Runtime cursor (docs/12 §33): {"script_id","step_index","status"}.
+    # None on snapshots written before the script layer existed, so a restored
+    # session simply has no active script (none re-fires: conditions also gate).
+    script_cursor: dict | None = None
     # Per-character persistent mood (docs/04 §9, CharacterStateService), keyed
     # by character_id. Empty on snapshots written before this state existed.
     character_states: dict[str, CharacterMood] = field(default_factory=dict)
@@ -115,6 +119,7 @@ def _session_to_dict(session: PersistedSession) -> dict:
             for owner, memories in session.memories.items()
         },
         "consumed_script_nodes": sorted(session.consumed_script_nodes),
+        "script_cursor": session.script_cursor,
         "character_states": {
             owner: _mood_to_dict(mood)
             for owner, mood in session.character_states.items()
@@ -144,6 +149,9 @@ def _session_from_dict(data: dict) -> PersistedSession:
         # Backward compatible: snapshots written before the script layer lack
         # this key, so an absent value means "nothing consumed yet".
         consumed_script_nodes=set(data.get("consumed_script_nodes", [])),
+        # Backward compatible: snapshots written before the script layer lack
+        # this key, so an absent value means "no active script cursor".
+        script_cursor=data.get("script_cursor"),
         # Backward compatible: snapshots written before the mood state existed
         # lack this key, so an absent value means "no mood committed yet".
         character_states={
@@ -169,6 +177,9 @@ def _chapter1_from_dict(data: dict) -> Chapter1State:
         "accepted_inferences": set(data.get("accepted_inferences", defaults.accepted_inferences)),
         "claim_store": dict(data.get("claim_store", defaults.claim_store)),
         "hotspot_states": dict(data.get("hotspot_states", defaults.hotspot_states)),
+        "pre_0317_player_turns": data.get(
+            "pre_0317_player_turns", defaults.pre_0317_player_turns
+        ),
         "scene_facts": set(data.get("scene_facts", defaults.scene_facts)),
         "private_interview_rights": set(data.get("private_interview_rights", defaults.private_interview_rights)),
         "private_interview_completed": set(data.get("private_interview_completed", defaults.private_interview_completed)),
@@ -198,6 +209,7 @@ def _chapter1_to_dict(state: Chapter1State) -> dict:
         "accepted_inferences": sorted(state.accepted_inferences),
         "claim_store": state.claim_store,
         "hotspot_states": state.hotspot_states,
+        "pre_0317_player_turns": state.pre_0317_player_turns,
         "scene_facts": sorted(state.scene_facts),
         "private_interview_rights": sorted(state.private_interview_rights),
         "private_interview_completed": sorted(state.private_interview_completed),

@@ -30,6 +30,9 @@ class Chapter1State:
     accepted_inferences: set[str] = field(default_factory=set)
     claim_store: dict[str, dict] = field(default_factory=dict)
     hotspot_states: dict[str, str] = field(default_factory=dict)
+    # docs/12 §13: EV01 opens the 03:17 window; two completed player turns
+    # without discussing 03:17 deterministically trigger the incident.
+    pre_0317_player_turns: int = 0
     scene_facts: set[str] = field(default_factory=set)
     private_interview_rights: set[str] = field(default_factory=set)
     private_interview_completed: set[str] = field(default_factory=set)

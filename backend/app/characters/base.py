@@ -71,9 +71,12 @@ class ActionProposal:
 
 
 # Named emotion / animation allow-lists (docs/04 §42-43). The model must pick
-# from these; it must not emit rendering parameters.
-ALLOWED_EMOTIONS = frozenset({"neutral", "happy", "annoyed", "angry", "embarrassed", "serious"})
-ALLOWED_ANIMATIONS = frozenset({"none", "shake", "strong_shake", "fade_in", "fade_out"})
+# from these; it must not emit rendering parameters. `surprised` was added for
+# the Script DSL's deterministic reactions (docs/12 §19); the small_jump /
+# slide_in_* animations are the CharacterStage's recommended named set
+# (docs/12 §11).
+ALLOWED_EMOTIONS = frozenset({"neutral", "happy", "annoyed", "angry", "embarrassed", "serious", "surprised"})
+ALLOWED_ANIMATIONS = frozenset({"none", "shake", "strong_shake", "fade_in", "fade_out", "small_jump", "slide_in_left", "slide_in_right"})
 
 
 @dataclass

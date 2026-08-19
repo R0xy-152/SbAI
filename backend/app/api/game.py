@@ -26,6 +26,7 @@ class InvestigationActionResponse(BaseModel):
     evidence_id: str | None = None
     state: dict
     presentation: list[str] = []
+    presentation_actions: list[dict] = []
 
 
 class PresentEvidenceRequest(BaseModel):

@@ -12,9 +12,16 @@ const sprite = {
     add: (...names) => names.forEach((name) => classes.add(name)),
     remove: (...names) => names.forEach((name) => classes.delete(name)),
     contains: (name) => classes.has(name),
+    toggle: (name, force) => {
+      if (force === true) classes.add(name);
+      else if (force === false) classes.delete(name);
+      else if (classes.has(name)) classes.delete(name);
+      else classes.add(name);
+    },
   },
   addEventListener: () => {},
   offsetWidth: 1,
+  style: { setProperty: () => {} },
 };
 
 const sendButton = { textContent: "发送", disabled: false };
@@ -26,6 +33,11 @@ const input = { value: "", disabled: false, focus: () => {} };
 const dialogue = { textContent: "" };
 const status = { textContent: "" };
 const characterName = { textContent: "" };
+const gameShell = { dataset: {}, classList: { toggle: () => {} } };
+const openingOverlay = { hidden: false };
+const openingSpeaker = { textContent: "" };
+const openingText = { textContent: "" };
+const skipOpening = { addEventListener: (_event, handler) => { global.skipOpening = handler; } };
 
 const historyToggle = { textContent: "查看历史" };
 historyToggle.addEventListener = () => {};
@@ -49,7 +61,13 @@ global.document = {
     "#dialogue-text": dialogue,
     "#form-status": status,
     "#character-sprite": sprite,
+    "#character-stage": { appendChild: () => {} },
     "#character-name": characterName,
+    ".game-shell": gameShell,
+    "#opening-overlay": openingOverlay,
+    "#opening-speaker": openingSpeaker,
+    "#opening-text": openingText,
+    "#skip-opening": skipOpening,
     "#history-toggle": historyToggle,
     "#history-panel": historyPanel,
     "#history-list": historyList,
@@ -78,8 +96,8 @@ global.fetch = async (url, options) => {
 require("../app.js");
 
 (async () => {
-  // Let the auto-invoked openOpening() finish its fetch + render.
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(input.disabled, true, "opening must lock input before the handoff");
+  await global.window.galOpening.skip();
 
   assert.equal(captured[0].url, "/api/chat/opening");
   assert.equal(captured[0].options.method, "POST");
@@ -89,6 +107,8 @@ require("../app.js");
   assert.equal(characterName.textContent, "DeepSeek");
   assert.equal(sprite.dataset.character, "deepseek");
   assert.equal(stored["gal_session_id"], "sess-1");
+  assert.equal(stored["gal_opening_completed:sess-1"], "true");
+  assert.equal(input.disabled, false, "skip must reach the interactive handoff");
 
   console.log("TV-17 scripted opening (frontend): PASS");
 })().catch((error) => {

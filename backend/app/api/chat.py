@@ -19,9 +19,9 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=500)
     session_id: str | None = None
-    # TV-09: explicit character selection (docs/04 §61: natural-language
-    # speaker detection is an Orchestrator/Narrative decision, deferred).
-    # Defaults to the orchestrator's default character.
+    # Internal compatibility override. The public UI deliberately omits this:
+    # the Orchestrator asks the connected model to propose an in-scene speaker
+    # and validates that proposal against authoritative presence state.
     character_id: str | None = None
 
 
@@ -37,7 +37,11 @@ class ChatResponse(BaseModel):
     # TV-16: story-semantic directives from a committed narrative event
     # (docs/03 §13.6), e.g. ["SHOW_CHARACTER claude"]; empty on noop turns.
     presentation: list[str] = []
+    # docs/12 §13: the structured presentation channel (registered action types
+    # only). The Frontend prefers this over the flat legacy strings.
+    presentation_actions: list[dict] = []
     claim_refs: list[str] = []
+    script_sequence: list[dict] = []
 
 
 class OpeningRequest(BaseModel):
@@ -93,7 +97,9 @@ def chat(
         # Each committed event's directive is one string, e.g. "SHOW_CHARACTER
         # claude" (docs/03 §13.6), so the Frontend can parse kind + target.
         presentation=[" ".join(result.presentation)] if result.presentation else [],
+        presentation_actions=[a.model_dump() for a in result.presentation_actions],
         claim_refs=result.response.claim_refs,
+        script_sequence=[line.__dict__ for line in result.script_sequence],
     )
 
 
@@ -113,7 +119,9 @@ def opening(
         emotion=result.response.emotion,
         animation=result.response.animation_proposal,
         presentation=[" ".join(result.presentation)] if result.presentation else [],
+        presentation_actions=[a.model_dump() for a in result.presentation_actions],
         claim_refs=result.response.claim_refs,
+        script_sequence=[line.__dict__ for line in result.script_sequence],
     )
 
 

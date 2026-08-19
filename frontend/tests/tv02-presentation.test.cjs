@@ -8,9 +8,16 @@ const sprite = {
     add: (...names) => names.forEach((name) => classes.add(name)),
     remove: (...names) => names.forEach((name) => classes.delete(name)),
     contains: (name) => classes.has(name),
+    toggle: (name, force) => {
+      if (force === true) classes.add(name);
+      else if (force === false) classes.delete(name);
+      else if (classes.has(name)) classes.delete(name);
+      else classes.add(name);
+    },
   },
   addEventListener: (_event, listener) => listeners.push(listener),
   offsetWidth: 1,
+  style: { setProperty: () => {} },
 };
 const form = { addEventListener: () => {}, querySelector: () => ({ textContent: "", disabled: false }) };
 const characterName = { textContent: "" };
@@ -30,6 +37,7 @@ global.document = {
     "#dialogue-text": { textContent: "" },
     "#form-status": { textContent: "" },
     "#character-sprite": sprite,
+    "#character-stage": { appendChild: () => {} },
     "#character-name": characterName,
     "#history-toggle": historyToggle,
     "#history-panel": historyPanel,

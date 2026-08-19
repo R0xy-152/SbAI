@@ -5,13 +5,20 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from app.characters.base import CharacterResponse
+
 from app.game.evidence import (
     EV01_NOTE_V03,
     EV02_ADMIN_SESSION_0317,
     EVIDENCE_REGISTRY,
     GROUND_TRUTH_REGISTRY,
 )
-from app.game.investigation import CH1_NOTE_01, INSPECT_HOTSPOT, PAPER_RUBBING_COMPLETE
+from app.game.investigation import (
+    CH1_NOTE_01,
+    CH1_TERMINAL_MAIN,
+    INSPECT_HOTSPOT,
+    PAPER_RUBBING_COMPLETE,
+)
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
 from app.main import create_app
@@ -21,11 +28,11 @@ from app.persistence.repository import JsonSessionRepository
 class _Runtime:
     character_id = "deepseek"
 
-    def respond(self, request):  # pragma: no cover - evidence never calls an LLM
-        raise AssertionError("presenting evidence must not call an LLM")
+    def respond(self, request):
+        return CharacterResponse(character_id=self.character_id, dialogue="继续调查。")
 
     def safe_fallback(self):
-        raise AssertionError("presenting evidence must not call an LLM")
+        return CharacterResponse(character_id=self.character_id, dialogue="请继续。")
 
 
 def _orchestrator(repository=None):
@@ -40,6 +47,14 @@ def _acquire_note(orchestrator):
         inspected.session_id, PAPER_RUBBING_COMPLETE, CH1_NOTE_01
     )
     return inspected.session_id
+
+
+def _unlock_evidence_presentation(orchestrator, session_id):
+    orchestrator.handle_turn(session_id, "继续调查。")
+    orchestrator.handle_turn(session_id, "再看看别处。")
+    return orchestrator.handle_investigation_action(
+        session_id, INSPECT_HOTSPOT, CH1_TERMINAL_MAIN
+    )
 
 
 def test_evidence_view_uses_immutable_registry_data_and_presentation_is_idempotent():
@@ -57,6 +72,10 @@ def test_evidence_view_uses_immutable_registry_data_and_presentation_is_idempote
         "presented_to": [],
     }]
 
+    with pytest.raises(ValueError, match="not unlocked"):
+        orchestrator.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
+
+    _unlock_evidence_presentation(orchestrator, session_id)
     first = orchestrator.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
     second = orchestrator.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
 
@@ -93,6 +112,7 @@ def test_unacquired_evidence_cannot_be_presented_and_presentation_persists(tmp_p
         first.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
 
     first.handle_investigation_action(session_id, PAPER_RUBBING_COMPLETE, CH1_NOTE_01)
+    _unlock_evidence_presentation(first, session_id)
     first.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
 
     restored = _orchestrator(repository)
@@ -115,6 +135,30 @@ def test_evidence_api_ignores_client_supplied_content(tmp_path):
             },
         )
         assert completed.status_code == 200
+        locked = client.post(
+            "/api/game/present",
+            json={
+                "session_id": inspected["session_id"],
+                "character_id": "deepseek",
+                "evidence_id": EV01_NOTE_V03,
+            },
+        )
+        assert locked.status_code == 400
+        for message in ("继续调查。", "再看看别处。"):
+            progressed = client.post(
+                "/api/chat",
+                json={"session_id": inspected["session_id"], "message": message},
+            )
+            assert progressed.status_code == 200
+        terminal = client.post(
+            "/api/game/action",
+            json={
+                "session_id": inspected["session_id"],
+                "action": INSPECT_HOTSPOT,
+                "hotspot_id": CH1_TERMINAL_MAIN,
+            },
+        )
+        assert terminal.status_code == 200
         presented = client.post(
             "/api/game/present",
             json={
@@ -130,4 +174,32 @@ def test_evidence_api_ignores_client_supplied_content(tmp_path):
     assert presented.json()["evidence"]["summary"] != "injected"
     assert presented.json()["evidence"]["facts"] == [
         "NOTE_TIMESTAMP_0317", "NOTE_WARNING_ADMIN_EXPLAINER", "NOTE_SIGNED_V03"
+    ]
+
+
+def test_chat_api_returns_formal_0317_sequence(tmp_path):
+    app = create_app()
+    app.state.orchestrator = _orchestrator(JsonSessionRepository(tmp_path / "sessions"))
+    with TestClient(app) as client:
+        inspected = client.post(
+            "/api/game/action", json={"action": INSPECT_HOTSPOT, "hotspot_id": CH1_NOTE_01}
+        ).json()
+        client.post(
+            "/api/game/action",
+            json={
+                "session_id": inspected["session_id"],
+                "action": PAPER_RUBBING_COMPLETE,
+                "hotspot_id": CH1_NOTE_01,
+            },
+        )
+        incident = client.post(
+            "/api/chat",
+            json={"session_id": inspected["session_id"], "message": "03:17 是什么意思？"},
+        )
+
+    assert incident.status_code == 200
+    assert incident.json()["presentation"] == ["SHOW_CHARACTER claude"]
+    assert incident.json()["script_sequence"] == [
+        {"speaker": "claude", "dialogue": "比上一次慢。", "emotion": "serious", "animation": "fade_in"},
+        {"speaker": "deepseek", "dialogue": "……你、你怎么会在这里？！", "emotion": "annoyed", "animation": "none"},
     ]

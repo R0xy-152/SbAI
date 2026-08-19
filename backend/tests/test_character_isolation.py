@@ -1,8 +1,9 @@
-"""TV-09 Second Character Isolation tests (docs/06 §15, docs/04 §58-61).
+"""Character context and public-scene visibility tests.
 
 Claude joins the cast with its own persona and Context Builder, and each
-character only hears its own conversation thread (docs/04 §59-60, docs/05
-§21-22): a player privately telling DeepSeek something must not reach Claude.
+character keeps its own persona, knowledge and memories. Public player speech
+is heard by every character in the scene; private-interview content uses the
+separate investigation flow and is not added to this dialogue history.
 """
 
 from __future__ import annotations
@@ -127,12 +128,11 @@ def test_unknown_character_is_rejected():
         orchestrator.handle_turn(None, "你好。", character_id="chatgpt")
 
 
-# ---- Private information isolation (docs/04 §59, docs/06 TV-09 Test B) ----
+# ---- Public player speech is shared; character output remains scoped ----
 
-def test_private_message_to_deepseek_is_not_heard_by_claude():
-    # Same session: the player privately tells DeepSeek, then talks to Claude
-    # for the first time. Claude's context must carry nothing of the private
-    # statement, while DeepSeek's own thread keeps it.
+def test_public_message_is_heard_by_claude():
+    # Normal chat has no private recipient. A later Claude turn receives the
+    # public player line that was spoken while DeepSeek answered.
     ds = _RecordingProvider("deepseek")
     cl = _RecordingProvider("claude")
     sessions = SessionStore()
@@ -140,16 +140,16 @@ def test_private_message_to_deepseek_is_not_heard_by_claude():
         sessions,
         {"deepseek": DeepSeekRuntime(ds), "claude": ClaudeRuntime(cl)},
     )
-    first = orchestrator.handle_turn(None, "我不信任Claude。", character_id="deepseek")
+    session = sessions.get_or_create(None)
+    orchestrator._state.state_for(session.session_id).chapter1.available_characters.update(
+        {"deepseek", "claude"}
+    )
+    first = orchestrator.handle_turn(session.session_id, "我不信任Claude。", character_id="deepseek")
     orchestrator.handle_turn(first.session_id, "我们认识吗？", character_id="claude")
-    # Claude's first interaction shows no trace of the private message.
-    assert "我不信任Claude" not in cl.calls[0]
-    # DeepSeek still has it in her own thread.
-    orchestrator.handle_turn(first.session_id, "我刚刚说了什么？", character_id="deepseek")
-    assert "我不信任Claude" in ds.calls[-1]
+    assert "我不信任Claude" in cl.calls[0]
 
 
-def test_each_character_keeps_its_own_thread():
+def test_public_messages_are_shared_but_character_replies_remain_scoped():
     ds = _RecordingProvider("deepseek")
     cl = _RecordingProvider("claude")
     sessions = SessionStore()
@@ -157,11 +157,15 @@ def test_each_character_keeps_its_own_thread():
         sessions,
         {"deepseek": DeepSeekRuntime(ds), "claude": ClaudeRuntime(cl)},
     )
-    first = orchestrator.handle_turn(None, "这是给DeepSeek的秘密。", character_id="deepseek")
+    session = sessions.get_or_create(None)
+    orchestrator._state.state_for(session.session_id).chapter1.available_characters.update(
+        {"deepseek", "claude"}
+    )
+    first = orchestrator.handle_turn(session.session_id, "这是给DeepSeek的秘密。", character_id="deepseek")
     orchestrator.handle_turn(first.session_id, "这是给Claude的秘密。", character_id="claude")
     orchestrator.handle_turn(first.session_id, "你听到了什么？", character_id="deepseek")
     orchestrator.handle_turn(first.session_id, "你听到了什么？", character_id="claude")
     assert "这是给DeepSeek的秘密" in ds.calls[-1]
-    assert "这是给Claude的秘密" not in ds.calls[-1]
+    assert "这是给Claude的秘密" in ds.calls[-1]
+    assert "这是给DeepSeek的秘密" in cl.calls[-1]
     assert "这是给Claude的秘密" in cl.calls[-1]
-    assert "这是给DeepSeek的秘密" not in cl.calls[-1]

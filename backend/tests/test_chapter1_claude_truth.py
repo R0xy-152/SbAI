@@ -5,7 +5,10 @@ import json
 from app.characters.base import CharacterRequest
 from app.characters.claude import ClaudeRuntime
 from app.characters.claude_truth import CLAUDE_TRUTH_CONTRACT
+from app.game.context import build_claude_context
+from app.game.scene import Scene
 from app.narrative.inquiry import ASK_CHARACTER_KNOWLEDGE, ASK_OBSERVATION_SOURCE, Inquiry
+from app.narrative.state import NarrativeState
 from app.providers.base import LLMProvider, ProviderError
 
 
@@ -71,6 +74,23 @@ def test_claude_public_claims_are_separate_and_deterministic():
 
     assert attribution.claim_refs == ["CL_CLAUDE_01"]
     assert source.claim_refs == ["CL_CLAUDE_02"]
+
+
+def test_claude_recovery_disclosure_requires_its_authorized_context_flag():
+    state = NarrativeState()
+    state.narrative_flags.add("claude_recovery_disclosure_open")
+    response = ClaudeRuntime(_FailingProvider()).respond(
+        CharacterRequest(
+            character_id="claude",
+            player_message="你访问过 Recovery Interface 吗？",
+            inquiry=Inquiry(ASK_CHARACTER_KNOWLEDGE, target="claude", topic="evidence"),
+            narrative_context=build_claude_context(
+                Scene(scene_id="ROOM_A", wall_code=""), state
+            ).narrative_context,
+        )
+    )
+
+    assert response.claim_refs == ["CL_CLAUDE_05"]
 
 
 def test_claude_prompt_uses_contract_and_only_presented_evidence():

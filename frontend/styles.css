@@ -29,6 +29,9 @@ body { margin: 0; min-width: 320px; }
   background:
     linear-gradient(90deg, rgba(8, 11, 19, .72), rgba(8, 11, 19, .16) 50%, rgba(8, 11, 19, .72)),
     url("../backgroud/background1.png") center / cover no-repeat;
+  opacity: 1;
+  filter: blur(0) brightness(1);
+  transition: opacity 1.6s ease, filter 1.6s ease;
 }
 
 .scene-vignette {
@@ -36,25 +39,92 @@ body { margin: 0; min-width: 320px; }
   background: radial-gradient(ellipse at center, transparent 35%, rgba(5, 7, 13, .55) 100%);
 }
 
-.character-layer {
-  min-height: 0;
-  display: flex;
-  align-items: end;
-  justify-content: center;
-  padding: 2.5rem 1rem 0;
+.game-shell.is-opening .scene-background {
+  opacity: 0;
+  filter: blur(5px) brightness(.45);
+}
+.game-shell.is-opening[data-opening-phase="room_reveal"],
+.game-shell.is-opening[data-opening-phase="restraint_reveal"],
+.game-shell.is-opening[data-opening-phase="voice_before_sprite"],
+.game-shell.is-opening[data-opening-phase="deepseek_reveal"] { }
+.game-shell.is-opening[data-opening-phase="room_reveal"] .scene-background,
+.game-shell.is-opening[data-opening-phase="restraint_reveal"] .scene-background,
+.game-shell.is-opening[data-opening-phase="voice_before_sprite"] .scene-background,
+.game-shell.is-opening[data-opening-phase="deepseek_reveal"] .scene-background {
+  opacity: 1;
+  filter: blur(0) brightness(1);
 }
 
+.interactive-ui { transition: opacity .25s ease; }
+.game-shell.is-opening .interactive-ui { display: none; }
+
+.opening-overlay {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  align-content: end;
+  justify-items: center;
+  padding: clamp(2rem, 8vh, 6rem) 1.5rem;
+  color: #f4f8ff;
+  pointer-events: none;
+}
+.opening-speaker { min-height: 1.5rem; margin: 0 0 .4rem; color: #a9e8ff; font-weight: 700; letter-spacing: .08em; }
+.opening-text { width: min(760px, 100%); margin: 0; text-align: center; font-size: clamp(1.2rem, 3vw, 1.7rem); line-height: 1.8; text-shadow: 0 2px 12px rgba(0, 0, 0, .85); }
+.skip-opening { position: absolute; right: 1.25rem; bottom: 1.1rem; border: 0; padding: .35rem .65rem; color: rgba(223, 247, 255, .7); background: transparent; cursor: pointer; font: inherit; font-size: .8rem; pointer-events: auto; }
+.skip-opening:hover, .skip-opening:focus-visible { color: #dff7ff; text-decoration: underline; }
+.opening-overlay[hidden] { display: none; }
+
+.character-stage {
+  position: absolute;
+  inset: 0 0 21dvh 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* DeepSeek is the static <img> anchor; Claude / ChatGPT / 豆包 are dynamically
+   created <figure class="character-sprite"> siblings (docs/12 §39 Task 2). The
+   base rule sizes either kind; the figure only wraps its <img>. */
 .character-sprite {
+  display: block;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  height: min(69dvh, 680px);
+  max-width: min(72vw, 530px);
+  margin: 0;
+  object-fit: contain;
+  object-position: bottom center;
+  transform: translateX(var(--x, -50%)) scale(var(--scale, 1)) translate(var(--offset-x, 0), var(--offset-y, 0));
+  transform-origin: bottom center;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .5));
+  pointer-events: none;
+}
+.character-stage figure.character-sprite { height: auto; max-width: none; }
+.character-stage figure.character-sprite img {
   display: block;
   height: min(69dvh, 680px);
   max-width: min(72vw, 530px);
   object-fit: contain;
   object-position: bottom center;
-  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .5));
 }
-.character-sprite[data-expression="alert"] {
+
+/* v1 ships one static painting per character (docs/12 §42): data-emotion is a
+   bounded filter palette, not a second art asset. The speaking highlight is a
+   distinct filter so it stays visible over the emotion tint. */
+.character-sprite[data-expression="alert"],
+.character-sprite[data-emotion="alert"] {
   filter: brightness(1.12) saturate(1.25) drop-shadow(0 0 20px rgba(141, 222, 255, .7));
-  transform: scale(1.015);
+}
+.character-sprite[data-emotion="happy"] { filter: brightness(1.1) saturate(1.08); }
+.character-sprite[data-emotion="serious"] { filter: brightness(1.04) saturate(.96) drop-shadow(0 0 16px rgba(141, 170, 255, .55)); }
+.character-sprite[data-emotion="annoyed"],
+.character-sprite[data-emotion="angry"] { filter: brightness(1.06) saturate(1.14) drop-shadow(0 0 16px rgba(255, 140, 120, .45)); }
+.character-sprite[data-emotion="embarrassed"] { filter: brightness(1.08) saturate(1.08) drop-shadow(0 0 16px rgba(255, 170, 195, .45)); }
+.character-sprite[data-emotion="surprised"] { filter: brightness(1.14) saturate(1.2); }
+.character-sprite.is-speaking {
+  filter: brightness(1.09) drop-shadow(0 0 18px rgba(169, 232, 255, .65));
 }
 
 .character-sprite.is-hidden { visibility: hidden; }
@@ -62,6 +132,15 @@ body { margin: 0; min-width: 320px; }
 .character-sprite.is-opening { animation: character-fade-in 900ms ease-out both; }
 .character-sprite.is-fading-out { animation: character-fade-out 420ms ease-in both; }
 .character-sprite.is-shaking { animation: character-shake 460ms ease-in-out; }
+.character-sprite.is-small-jumping { animation: character-small-jump 500ms ease-in-out; }
+.character-sprite.is-sliding-in-left { animation: character-slide-in-left 480ms ease-out both; }
+.character-sprite.is-sliding-in-right { animation: character-slide-in-right 480ms ease-out both; }
+
+.game-shell.is-screen-shaking { animation: game-shell-shake 460ms ease-in-out; }
+.game-shell.is-screen-shaking[data-effect-intensity="high"] { animation-name: game-shell-shake-strong; }
+.game-shell.is-glitching { animation: game-shell-glitch 340ms steps(2, end); }
+.game-shell.is-scene-fading { animation: scene-fade 700ms ease-in-out; }
+.dialogue-panel.is-focused { animation: dialogue-focus 480ms ease-out; border-color: #ffd9a0; }
 
 .scene-hotspots { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
 .scene-hotspot {
@@ -76,6 +155,8 @@ body { margin: 0; min-width: 320px; }
 }
 .scene-hotspot:hover, .scene-hotspot:focus-visible { background: rgba(30, 48, 78, .94); }
 .scene-hotspot.is-completed { border-color: #9fffc5; color: #9fffc5; }
+.scene-hotspot.is-newly-unlocked { animation: hotspot-unlock 700ms ease-out both; }
+.scene-hotspot[hidden] { display: none; }
 .hotspot-note { left: 16%; top: 58%; }
 .hotspot-terminal { right: 10%; top: 37%; }
 .hotspot-claude { left: 8%; top: 30%; }
@@ -98,23 +179,72 @@ body { margin: 0; min-width: 320px; }
 .paper-close { float: right; border: 0; color: #d7effa; background: transparent; cursor: pointer; }
 .rubbing-surface { position: relative; min-height: 260px; overflow: hidden; border-radius: 4px; background: #e7dfce; touch-action: none; cursor: crosshair; box-shadow: inset 0 0 24px rgba(71, 51, 34, .22); }
 .rubbing-canvas { display: block; width: 100%; height: 260px; touch-action: none; }
-.rubbing-hint { position: absolute; right: .75rem; bottom: .5rem; margin: 0; color: rgba(74, 56, 40, .52); font-size: .76rem; pointer-events: none; transition: opacity .3s ease; }
-.rubbing-surface.is-revealed .rubbing-hint { opacity: 0; }
 
 @keyframes character-fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateX(var(--x, -50%)) scale(var(--scale, 1)) translateY(10px); }
+  to { opacity: 1; transform: translateX(var(--x, -50%)) scale(var(--scale, 1)) translateY(0); }
 }
 
 @keyframes character-fade-out {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(10px); }
+  from { opacity: 1; transform: translateX(var(--x, -50%)) scale(var(--scale, 1)) translateY(0); }
+  to { opacity: 0; transform: translateX(var(--x, -50%)) scale(var(--scale, 1)) translateY(10px); }
 }
 
 @keyframes character-shake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-12px); }
-  40%, 80% { transform: translateX(12px); }
+  0%, 100% { transform: translateX(var(--x, -50%)) scale(var(--scale, 1)); }
+  20%, 60% { transform: translateX(calc(var(--x, -50%) - 12px)) scale(var(--scale, 1)); }
+  40%, 80% { transform: translateX(calc(var(--x, -50%) + 12px)) scale(var(--scale, 1)); }
+}
+
+@keyframes character-small-jump {
+  0%, 100% { transform: translateX(var(--x, -50%)) scale(var(--scale, 1)) translateY(0); }
+  50% { transform: translateX(var(--x, -50%)) scale(var(--scale, 1)) translateY(-18px); }
+}
+
+@keyframes character-slide-in-left {
+  from { opacity: 0; transform: translateX(calc(var(--x, -50%) - 90px)) scale(var(--scale, 1)); }
+  to { opacity: 1; transform: translateX(var(--x, -50%)) scale(var(--scale, 1)); }
+}
+
+@keyframes character-slide-in-right {
+  from { opacity: 0; transform: translateX(calc(var(--x, -50%) + 90px)) scale(var(--scale, 1)); }
+  to { opacity: 1; transform: translateX(var(--x, -50%)) scale(var(--scale, 1)); }
+}
+
+@keyframes game-shell-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20%, 60% { transform: translate(-7px, 3px); }
+  40%, 80% { transform: translate(7px, -3px); }
+}
+
+@keyframes game-shell-shake-strong {
+  0%, 100% { transform: translate(0, 0); }
+  20%, 60% { transform: translate(-11px, 5px); }
+  40%, 80% { transform: translate(11px, -5px); }
+}
+
+@keyframes game-shell-glitch {
+  0%, 100% { transform: translate(0); filter: none; }
+  33% { transform: translate(-4px, 2px); filter: hue-rotate(28deg) saturate(1.6); }
+  66% { transform: translate(4px, -2px); filter: hue-rotate(-28deg) saturate(1.6); }
+}
+
+@keyframes scene-fade {
+  0% { opacity: .55; }
+  50% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes dialogue-focus {
+  0% { box-shadow: 0 0 0 rgba(255, 203, 130, 0); }
+  50% { box-shadow: 0 0 34px rgba(255, 203, 130, .55); }
+  100% { box-shadow: 0 0 0 rgba(255, 203, 130, 0); }
+}
+
+@keyframes hotspot-unlock {
+  0% { opacity: 0; transform: translateY(8px); box-shadow: 0 0 0 rgba(135, 214, 244, 0); }
+  60% { opacity: 1; transform: translateY(0); box-shadow: 0 0 24px rgba(135, 214, 244, .7); }
+  100% { box-shadow: 0 0 0 rgba(135, 214, 244, 0); }
 }
 
 .dialogue-panel {
@@ -141,9 +271,6 @@ body { margin: 0; min-width: 320px; }
   margin-bottom: .5rem;
 }
 
-.character-switcher { display: flex; gap: .4rem; }
-
-.character-switch,
 .history-toggle {
   border: 1px solid rgba(211, 234, 255, .55);
   border-radius: 999px;
@@ -155,43 +282,45 @@ body { margin: 0; min-width: 320px; }
   cursor: pointer;
 }
 
-.character-switch:hover,
 .history-toggle:hover { background: rgba(30, 48, 78, .85); }
 
-.character-switch.is-active {
-  color: #06121b;
-  background: #87d6f4;
-  border-color: #87d6f4;
+.history-toggle:first-child { margin-left: auto; }
+
+.game-modal {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(3, 6, 13, .72);
 }
-
-.history-toggle { margin-left: auto; }
-
-.history-panel {
-  width: min(1080px, calc(100% - 2rem));
-  justify-self: center;
-  max-height: 34dvh;
+.game-modal[hidden] { display: none; }
+.modal-window {
+  width: min(760px, 100%);
+  max-height: min(72dvh, 680px);
   overflow: auto;
-  margin-bottom: .5rem;
-  padding: .9rem 1.1rem;
-  border: 1px solid rgba(211, 234, 255, .45);
-  border-radius: 6px;
-  background: rgba(7, 12, 24, .9);
+  padding: .9rem 1.1rem 1.1rem;
+  border: 1px solid rgba(211, 234, 255, .55);
+  border-radius: 8px;
+  box-shadow: 0 20px 65px rgba(0, 0, 0, .55);
+  background: rgba(7, 12, 24, .98);
 }
-
-.evidence-panel {
-  width: min(1080px, calc(100% - 2rem));
-  justify-self: center;
-  max-height: 34dvh;
-  overflow: auto;
-  margin-bottom: .5rem;
-  padding: .9rem 1.1rem;
-  border: 1px solid rgba(159, 255, 197, .5);
-  border-radius: 6px;
-  background: rgba(7, 12, 24, .93);
-}
+.modal-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.modal-header .history-title { margin: 0; }
+.modal-close { border: 1px solid rgba(211, 234, 255, .55); border-radius: 4px; padding: .3rem .6rem; color: #d7effa; background: rgba(30, 48, 78, .85); cursor: pointer; font: inherit; font-size: .85rem; }
+.modal-close:hover, .modal-close:focus-visible { background: rgba(55, 82, 126, .9); }
+.modal-content[hidden] { display: none; }
+.modal-content { max-height: calc(min(72dvh, 680px) - 5rem); overflow: auto; }
+.investigation-detail p { margin: 0; color: #e8f2fb; line-height: 1.75; }
+.investigation-detail .investigation-progress { margin-top: .75rem; color: #a9e8ff; font-size: .9rem; }
+.investigation-confirm { margin-top: 1rem; border: 1px solid rgba(135, 214, 244, .75); border-radius: 4px; padding: .55rem .9rem; color: #06121b; background: #87d6f4; cursor: pointer; font: inherit; font-weight: 700; }
+.investigation-confirm:hover, .investigation-confirm:focus-visible { background: #b4e9fb; }
+.investigation-confirm:disabled { opacity: .6; cursor: wait; }
 .evidence-empty { margin: 0; color: #d7effa; }
 .evidence-list { display: grid; gap: .65rem; margin: 0; padding: 0; list-style: none; }
 .evidence-card { padding: .7rem; border: 1px solid rgba(211, 234, 255, .25); border-radius: 5px; }
+.evidence-card.is-highlighted { border-color: #9fffc5; box-shadow: 0 0 0 1px rgba(159, 255, 197, .35), 0 0 22px rgba(83, 225, 151, .16); }
 .evidence-card h3, .evidence-card p { margin: 0; }
 .evidence-card p { margin-top: .35rem; color: #d7effa; font-size: .9rem; line-height: 1.55; }
 .evidence-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
@@ -275,8 +404,9 @@ body { margin: 0; min-width: 320px; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
 @media (max-width: 560px) {
-  .character-layer { padding-top: 1rem; }
-  .character-sprite { height: min(53dvh, 480px); max-width: 92vw; }
+  .character-stage { inset: 0 0 18dvh 0; }
+  .character-sprite,
+  .character-stage figure.character-sprite img { height: min(53dvh, 480px); max-width: 92vw; }
   .dialogue-panel { padding: .9rem 1rem; margin-bottom: .6rem; }
   .player-input { gap: .5rem; }
   .player-input button { min-width: 4.2rem; }

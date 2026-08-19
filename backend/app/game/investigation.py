@@ -20,6 +20,8 @@ class HotspotDefinition:
     hotspot_id: str
     scene_id: str
     interaction_type: str
+    title: str
+    preview: str
     evidence_on_complete: str | None = None
     evidence_on_inspect: str | None = None
     scene_fact_on_inspect: str | None = None
@@ -28,12 +30,19 @@ class HotspotDefinition:
 
 HOTSPOTS = {
     CH1_NOTE_01: HotspotDefinition(
-        CH1_NOTE_01, "ROOM_A", "paper_rubbing", evidence_on_complete="EV01_NOTE_V03"
+        CH1_NOTE_01,
+        "ROOM_A",
+        "paper_rubbing",
+        "桌上的纸",
+        "桌面上压着一张近乎空白的纸，旁边留着一支削尖的铅笔。纸面似乎有很浅的压痕。",
+        evidence_on_complete="EV01_NOTE_V03",
     ),
     CH1_TERMINAL_MAIN: HotspotDefinition(
         CH1_TERMINAL_MAIN,
         "ROOM_A",
         "inspect",
+        "主终端",
+        "终端仍停留在系统日志界面。屏幕有短暂闪烁，最近一次管理员会话值得进一步检查。",
         evidence_on_inspect="EV02_ADMIN_SESSION_0317",
         scene_fact_on_inspect="TERMINAL_MAIN_INSPECTED",
         requires_character="claude",
@@ -42,6 +51,8 @@ HOTSPOTS = {
         CH1_C02_DOOR,
         "ROOM_A",
         "inspect",
+        "C-02 隔离门",
+        "隔离门已经解除锁定，门侧的本地控制器却处于禁用状态。释放记录或许能说明它是如何打开的。",
         evidence_on_inspect="EV03_C02_RELEASE",
         scene_fact_on_inspect="C02_DOOR_INSPECTED",
         requires_character="claude",
@@ -50,6 +61,8 @@ HOTSPOTS = {
         CH1_CHARACTER_REGISTRY,
         "ROOM_A",
         "inspect",
+        "角色注册表",
+        "注册表列出了当前正在运行的角色实例。DeepSeek 的实例编号可以与 03:17 的记录进行核对。",
         evidence_on_inspect="EV04_CURRENT_DEEPSEEK_REGISTRY",
         scene_fact_on_inspect="CHARACTER_REGISTRY_INSPECTED",
         requires_character="claude",
@@ -112,3 +125,37 @@ class InvestigationRuntime:
             return InvestigationResult(action, hotspot_id, "COMPLETED", evidence_id)
 
         raise ValueError(f"unknown investigation action: {action}")
+
+    @staticmethod
+    def available_hotspots(state: NarrativeState) -> list[dict]:
+        """Return authored, non-secret presentation data for available hotspots.
+
+        During the opening phase the scene is still ``binding_room`` while every
+        authored hotspot lives in ``ROOM_A``. The chapter's first hotspot (the
+        paper) is available from the start so the player's first physical
+        interaction can begin the chapter (docs/12 §41: 自由对话 → 调查纸条 EV01);
+        everything else waits until the chapter has begun.
+        """
+        in_opening = state.chapter1.phase == "opening"
+
+        def visible(hotspot: HotspotDefinition) -> bool:
+            if in_opening:
+                return hotspot.hotspot_id == CH1_NOTE_01
+            return (
+                hotspot.scene_id == state.current_scene
+                and (
+                    hotspot.requires_character is None
+                    or hotspot.requires_character in state.chapter1.available_characters
+                )
+            )
+
+        return [
+            {
+                "hotspot_id": hotspot.hotspot_id,
+                "title": hotspot.title,
+                "preview": hotspot.preview,
+                "interaction_type": hotspot.interaction_type,
+            }
+            for hotspot in HOTSPOTS.values()
+            if visible(hotspot)
+        ]

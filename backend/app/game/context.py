@@ -47,7 +47,10 @@ def _narrative_context_for(state: NarrativeState | None, *, character_id: str | 
     if "claude_has_appeared" in state.narrative_flags:
         lines.append("Claude已经出现在这个房间里了。")
     if character_id == "claude" and "claude_recovery_disclosure_open" in state.narrative_flags:
-        lines.append("你现在可以承认自己访问过 Recovery Interface，但不可展开完整计划。")
+        lines.append(
+            "UNLOCK_CLAUDE_RECOVERY_DISCLOSURE："
+            "你现在可以承认自己访问过 Recovery Interface，但不可展开完整计划。"
+        )
     return "\n".join(lines)
 
 

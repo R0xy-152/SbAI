@@ -26,14 +26,16 @@ from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.inquiry import Chapter1InquiryInterpreter
-from app.narrative.poc import build_poc_events
 from app.persistence.repository import JsonSessionRepository
 from app.providers.anthropic import AnthropicProvider
 from app.providers.base import LLMProvider, ProviderConfigError
 from app.providers.deepseek import DeepSeekProvider
 from app.providers.mock import MockProvider
+from app.script.chapter1 import build_script_registry
 from app.script.fixture import build_script_nodes
+from app.script.runtime import ScriptRuntime
 from app.script.service import ScriptService
+from app.game.speaker_selector import SpeakerSelector
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -108,7 +110,10 @@ def create_app() -> FastAPI:
         runtimes,
         interpreter=NarrativeInterpreter(deepseek_provider),
         inquiry_interpreter=Chapter1InquiryInterpreter(deepseek_provider),
-        events=build_poc_events(),
+        speaker_selector=SpeakerSelector(deepseek_provider),
+        # docs/12 §32: POC events remain available to their isolated runtime
+        # tests, but must never be eligible in a formal Chapter One session.
+        events=(),
         repository=JsonSessionRepository(data_dir),
         # Presence Gate (docs/03 §13.6): Claude is only interactable after the
         # Narrative Event commits `claude_has_appeared`. DeepSeek is ungated.
@@ -121,6 +126,10 @@ def create_app() -> FastAPI:
         # active opening (docs/01 §4) and per-event beat lines. Fixture ≠
         # Production (docs/06 §10); the wording is a placeholder.
         script=ScriptService(build_script_nodes()),
+        # Script Runtime (docs/12 §32-33): the fixed Chapter One beats (03:17
+        # incident, GPT/豆包 arrivals, final reveal) as Script Sequences. The
+        # runtime only proposes; the Narrative Runtime above stays authoritative.
+        script_runtime=ScriptRuntime(build_script_registry()),
     )
     app.include_router(chat_router)
     app.include_router(game_router)
