@@ -4,7 +4,7 @@
   缓存、30fps 帧率限制与页面隐藏暂停。
 -->
 <template>
-  <div v-if="starsEnabled" class="stars-layer" ref="starsLayerRef">
+  <div v-if="starsEnabled" class="stars-layer" ref="starsLayerEl">
     <canvas id="stars-canvas" ref="canvasRef"></canvas>
   </div>
 </template>
@@ -14,11 +14,12 @@ import { nextTick, onMounted, onUnmounted, ref, shallowRef, watch, computed } fr
 
 const props = defineProps<{
   starsEnabled: boolean
-  starsLayerRef: HTMLElement | null
   starsFps?: number
 }>()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+// docs/15 §4.3：模板 ref 改为本地变量（LingChat 原版同名 prop 与模板 ref 冲突，
+// 且未被任何逻辑消费；视差位移由父层容器承担）。
 
 interface Star {
   x: number

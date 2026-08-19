@@ -1,23 +1,27 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { useSavesStore } from '../stores/saves'
 import { useUiStore } from '../stores/ui'
+import { useSettingsStore } from '../stores/settings'
+import { StartPage, StartLogo, StartItem, StartLine, StartList } from '../components/title'
+import MeteorAnimation from '../components/effects/MeteorAnimation.vue'
+import StarAnimation from '../components/effects/StarAnimation.vue'
+import { useParallaxAnimation } from '../composables/useParallaxAnimation'
 
-// docs/13 §12 Title Screen：开始游戏 / 继续游戏 / 读取存档 / 设置。
-// New Game 语义（§12.2）：显式新建会话，直接落 Opening；已有 localStorage
-// session_id 时清掉再新建（不删除旧存档，docs/13 §14.1）。
-// Continue（§12.3）：加载「该 player 最近更新的有效存档」；无存档时禁用。
-// Task 7 接入后端 Save 后，Continue 加载 mostRecent（docs/13 §12.3 优先级 =
-// 更新时间，不强制 Auto/Manual），结果暂存 game.pendingLoad 由 GameView
-// 挂载时消费（docs/13 §20.3）。
+// docs/15 §4：基于 LingChat MainMenu 视觉层与动画层重建 TitleView ——
+// 全亮背景（无遮罩）+ 流星/星星粒子 + 角色立绘 + 鼠标视差 + 电影感菜单。
+// 行为语义保持不变（docs/13 §12）：New Game 新建会话；Continue 加载最近存档
+//（无存档禁用）；Load/Settings 走路由。按钮保留 .title-btn（E2E 兼容）。
 const router = useRouter()
 const game = useGameStore()
 const saves = useSavesStore()
 const ui = useUiStore()
+const settings = useSettingsStore()
 
-const BG = '/backgroud/background_title.png'
+const DEEPSEEK_CHAR = '/char/deepseek/pic/deepseek_main.png'
+
 const newGameBusy = ref(false)
 const newGameError = ref<string | null>(null)
 const continueBusy = ref(false)
@@ -66,69 +70,141 @@ async function refreshSaves() {
 }
 
 onMounted(refreshSaves)
+
+// ── 视差层（docs/15 §4.2） ──
+const bgRef = ref<HTMLElement | null>(null)
+const charRef = ref<HTMLElement | null>(null)
+const starsLayerRef = ref<HTMLElement | null>(null)
+
+const prefersReducedMotion =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+const { handleMouseMove, handleMouseLeave } = useParallaxAnimation({
+  charRef,
+  bgRef,
+  starsLayerRef,
+})
+
+const onMouseMove = (e: MouseEvent) => {
+  if (!prefersReducedMotion) handleMouseMove(e)
+}
+
+const onMouseLeave = () => {
+  if (!prefersReducedMotion) handleMouseLeave()
+}
+
+const backendLabel = computed(() =>
+  ui.backendOk === true ? '后端已连接' : ui.backendOk === false ? '后端未连接' : '连接后端中…',
+)
 </script>
 
 <template>
-  <div class="relative flex h-full w-full flex-col items-center justify-center overflow-hidden bg-[#10131d] text-[#f4f8ff]">
-    <!-- 背景（docs/13 §12.1：Background，与游戏内同一张） -->
+  <div class="relative h-full w-full overflow-hidden bg-[#04070f] text-[#f4f8ff]">
+    <!-- 1. 背景层（docs/15 §4.1：全亮无遮罩，120% 宽给视差留余量） -->
+    <div ref="bgRef" class="title-bg-layer"></div>
+
+    <!-- 2. 流星层 -->
+    <MeteorAnimation :meteors-enabled="settings.mainMenuMeteorsEnabled" :meteor-fps="30" />
+
+    <!-- 3. 星星层（容器承载视差位移） -->
+    <div ref="starsLayerRef" class="pointer-events-none absolute inset-0 z-[2]">
+      <StarAnimation :stars-enabled="settings.mainMenuStarsEnabled" :stars-fps="30" />
+    </div>
+
+    <!-- 4. 角色立绘层（本项目自有素材，docs/15 §2）。src 用绑定避免 Vite 把
+         公共路径当静态资源导入（vitest 下会解析失败）。 -->
     <img
-      :src="BG"
-      alt=""
-      class="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-60"
+      ref="charRef"
+      class="title-character"
+      :src="DEEPSEEK_CHAR"
+      alt="DeepSeek"
     />
-    <div class="pointer-events-none absolute inset-0 bg-[#070c18]/55"></div>
 
-    <!-- 临时文字 Logo（docs/13 Task 5 第一轮：无需先生成最终 KV） -->
-    <h1 class="relative z-10 mb-10 text-center text-4xl font-bold tracking-widest text-[#dff7ff] drop-shadow-lg">
-      完蛋，我被AI娘包围了
-    </h1>
+    <!-- 5. 菜单层（mousemove/mouseleave 驱动视差） -->
+    <StartPage @mousemove="onMouseMove" @mouseleave="onMouseLeave">
+      <div class="flex flex-col gap-4">
+        <Transition name="slide-left" appear>
+          <StartList responsive>
+            <StartLine>
+              <StartItem :disabled="newGameBusy" @click="onNewGame">{{ newGameBusy ? '创建中…' : '开始游戏' }}</StartItem>
+            </StartLine>
+            <StartLine>
+              <StartItem
+                :disabled="!saves.hasAnySave || newGameBusy || continueBusy"
+                :title="saves.hasAnySave ? '' : '暂无可继续的存档'"
+                @click="onContinue"
+              >
+                {{ continueBusy ? '读取中…' : '继续游戏' }}
+              </StartItem>
+            </StartLine>
+            <StartLine>
+              <StartItem :disabled="newGameBusy" @click="router.push('/load')">读取存档</StartItem>
+            </StartLine>
+            <StartLine>
+              <StartItem :disabled="newGameBusy" @click="router.push('/settings')">设置</StartItem>
+            </StartLine>
+          </StartList>
+        </Transition>
 
-    <!-- 主菜单（docs/13 §12.1：Menu） -->
-    <nav class="relative z-10 flex flex-col items-center gap-3">
-      <button class="title-btn" :disabled="newGameBusy" @click="onNewGame">开始游戏</button>
-      <button
-        class="title-btn"
-        :disabled="!saves.hasAnySave || newGameBusy || continueBusy"
-        :title="saves.hasAnySave ? '' : '暂无可继续的存档'"
-        @click="onContinue"
-      >
-        {{ continueBusy ? '读取中…' : '继续游戏' }}
-      </button>
-      <button class="title-btn" :disabled="newGameBusy" @click="router.push('/load')">读取存档</button>
-      <button class="title-btn" :disabled="newGameBusy" @click="router.push('/settings')">设置</button>
-    </nav>
+        <p v-if="newGameError" class="max-w-sm text-sm text-red-300 drop-shadow">{{ newGameError }}</p>
+        <p v-else-if="continueError" class="max-w-sm text-sm text-red-300 drop-shadow">{{ continueError }}</p>
+      </div>
 
-    <p v-if="newGameError" class="relative z-10 mt-5 max-w-sm text-center text-sm text-red-300">{{ newGameError }}</p>
-    <p v-else-if="continueError" class="relative z-10 mt-5 max-w-sm text-center text-sm text-red-300">{{ continueError }}</p>
-    <p v-else class="relative z-10 mt-5 text-xs text-[#a9e8ff]/70">
-      {{ ui.backendOk === true ? '后端已连接' : ui.backendOk === false ? '后端未连接' : '连接后端中…' }}
-    </p>
+      <StartLogo />
+
+      <!-- 后端连接状态（底部小字 + 呼吸灯点，docs/15 §4.4） -->
+      <p class="absolute bottom-[3.2vw] right-[4vw] z-10 flex items-center gap-2 text-xs tracking-wider text-[#a9e8ff]/75 drop-shadow">
+        <span
+          class="inline-block h-1.5 w-1.5 rounded-full"
+          :class="
+            ui.backendOk === true
+              ? 'bg-emerald-300 shadow-[0_0_6px_rgba(110,231,183,0.9)]'
+              : ui.backendOk === false
+                ? 'bg-red-300 shadow-[0_0_6px_rgba(248,113,113,0.9)]'
+                : 'animate-pulse bg-amber-200 shadow-[0_0_6px_rgba(252,211,77,0.9)]'
+          "
+        ></span>
+        {{ backendLabel }}
+      </p>
+    </StartPage>
   </div>
 </template>
 
 <style scoped>
-/* 按钮：与游戏内 UI 一致（GameDialog / 系统菜单同款深蓝边框 + 悬停高亮）。
-   固定宽度避免 resize / 长文案换行导致溢出（docs/13 Task 5 验收：resize 不溢出）。 */
-.title-btn {
-  width: 13rem;
-  max-width: 80vw;
-  padding: 0.7rem 1rem;
-  border: 1px solid rgba(211, 234, 255, 0.55);
-  border-radius: 0.5rem;
-  background: rgba(7, 12, 24, 0.85);
-  color: #d7effa;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+.title-bg-layer {
+  position: absolute;
+  top: 0;
+  left: -10%;
+  width: 120%;
+  height: 100%;
+  background-image: url('/backgroud/background_title.png');
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+  will-change: transform;
 }
-.title-btn:hover:not(:disabled) {
-  background: rgba(30, 48, 78, 0.9);
+
+.title-character {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 100%;
+  max-height: 100%;
+  z-index: 3;
+  pointer-events: none;
+  will-change: transform;
 }
-.title-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+
+/* 菜单入场（docs/15 §4.4） */
+.slide-left-enter-active {
+  transition: all 0.4s cubic-bezier(0.7, 0, 0.2, 1);
+}
+
+.slide-left-enter-from {
+  transform: translateX(-120%);
+  opacity: 0;
 }
 </style>

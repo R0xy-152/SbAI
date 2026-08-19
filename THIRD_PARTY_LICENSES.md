@@ -34,6 +34,12 @@
 | `src/components/game/standard/particles/Snow.vue`（含 `config/snow.ts`） | `frontend-vue/src/components/game/standard/particles/Snow.vue` | 配置内联合并；其余原样适配（docs/15 §6.3） |
 | `src/components/game/standard/particles/hooks/useFallingParticle.ts`（含 `types/falling.ts`） | `frontend-vue/src/components/game/standard/particles/useFallingParticle.ts` | 类型内联合并；createParticle 回调简化为单参（docs/15 §6.3） |
 | `src/components/game/standard/particles/Fireworks.vue` | `frontend-vue/src/components/game/standard/particles/Fireworks.vue` | **自研简化实现**：仅概念参考「火箭升空 → 爆炸粒子 + 拖尾」演出，不复制源码（LingChat 版依赖指针交互/音频，本项目只需氛围层，docs/15 §3） |
+| `src/components/game/standard/animations/ParallaxAnimation.ts` | `frontend-vue/src/composables/useParallaxAnimation.ts` | 原样适配（无 Tauri/外部依赖）；保留阻尼插值、节流、页面隐藏暂停、will-change 优化（docs/15 §4.2） |
+| `src/components/views/menu/base/StartPage.vue` | `frontend-vue/src/components/title/StartPage.vue` | 边框内缩 6vw→4vw；窄屏居中/宽屏靠左（docs/15 §4） |
+| `src/components/views/menu/base/StartList.vue` | `frontend-vue/src/components/title/StartList.vue` | 原样适配（>2:1 两列 + isUltraWide provide，docs/15 §4.6） |
+| `src/components/views/menu/base/StartLine.vue` | `frontend-vue/src/components/title/StartLine.vue` | 原样适配（docs/15 §4） |
+| `src/components/views/menu/base/StartItem.vue` | `frontend-vue/src/components/title/StartItem.vue` | 视觉样式收敛到全局 .title-btn/.title-btn--ultra（style.css）；保留 class="title-btn" 兼容 E2E 选择器（docs/15 §4.4） |
+| `src/components/views/menu/base/StartLogo.vue` | `frontend-vue/src/components/title/StartLogo.vue` | **未复用素材与代码**：LingChat 版为图片 Logo（素材不迁移，docs/13 §4.4），本项目自制 CSS 渐变+辉光文字 Logo（docs/15 §4.5） |
 
 > 参考（未复制，仅用于理解行为）：`src/controllers/emotion/config.ts`、`src/stores/modules/ui/ui.ts`、`src/stores/modules/game/state.ts`、`src/components/base/index.ts`。它们定义了「emotion → animation/bubble」「UI Store 视口字段」「角色结构」的契约，本项目在 `frontend-vue/src/adapters/lingchat-compat.ts` 中实现等价的最小 Mock（docs/13 §11.2：替换 LingChat emotion vocab / useGameStore / useUIStore 数据来源）。
 
