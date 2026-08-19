@@ -42,10 +42,12 @@ const emit = defineEmits<{ (e: 'select', option: GameOption): void }>()
         {{ opt.label }}
       </button>
     </div>
+    <!-- 路由提示与操作反馈可同时可见（feedback 不得被 routeLabel 遮蔽，
+         docs/14 T4 E2E 复现：私审成功文案被路由行吞掉） -->
     <div v-if="routeLabel" class="px-4 text-xs text-[#a9e8ff]">
       {{ routeLabel }}
     </div>
-    <div v-else-if="feedback" class="max-w-[560px] px-4 text-xs text-[#a9e8ff]/80">
+    <div v-if="feedback" class="max-w-[560px] px-4 text-xs text-[#a9e8ff]/80">
       {{ feedback }}
     </div>
   </div>
