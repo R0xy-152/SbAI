@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.chat import router as chat_router
 from app.api.game import router as game_router
+from app.api.saves import router as saves_router
 from app.characters.base import CharacterRuntime
 from app.characters.claude import ClaudeRuntime
 from app.characters.chatgpt import ChatGPTRuntime
@@ -31,6 +32,7 @@ from app.providers.anthropic import AnthropicProvider
 from app.providers.base import LLMProvider, ProviderConfigError
 from app.providers.deepseek import DeepSeekProvider
 from app.providers.mock import MockProvider
+from app.save import JsonSaveRepository, PostgresSaveRepository, SaveSnapshotService
 from app.script.chapter1 import build_script_registry
 from app.script.fixture import build_script_nodes
 from app.script.runtime import ScriptRuntime
@@ -131,8 +133,24 @@ def create_app() -> FastAPI:
         # runtime only proposes; the Narrative Runtime above stays authoritative.
         script_runtime=ScriptRuntime(build_script_registry()),
     )
+    # Save Snapshot layer (docs/13 §14-21, Task 6): PostgreSQL is the target
+    # backend (docs/13 §16); GAL_SAVE_BACKEND=postgres opts in with a DSN. The
+    # default JSON file repository is the TV-14-style local fixture so the app
+    # runs without a database (docs/06 §10: fixture ≠ production).
+    save_backend = os.environ.get("GAL_SAVE_BACKEND", "json")
+    if save_backend == "postgres":
+        save_repository = PostgresSaveRepository(
+            os.environ.get(
+                "GAL_POSTGRES_DSN",
+                "postgresql://gal:gal@localhost:5432/gal",
+            )
+        )
+    else:
+        save_repository = JsonSaveRepository(REPO_ROOT / "backend" / "data" / "saves")
+    app.state.save_service = SaveSnapshotService(save_repository)
     app.include_router(chat_router)
     app.include_router(game_router)
+    app.include_router(saves_router)
 
     # Liveness probe consumed by the Vue frontend (docs/13 Task 1: Vue 可请求
     # FastAPI health endpoint). Does not touch any game runtime state.

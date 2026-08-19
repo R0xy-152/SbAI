@@ -13,6 +13,7 @@ fresh process, so a refresh continues the same game.
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass
 
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
@@ -1066,6 +1067,37 @@ class GameOrchestrator:
             ),
             character_states=self._character_state.snapshot(session_id),
         )
+
+    def import_snapshot(self, snapshot: dict) -> str:
+        """docs/13 §19.1: create a NEW Active Session from a saved snapshot.
+
+        The saved session is never edited in place: a fresh id is minted, the
+        snapshot is restored into it, and it is persisted so a refresh after
+        Load continues the restored game. Post-restore integrity validation
+        (docs/13 §19.3) is the SaveSnapshotService's responsibility.
+        """
+        from app.persistence.repository import _session_from_dict
+
+        persisted = _session_from_dict(snapshot)
+        new_session_id = uuid.uuid4().hex
+        persisted.session_id = new_session_id
+        if self._repository is not None:
+            self._repository.save(persisted)
+        self._restore_session(persisted)
+        return new_session_id
+
+    def gameview_state(self, session_id: str) -> dict:
+        """docs/13 §20.3: the initial GameViewState a Load returns the Frontend.
+
+        The same authoritative view the Frontend fetches from /api/game/state
+        (presentation_state: scene / present characters / input mode), plus the
+        message history so the last displayed line can be re-rendered.
+        """
+        state = self._load_known_state(session_id)
+        return {
+            "state": self._investigation_state_view(state),
+            "history": self.get_history(session_id),
+        }
 
     def _public_audience(self, session_id: str, character_id: str) -> set[str]:
         """Return the authoritative audience for one public player turn."""

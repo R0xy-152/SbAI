@@ -1,0 +1,12 @@
+# backend Docker build context is the repo root (backend/Dockerfile).
+# Keep the image lean and never ship secrets / local runtime data.
+backend/.venv/
+backend/data/
+backend/.pytest_cache/
+**/__pycache__/
+*.pyc
+.git/
+docs/
+validation-results/
+frontend/
+frontend-vue/
