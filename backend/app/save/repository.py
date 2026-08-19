@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import uuid
 from abc import ABC, abstractmethod
@@ -120,6 +121,24 @@ def new_save_id() -> str:
     return uuid.uuid4().hex
 
 
+# T2review P1-2：player_id / save_id 是后端命名空间键，不是自由文件路径。
+_PLAYER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# save_id 同样只允许不透明字符集：不含路径分隔符/点号即不可能穿越。
+_SAVE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _check_player_id(player_id: str) -> str:
+    if not isinstance(player_id, str) or not _PLAYER_ID_RE.fullmatch(player_id):
+        raise ValueError("invalid player_id")
+    return player_id
+
+
+def _check_save_id(save_id: str) -> str:
+    if not isinstance(save_id, str) or not _SAVE_ID_RE.fullmatch(save_id):
+        raise ValueError("invalid save_id")
+    return save_id
+
+
 class JsonSaveRepository(SaveRepository):
     """Durable JSON-file fixture behind SaveRepository (docs/13 Task 6 local
     path, mirroring JsonSessionRepository; PostgreSQL is the target backend).
@@ -133,10 +152,15 @@ class JsonSaveRepository(SaveRepository):
         self._data_dir = Path(data_dir)
 
     def _player_dir(self, player_id: str) -> Path:
-        return self._data_dir / player_id
+        return self._data_dir / _check_player_id(player_id)
 
     def _path(self, player_id: str, save_id: str) -> Path:
-        return self._player_dir(player_id) / f"{save_id}.json"
+        path = self._player_dir(player_id) / f"{_check_save_id(save_id)}.json"
+        # 二次防护（T2review P1-2）：resolve 后目标必须仍在存档根内
+        root = self._data_dir.resolve()
+        if root not in path.resolve().parents:
+            raise ValueError("save path escapes the save root")
+        return path
 
     def upsert(self, save: GameSave) -> None:
         self._data_dir.mkdir(parents=True, exist_ok=True)
@@ -156,7 +180,10 @@ class JsonSaveRepository(SaveRepository):
         for player_dir in self._data_dir.iterdir():
             if not player_dir.is_dir():
                 continue
-            path = player_dir / f"{save_id}.json"
+            try:
+                path = self._path(player_dir.name, save_id)
+            except ValueError:
+                continue
             if path.exists():
                 return self._read(path)
         return None

@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from app.game.orchestrator import GameOrchestrator
 from app.persistence.repository import _mood_to_dict, _session_to_dict
 from app.save.checkpoint import (
+    CHECKPOINT_IDS,
     mark_captured,
     pending_checkpoints,
     reached_checkpoints,
@@ -118,17 +119,41 @@ class SaveSnapshotService:
     def save_auto(
         self, orchestrator: GameOrchestrator, player_id: str, session_id: str
     ) -> GameSave:
-        """Overwrite the single AUTO slot (docs/13 §21). The captured
-        checkpoints are the ones the state reaches that the session has not
-        already auto-saved (Task 8 side effect, docs/13 §21.2)."""
-        # docs/13 §21.3: mark the reached checkpoints BEFORE the capture, so the
-        # AUTO snapshot itself carries the just-captured flags. Never
-        # save-then-update: a snapshot taken before marking would let a restored
-        # session re-capture the same checkpoint (§21.2 once-per-session).
-        self._mark_checkpoints(orchestrator, session_id)
-        return self._save_slot(
-            orchestrator, player_id, session_id, AUTO, None, title=None
+        """Overwrite the single AUTO slot (docs/13 §21)。
+
+        T2review P1-5 / P1-6 修复：
+        - 仅当存在新 checkpoint 时允许写 AUTO——普通回合不得覆盖唯一
+          合法 checkpoint（Continue 的确定性保证）；
+        - checkpoint 标记在内存中先置（AUTO 快照携带刚捕获的标志，
+          docs/13 §21.3 不变），但只在 AUTO 写入成功后持久化；写入失败回滚
+          内存标志，checkpoint 保持 pending，后续回合可重试（不再被吞掉）。"""
+        state = orchestrator._load_known_state(session_id)
+        opened = self._session_opened(orchestrator, session_id)
+        if not pending_checkpoints(state, opened=opened):
+            raise ValueError(
+                "no new checkpoint: the AUTO slot only updates on checkpoints"
+            )
+        # docs/13 §21.3：先标记并把标志持久化进会话快照，AUTO 捕获的快照才能
+        # 携带刚捕获的标志（capture 内部会经 _load_known_state 重新加载）。
+        mark_captured(state, opened=opened)
+        orchestrator._repository.save(orchestrator._snapshot(session_id))
+        try:
+            save = self._save_slot(
+                orchestrator, player_id, session_id, AUTO, None, title=None
+            )
+        except Exception:
+            # T2review P1-5：写入失败回滚标志并再次持久化——checkpoint 保持
+            # pending，后续回合可重试（不再被永久吞掉）。
+            live = orchestrator._load_known_state(session_id)
+            live.narrative_flags.difference_update(CHECKPOINT_IDS)
+            orchestrator._repository.save(orchestrator._snapshot(session_id))
+            raise
+        logger.info(
+            "auto save captured checkpoints %s (session %s)",
+            sorted(reached_checkpoints(state, opened=True)),
+            session_id,
         )
+        return save
 
     def _save_slot(
         self,
@@ -166,25 +191,6 @@ class SaveSnapshotService:
         was recorded). The opening is a scripted beat that lands before any
         narrative flag change, so completion is derived from history."""
         return bool(orchestrator.get_history(session_id))
-
-    def _mark_checkpoints(
-        self, orchestrator: GameOrchestrator, session_id: str
-    ) -> None:
-        """Persist the captured checkpoints into the session snapshot so they
-        are never re-captured on a later commit (docs/13 §21.2)."""
-        state = orchestrator._load_known_state(session_id)
-        if not pending_checkpoints(state, opened=self._session_opened(orchestrator, session_id)):
-            return
-        mark_captured(state, opened=self._session_opened(orchestrator, session_id))
-        # The state mutation must be re-persisted (as narrative flags); the
-        # pending set only differs from reached when a checkpoint was already
-        # captured.
-        orchestrator._repository.save(orchestrator._snapshot(session_id))
-        logger.info(
-            "auto save captured checkpoints %s (session %s)",
-            sorted(reached_checkpoints(state, opened=True)),
-            session_id,
-        )
 
     # ── Trigger helper (docs/13 §21.3 / Task 8) ────────────────────────────
 

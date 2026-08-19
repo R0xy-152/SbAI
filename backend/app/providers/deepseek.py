@@ -81,7 +81,14 @@ class DeepSeekProvider(LLMProvider):
         except httpx.HTTPError as exc:
             raise ProviderError(f"DeepSeek request failed: {exc}") from exc
 
-        data = response.json()
+        # T2review P1-14：非 JSON / 非对象响应必须落入统一 ProviderError
+        # 边界，而不是逃逸成 400/500。
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise ProviderError(f"DeepSeek returned a non-JSON body: {exc}") from exc
+        if not isinstance(data, dict):
+            raise ProviderError("DeepSeek response is not a JSON object")
         # Context caching observability (docs 上下文硬盘缓存): surface how much
         # of the input prefix hit the cache vs. was recomputed, so the hit rate
         # of the fixed system prompt can be measured in the backend logs.

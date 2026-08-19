@@ -9,6 +9,8 @@ Private Interview progress, Scene / Presence / Emotion, and the script cursor.
 
 from __future__ import annotations
 
+import pytest
+
 from app.characters.base import CharacterMood, CharacterResponse, MemoryProposal
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
@@ -255,6 +257,9 @@ def test_manual_save_overwrite_and_auto_slot(tmp_path):
     session_id = _acquire_note(orchestrator)
 
     m1 = service.save_manual(orchestrator, "p1", session_id, 1, title="第一次")
+    # P1-6 修复后：AUTO 只在新 checkpoint 时更新——先完成一个回合（Opening
+    # Complete checkpoint）再写 AUTO。
+    orchestrator.handle_turn(session_id, "你好", player_id="p1")
     auto = service.save_auto(orchestrator, "p1", session_id)
     listing = service.list_saves("p1")
     assert listing["manual"][0] is not None and listing["manual"][0]["id"] == m1.id
@@ -522,6 +527,43 @@ def test_inf01_and_inf03_auto_save_after_deduction(tmp_path):
 
 
 # ── §26.3: investigation gates after load ─────────────────────────────────
+
+# ── T2review P1-5 / P1-6：AUTO checkpoint 门禁与写失败回滚 ─────────────────
+
+
+def test_auto_save_rejects_without_pending_checkpoint(tmp_path):
+    """普通状态（无新 checkpoint）写 AUTO 被拒，不覆盖唯一合法 checkpoint。"""
+    orchestrator = _orchestrator(repository=JsonSessionRepository(tmp_path / "sess"))
+    service, _ = _service(tmp_path)
+    session_id = _acquire_note(orchestrator)
+    with pytest.raises(ValueError, match="no new checkpoint"):
+        service.save_auto(orchestrator, "p1", session_id)
+    assert service.list_saves("p1")["auto"] is None
+
+
+def test_auto_save_write_failure_keeps_checkpoint_pending(tmp_path, monkeypatch):
+    """写失败：checkpoint 标记回滚、保持 pending，后续重试成功（P1-5）。"""
+    orchestrator = _orchestrator(repository=JsonSessionRepository(tmp_path / "sess"))
+    service, repo = _service(tmp_path)
+    session_id = _acquire_note(orchestrator)
+    orchestrator.handle_turn(session_id, "你好", player_id="p1")
+
+    def _boom(_save):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(repo, "upsert", _boom)
+    with pytest.raises(OSError):
+        service.save_auto(orchestrator, "p1", session_id)
+    state = orchestrator._state.state_for(session_id)
+    assert "AS_CH1_OPENING_COMPLETE" not in state.narrative_flags  # 标记已回滚
+
+    monkeypatch.undo()
+    save = service.save_auto(orchestrator, "p1", session_id)
+    assert save.slot_type == "AUTO"
+    assert "AS_CH1_OPENING_COMPLETE" in orchestrator._state.state_for(
+        session_id
+    ).narrative_flags
+
 
 def test_investigation_gates_behave_identically_after_load(tmp_path):
     """docs/13 §26.3: 推进到 EV01 → 03:17 确定性 Gate（轮数兜底 counter=2，

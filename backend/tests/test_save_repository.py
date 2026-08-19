@@ -144,3 +144,21 @@ def test_json_upsert_is_atomic_on_replace_failure(json_repository, monkeypatch):
         if p.name.endswith(".json")
     ]
     assert names == ["m1.json"]
+
+# ── T2review P1-2：player_id / save_id 路径穿越防护 ────────────────────────
+
+
+def test_player_id_traversal_is_rejected(tmp_path):
+    repo = JsonSaveRepository(tmp_path / "saves")
+    with pytest.raises(ValueError, match="invalid player_id"):
+        repo._player_dir("../escaped")
+    with pytest.raises(ValueError, match="invalid player_id"):
+        repo.list_by_player("../escaped")
+
+
+def test_save_id_traversal_never_reads_outside_root(tmp_path):
+    repo = JsonSaveRepository(tmp_path / "saves")
+    assert repo.get_by_id("../../etc/passwd") is None
+    with pytest.raises(ValueError, match="invalid save_id"):
+        repo._path("p1", "../escaped")
+

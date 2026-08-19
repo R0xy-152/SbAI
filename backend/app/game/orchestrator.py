@@ -13,6 +13,7 @@ fresh process, so a refresh continues the same game.
 from __future__ import annotations
 
 import logging
+import threading
 import uuid
 from dataclasses import dataclass
 
@@ -183,8 +184,30 @@ class GameOrchestrator:
         # pre-Task-8 behaviour for existing direct-construction tests.
         self._save_service = save_service
         self._player_by_session: dict[str, str] = {}
+        # T2review P1-3：per-session 锁——Turn 的 Provider 读取、状态提交、
+        # 消息写入与持久化必须串行化，不允许交错。
+        self._turn_locks: dict[str | None, threading.Lock] = {}
+        self._turn_locks_guard = threading.Lock()
 
     def handle_turn(
+        self,
+        session_id: str | None,
+        message: str,
+        character_id: str | None = None,
+        *,
+        player_id: str | None = None,
+    ) -> TurnResult:
+        """One complete turn under the session's atomic boundary (P1-3)."""
+        with self._session_lock(session_id):
+            return self._handle_turn(
+                session_id, message, character_id, player_id=player_id
+            )
+
+    def _session_lock(self, session_id: str | None) -> threading.Lock:
+        with self._turn_locks_guard:
+            return self._turn_locks.setdefault(session_id, threading.Lock())
+
+    def _handle_turn(
         self,
         session_id: str | None,
         message: str,
@@ -327,20 +350,39 @@ class GameOrchestrator:
                 approved = False
                 response = runtime.safe_fallback()
             else:
+                live_state = None
                 for definition in definitions:
-                    if definition is not None:
-                        self._state.state_for(session.session_id).chapter1.claim_store.setdefault(
-                            definition.claim_id,
-                            {
-                                "character_id": definition.character_id,
-                                "fact_refs": list(definition.fact_refs),
-                                "statement_type": "public",
-                            },
+                    if definition is None:
+                        continue
+                    # 惰性取 state：无证词的普通回合不得创建 NarrativeState
+                    #（保持既有「无叙事即无状态」不变式）
+                    if live_state is None:
+                        live_state = self._state.state_for(session.session_id)
+                    # T2review P1-1：disclosure gate——CL_CLAUDE_05（Recovery
+                    # 访问披露）只有在剧情开启 claude_recovery_disclosure_open
+                    # 后才能成立；不可信 LLM 不得提前解锁 EV07。被拒的 claim
+                    # 只剔除、不否决整轮回复。
+                    if (
+                        definition.claim_id == "CL_CLAUDE_05"
+                        and "claude_recovery_disclosure_open"
+                        not in live_state.narrative_flags
+                    ):
+                        logger.warning(
+                            "claim %s blocked by disclosure gate", definition.claim_id
                         )
-                        if definition.claim_id == "CL_CLAUDE_05":
-                            self._state.state_for(session.session_id).chapter1.acquired_evidence.add(
-                                "EV07_CLAUDE_RECOVERY_ACCESS"
-                            )
+                        continue
+                    live_state.chapter1.claim_store.setdefault(
+                        definition.claim_id,
+                        {
+                            "character_id": definition.character_id,
+                            "fact_refs": list(definition.fact_refs),
+                            "statement_type": "public",
+                        },
+                    )
+                    if definition.claim_id == "CL_CLAUDE_05":
+                        live_state.chapter1.acquired_evidence.add(
+                            "EV07_CLAUDE_RECOVERY_ACCESS"
+                        )
                 current_state = self._state.get(session.session_id)
                 if current_state is not None:
                     chapter = current_state.chapter1
@@ -448,6 +490,9 @@ class GameOrchestrator:
                 "role": "character",
                 "character_id": response.character_id,
                 "content": response.dialogue,
+                # T2review P2-1：公开台词同样记录听众——同场其他角色能听到
+                # 公开回复（玩家消息已带 heard_by，角色消息此前缺失）。
+                "heard_by": sorted(audience),
             },
         )
         for line in incident_sequence + (script_plan.lines if script_plan is not None else ()):
@@ -781,6 +826,10 @@ class GameOrchestrator:
             },
             # docs/12 §39 Task 1: authoritative on-stage presentation state, so
             # the Frontend never infers who is on stage from plot conditions.
+            # T2review P1-10：Bad End 权威状态不再自相矛盾——在场角色就是
+            # available_characters（bad_end 只剩 ChatGPT，与 docs/08 保留 GPT
+            # 对话一致，不强行加回 DeepSeek）；Bad End 聊天继续，只有
+            # to_be_continued 结局锁定输入。
             "presentation_state": {
                 "scene": state.current_scene,
                 "characters": [
@@ -790,11 +839,11 @@ class GameOrchestrator:
                         "emotion": "neutral",
                         "slot": None,
                     }
-                    for cid in sorted(set(chapter.available_characters) | {"deepseek"})
+                    for cid in sorted(chapter.available_characters)
                 ],
                 "input_mode": (
                     "locked"
-                    if chapter.phase in ("bad_end", "to_be_continued")
+                    if chapter.phase == "to_be_continued"
                     else "investigation"
                 ),
             },

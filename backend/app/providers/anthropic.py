@@ -76,7 +76,13 @@ class AnthropicProvider(LLMProvider):
         except httpx.HTTPError as exc:
             raise ProviderError(f"Anthropic request failed: {exc}") from exc
 
-        data = response.json()
+        # T2review P1-14：非 JSON / 非对象响应统一落入 ProviderError 边界。
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise ProviderError(f"Anthropic returned a non-JSON body: {exc}") from exc
+        if not isinstance(data, dict):
+            raise ProviderError("Anthropic response is not a JSON object")
         content = data.get("content") or []
         if not content:
             raise ProviderError("Anthropic response contains no content")

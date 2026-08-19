@@ -46,7 +46,11 @@ def list_saves(
     save_service: SaveSnapshotService = Depends(get_save_service),
 ) -> dict:
     """docs/13 §20.1: {auto, manual:[6]} — slot metadata only, no snapshot."""
-    return save_service.list_saves(player_id)
+    try:
+        return save_service.list_saves(player_id)
+    except ValueError as exc:
+        # T2review P1-2：非法 player_id（如路径穿越串）明确拒绝
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/api/saves/manual/{slot}")
@@ -76,11 +80,14 @@ def auto_save(
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
     save_service: SaveSnapshotService = Depends(get_save_service),
 ) -> dict:
-    """docs/13 §21: overwrite the single AUTO slot (Task 8 wires the checkpoints;
-    the endpoint is available from Task 6)."""
-    save = save_service.save_auto(
-        orchestrator, payload.player_id, payload.session_id
-    )
+    """docs/13 §21：覆盖唯一 AUTO slot。T2review P1-6 修复：AUTO 是确定性
+    checkpoint 槽——没有新 checkpoint 的普通回合请求被拒绝（409）。"""
+    try:
+        save = save_service.save_auto(
+            orchestrator, payload.player_id, payload.session_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return save.info()
 
 
