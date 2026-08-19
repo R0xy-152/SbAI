@@ -16,10 +16,16 @@ transaction / atomic file write).
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from app.game.orchestrator import GameOrchestrator
 from app.persistence.repository import _mood_to_dict, _session_to_dict
+from app.save.checkpoint import (
+    mark_captured,
+    pending_checkpoints,
+    reached_checkpoints,
+)
 from app.save.repository import (
     AUTO,
     MANUAL,
@@ -38,6 +44,9 @@ CHAPTER_ID = "ch1"
 
 # docs/13 §19.3 / §26.3: an unsupported snapshot schema is a distinct, loud
 # failure — the player must not get "best-effort restored and keep playing".
+logger = logging.getLogger(__name__)
+
+
 class SaveSchemaError(Exception):
     """The save's snapshot schema_version is not supported (docs/13 §16.2)."""
 
@@ -109,6 +118,14 @@ class SaveSnapshotService:
     def save_auto(
         self, orchestrator: GameOrchestrator, player_id: str, session_id: str
     ) -> GameSave:
+        """Overwrite the single AUTO slot (docs/13 §21). The captured
+        checkpoints are the ones the state reaches that the session has not
+        already auto-saved (Task 8 side effect, docs/13 §21.2)."""
+        # docs/13 §21.3: mark the reached checkpoints BEFORE the capture, so the
+        # AUTO snapshot itself carries the just-captured flags. Never
+        # save-then-update: a snapshot taken before marking would let a restored
+        # session re-capture the same checkpoint (§21.2 once-per-session).
+        self._mark_checkpoints(orchestrator, session_id)
         return self._save_slot(
             orchestrator, player_id, session_id, AUTO, None, title=None
         )
@@ -143,6 +160,47 @@ class SaveSnapshotService:
         )
         self._repository.upsert(save)
         return save
+
+    def _session_opened(self, orchestrator: GameOrchestrator, session_id: str) -> bool:
+        """Whether the session has actually spoken its opening line (a message
+        was recorded). The opening is a scripted beat that lands before any
+        narrative flag change, so completion is derived from history."""
+        return bool(orchestrator.get_history(session_id))
+
+    def _mark_checkpoints(
+        self, orchestrator: GameOrchestrator, session_id: str
+    ) -> None:
+        """Persist the captured checkpoints into the session snapshot so they
+        are never re-captured on a later commit (docs/13 §21.2)."""
+        state = orchestrator._load_known_state(session_id)
+        if not pending_checkpoints(state, opened=self._session_opened(orchestrator, session_id)):
+            return
+        mark_captured(state, opened=self._session_opened(orchestrator, session_id))
+        # The state mutation must be re-persisted (as narrative flags); the
+        # pending set only differs from reached when a checkpoint was already
+        # captured.
+        orchestrator._repository.save(orchestrator._snapshot(session_id))
+        logger.info(
+            "auto save captured checkpoints %s (session %s)",
+            sorted(reached_checkpoints(state, opened=True)),
+            session_id,
+        )
+
+    # ── Trigger helper (docs/13 §21.3 / Task 8) ────────────────────────────
+
+    def auto_save_pending(
+        self, orchestrator: GameOrchestrator, player_id: str, session_id: str
+    ) -> GameSave | None:
+        """The Task 8 side effect: capture the AUTO slot when the session has
+        pending checkpoints, and only then. Called after the narrative commit
+        and after the session is persisted. Returns the new save, or None when
+        no checkpoint newly reached."""
+        state = orchestrator._load_known_state(session_id)
+        if not pending_checkpoints(
+            state, opened=self._session_opened(orchestrator, session_id)
+        ):
+            return None
+        return self.save_auto(orchestrator, player_id, session_id)
 
     # ── List ──────────────────────────────────────────────────────────────
 

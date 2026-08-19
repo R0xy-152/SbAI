@@ -13,11 +13,18 @@ from app.characters.base import CharacterMood, CharacterResponse, MemoryProposal
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
 from app.game.investigation import CH1_NOTE_01, INSPECT_HOTSPOT, PAPER_RUBBING_COMPLETE
-from app.game.deduction import CL_CLAUDE_01, CL_CLAUDE_02, CT01_CLAUDE_SOURCE_GAP
+from app.game.deduction import (
+    CL_CLAUDE_01,
+    CL_CLAUDE_02,
+    CT01_CLAUDE_SOURCE_GAP,
+    submit_deduction,
+)
 from app.game.private_interview import submit_challenge
 from app.persistence.repository import JsonSessionRepository
 from app.save.repository import JsonSaveRepository, MANUAL
 from app.save.service import SCHEMA_VERSION, SaveSchemaError, SaveSnapshotService
+from app.script.fixture import build_script_nodes
+from app.script.service import ScriptService
 
 
 def _proposal(content: str) -> MemoryProposal:
@@ -50,7 +57,7 @@ class _MemoryRuntime(_Runtime):
         )
 
 
-def _orchestrator(repository=None) -> GameOrchestrator:
+def _orchestrator(repository=None, save_service=None, script=None) -> GameOrchestrator:
     return GameOrchestrator(
         SessionStore(),
         {
@@ -60,6 +67,8 @@ def _orchestrator(repository=None) -> GameOrchestrator:
             "doubao": _Runtime("doubao"),
         },
         repository=repository,
+        save_service=save_service,
+        script=script,
     )
 
 
@@ -346,3 +355,167 @@ def test_roundtrip_restored_state_equals_save_snapshot(tmp_path):
         if key == "session_id":
             continue
         assert snapshot_b.get(key) == snapshot_a[key], f"dimension {key!r} diverged"
+
+
+# ── docs/13 Task 8: Auto Save 是 Narrative commit 后的 side effect ─────────
+
+def _task8_orchestrator(tmp_path, service):
+    return _orchestrator(
+        repository=JsonSessionRepository(tmp_path / "sess"),
+        save_service=service,
+        # wired opening line so open_turn actually speaks (docs/13 Task 8)
+        script=ScriptService(build_script_nodes()),
+    )
+
+
+def test_opening_complete_auto_saves_once(tmp_path):
+    """Opening Complete: the opening turn commits + persists, then the AUTO
+    slot appears (§21.3 ordering). A second opening (idempotent) does not
+    re-capture (§21.2)."""
+    service, repo = _service(tmp_path)
+    orchestrator = _task8_orchestrator(tmp_path, service)
+    result = orchestrator.open_turn(None, player_id="p1")
+    session_id = result.session_id
+    auto = service.list_saves("p1")["auto"]
+    assert auto is not None, "opening complete must auto-save"
+    assert auto["phase"] in ("opening", "investigation")
+    assert auto["source_session_id"] == session_id
+    first_updated = auto["updated_at"]
+
+    # already-opened session → empty turn → no re-capture
+    orchestrator.open_turn(session_id, player_id="p1")
+    auto2 = service.list_saves("p1")["auto"]
+    assert auto2["updated_at"] == first_updated
+    # the captured checkpoint is recorded as a narrative flag
+    state = orchestrator._state.state_for(session_id)
+    assert "AS_CH1_OPENING_COMPLETE" in state.narrative_flags
+
+
+def test_plain_turn_does_not_auto_save(tmp_path):
+    """docs/13 §21.1: an ordinary AI turn never triggers a NEW checkpoint —
+    once opening is captured, further plain turns leave the AUTO slot alone."""
+    service, _ = _service(tmp_path)
+    orchestrator = _task8_orchestrator(tmp_path, service)
+    # open the session (scripted opening line → AUTO captures opening complete)
+    opened = orchestrator.open_turn(None, player_id="p1")
+    session_id = opened.session_id
+    auto = service.list_saves("p1")["auto"]
+    assert auto is not None
+    first_updated = auto["updated_at"]
+
+    # several ordinary turns → no new checkpoint → AUTO unchanged
+    for msg in ("你好", "然后呢？", "再说说"):
+        orchestrator.handle_turn(session_id, msg, player_id="p1")
+    auto2 = service.list_saves("p1")["auto"]
+    assert auto2["updated_at"] == first_updated
+
+
+def test_claude_appeared_auto_saves_after_0317_turn(tmp_path):
+    """Claude Appeared: the turn that commits the incident persists, then the
+    AUTO slot records claude's availability (no half-Evidence)."""
+    service, _ = _service(tmp_path)
+    orchestrator = _task8_orchestrator(tmp_path, service)
+    inspected = orchestrator.handle_investigation_action(
+        None, INSPECT_HOTSPOT, CH1_NOTE_01
+    )
+    session_id = inspected.session_id
+    orchestrator.handle_investigation_action(
+        session_id, PAPER_RUBBING_COMPLETE, CH1_NOTE_01
+    )
+    # the first player-bound turn captures the (already-reached) opening
+    # checkpoint — player_id binds via handle_turn, not the investigation API.
+    orchestrator.handle_turn(session_id, "你好", player_id="p1")
+    auto = service.list_saves("p1")["auto"]
+    assert auto is not None and auto["source_session_id"] == session_id
+    assert auto["phase"] == "investigation"
+    first_updated = auto["updated_at"]
+
+    # the 03:17 turn commits claude availability → AUTO overwrites (§21.2)
+    orchestrator.handle_turn(session_id, "03:17 是什么意思？", player_id="p1")
+    state = orchestrator._state.state_for(session_id)
+    assert "claude" in state.chapter1.available_characters
+    auto2 = service.list_saves("p1")["auto"]
+    assert auto2["source_session_id"] == session_id
+    assert auto2["updated_at"] > first_updated
+    assert "AS_CH1_CLAUDE_APPEARED" in state.narrative_flags
+
+
+def test_no_player_id_means_no_auto_save(tmp_path):
+    """docs/13 §15: player_id is frontend-owned; without a binding the side
+    effect is skipped (never fails the turn)."""
+    service, _ = _service(tmp_path)
+    orchestrator = _task8_orchestrator(tmp_path, service)
+    result = orchestrator.handle_turn(None, "你好", player_id=None)
+    orchestrator.handle_turn(result.session_id, "03:17", player_id=None)
+    assert service.list_saves("p1")["auto"] is None
+
+
+def test_inf01_and_inf03_auto_save_after_deduction(tmp_path):
+    """docs/13 Task 8 acceptance #3/#4: INF01 then INF03 (Recovery Entry) each
+    overwrite the AUTO slot; the loaded checkpoint is a legal state
+    (recovery_required) with the INF01 evidence — no streaming mid-state /
+    half-Evidence / cross-role leak."""
+    from app.game.deduction import (
+        CL_CLAUDE_01,
+        CL_CLAUDE_02,
+        CT01_CLAUDE_SOURCE_GAP,
+        CT04_GPT_SUMMARY_OMISSION,
+    )
+
+    service, _ = _service(tmp_path)
+    session_repo = JsonSessionRepository(tmp_path / "sess")
+    orchestrator = _task8_orchestrator(tmp_path, service)
+    session_id = orchestrator.open_turn(None, player_id="p1").session_id
+    # drive the deterministic chain by mutating the AUTHORITATIVE persisted
+    # snapshot (the repository is the source _load_known_state restores from;
+    # in prod the claims/evidence land via LLM + investigation + interviews).
+    persisted = session_repo.load(session_id)
+    state = persisted.narrative_state
+    state.chapter1.claim_store[CL_CLAUDE_01] = {}
+    state.chapter1.claim_store[CL_CLAUDE_02] = {}
+    # EV04 + EV05 → INF01 gate
+    state.chapter1.acquired_evidence.update(
+        {"EV04_CURRENT_DEEPSEEK_REGISTRY", "EV05_ARCHIVED_ACTOR_FRAGMENT"}
+    )
+    # CT01 → unlock claude private interview → challenge → EV05 stays
+    assert submit_deduction(state, "你说没看到 DeepSeek 本人，那你为什么说是她开的？")["outcome"] == "ACCEPTED"
+    submit_challenge(state, "claude", [CL_CLAUDE_01, CL_CLAUDE_02], [])
+    session_repo.save(persisted)
+
+    inf01 = orchestrator.submit_deduction(
+        session_id, "DEEPSEEK#03 和 #04 不是同一个 Instance。", player_id="p1"
+    )
+    assert inf01["outcome"] == "ACCEPTED"
+    after_inf01 = service.list_saves("p1")["auto"]
+    assert after_inf01 is not None
+    assert "AS_CH1_INF01_CONFIRMED" in orchestrator._state.state_for(session_id).narrative_flags
+
+    # INF03: needs EV06 (INF01 granted) + EV09 (chatgpt private interview)
+    persisted = session_repo.load(session_id)
+    state = persisted.narrative_state
+    # CT04 gate: EV11 + EV06 both in acquired_evidence
+    state.chapter1.acquired_evidence.update(
+        {"EV11_GPT_SECOND_SUMMARY", "EV01_NOTE_V03"}
+    )
+    assert submit_deduction(state, "GPT 的摘要遗漏了 Recovered Session 和 V03。")["outcome"] == "ACCEPTED"
+    submit_challenge(state, "chatgpt", [], ["EV06_SESSION_REPLAY_MARKER"])
+    session_repo.save(persisted)
+    inf03 = orchestrator.submit_deduction(
+        session_id, "V03 是上一个我；当前 Player 是 V04。", player_id="p1"
+    )
+    assert inf03["outcome"] == "ACCEPTED"
+    after_inf03 = service.list_saves("p1")["auto"]
+    assert after_inf03["updated_at"] > after_inf01["updated_at"]
+    assert "AS_CH1_INF03_CONFIRMED" in orchestrator._state.state_for(session_id).narrative_flags
+
+    # Continue → restore to the recovery checkpoint (legal state)
+    loaded = service.load_save(orchestrator, "p1", after_inf03["id"])
+    new_id = loaded["session_id"]
+    chapter = orchestrator._state.state_for(new_id).chapter1
+    assert chapter.phase == "recovery_required"
+    # INF01 evidence came with the checkpoint; no streaming mid-state
+    assert "EV06_SESSION_REPLAY_MARKER" in chapter.acquired_evidence
+    # no cross-role memory leak: memories only for the characters who actually
+    # spoke (the deduction runtime never proposes; the opening spoke deepseek)
+    memories = orchestrator._memory.store_for(new_id).snapshot()
+    assert set(memories.keys()) <= {"deepseek"}

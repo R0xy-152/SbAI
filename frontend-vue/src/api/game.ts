@@ -1,4 +1,5 @@
 import { http } from './http'
+import { getPlayerId } from './saves'
 
 export interface OpeningResponse {
   session_id: string
@@ -64,16 +65,19 @@ export async function checkBackendHealth(): Promise<boolean> {
   return data.status === 'ok'
 }
 
-/** 新开/恢复 Opening（docs/13 Task 5 New Game 会正式接入）。 */
+/** 新开/恢复 Opening（docs/13 Task 5 New Game 会正式接入）。附带匿名
+ * player_id（docs/13 §15），供后端 Opening Complete 自动存档（Task 8）。 */
 export async function createOpening(sessionId: string | null): Promise<OpeningResponse> {
   const { data } = await http.post<OpeningResponse>('/chat/opening', {
     session_id: sessionId,
+    player_id: getPlayerId(),
   })
   return data
 }
 
 /** 玩家输入 → 一轮角色回应（docs/13 §27 Task 4：Player Input / Streaming /
- * Response / Presentation Directive）。 */
+ * Response / Presentation Directive）。附带 player_id 供后端 checkpoint 自动
+ * 存档（Task 8：Claude Appeared）。 */
 export async function sendChat(
   sessionId: string,
   message: string,
@@ -82,6 +86,7 @@ export async function sendChat(
   const { data } = await http.post<ChatResponse>('/chat', {
     session_id: sessionId,
     message,
+    player_id: getPlayerId(),
     ...(characterId ? { character_id: characterId } : {}),
   })
   return data
@@ -139,5 +144,20 @@ export async function fetchHistory(sessionId: string): Promise<{
   messages: Array<{ role: string; character_id: string | null; content: string }>
 }> {
   const { data } = await http.get('/chat/history', { params: { session_id: sessionId } })
+  return data
+}
+
+/** 推理提交（docs/13 Task 8：INF01 / INF03 checkpoint 由后端在 Narrative
+ * commit 后自动存档；前端只附带 player_id）。第一章调查主线当前无 UI，先
+ * 供后端 / API 测试与后续调查面板使用。 */
+export async function submitDeduction(
+  sessionId: string,
+  message: string,
+): Promise<Record<string, unknown>> {
+  const { data } = await http.post('/game/deduction', {
+    session_id: sessionId,
+    message,
+    player_id: getPlayerId(),
+  })
   return data
 }

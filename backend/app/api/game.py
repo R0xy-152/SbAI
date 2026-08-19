@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.api.chat import get_orchestrator
 from app.game.orchestrator import GameOrchestrator
@@ -45,6 +45,9 @@ class PresentEvidenceResponse(BaseModel):
 class DeductionRequest(BaseModel):
     session_id: str
     message: str
+    # docs/13 §15 / §21: the anonymous browser namespace for the INF01 / INF03
+    # checkpoint auto saves (Task 8).
+    player_id: str | None = Field(default=None, max_length=64)
 
 
 class PrivateInterviewChallengeRequest(BaseModel):
@@ -127,7 +130,9 @@ def deduction(
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> dict:
     try:
-        return orchestrator.submit_deduction(payload.session_id, payload.message)
+        return orchestrator.submit_deduction(
+            payload.session_id, payload.message, player_id=payload.player_id
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

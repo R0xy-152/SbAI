@@ -23,6 +23,9 @@ class ChatRequest(BaseModel):
     # the Orchestrator asks the connected model to propose an in-scene speaker
     # and validates that proposal against authoritative presence state.
     character_id: str | None = None
+    # docs/13 §15: the anonymous browser namespace the Auto Save side effect
+    # (docs/13 §21, Task 8) binds to this session. Not a security boundary.
+    player_id: str | None = Field(default=None, max_length=64)
 
 
 class ChatResponse(BaseModel):
@@ -46,6 +49,9 @@ class ChatResponse(BaseModel):
 
 class OpeningRequest(BaseModel):
     session_id: str | None = None
+    # docs/13 §15 / §21: the anonymous browser namespace for the opening
+    # checkpoint auto save (Task 8).
+    player_id: str | None = Field(default=None, max_length=64)
 
 
 class HistoryMessage(BaseModel):
@@ -74,7 +80,10 @@ def chat(
 
     try:
         result = orchestrator.handle_turn(
-            payload.session_id, message, character_id=payload.character_id
+            payload.session_id,
+            message,
+            character_id=payload.character_id,
+            player_id=payload.player_id,
         )
     except ProviderError as exc:
         # docs/04 §55: a provider failure is a recoverable error, not a reason
@@ -110,7 +119,7 @@ def opening(
 ) -> ChatResponse:
     """The session's active opening line (docs/01 §4), spoken without player
     input. Idempotent: an already-opened session returns an empty dialogue."""
-    result = orchestrator.open_turn(payload.session_id)
+    result = orchestrator.open_turn(payload.session_id, player_id=payload.player_id)
     return ChatResponse(
         session_id=result.session_id,
         character_id=result.response.character_id,

@@ -136,6 +136,11 @@ class GameOrchestrator:
         script_runtime: ScriptRuntime | None = None,
         inquiry_interpreter: Chapter1InquiryInterpreter | None = None,
         speaker_selector: SpeakerSelector | None = None,
+        # Auto Save (docs/13 §21, Task 8): when given, the orchestrator fires
+        # the checkpoint side effect after narrative commits. The player_id is
+        # the browser-localStorage namespace (docs/13 §15), supplied by the API
+        # layer (the frontend owns it, not the orchestrator).
+        save_service: SaveSnapshotService | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -173,17 +178,24 @@ class GameOrchestrator:
         self._speaker_selector = speaker_selector
         self._investigation = InvestigationRuntime()
         self._chapter1_script = Chapter1ScriptRuntime()
+        # Auto Save side effect (docs/13 §21, Task 8): None keeps the
+        # pre-Task-8 behaviour for existing direct-construction tests.
+        self._save_service = save_service
+        self._player_by_session: dict[str, str] = {}
 
     def handle_turn(
         self,
         session_id: str | None,
         message: str,
         character_id: str | None = None,
+        *,
+        player_id: str | None = None,
     ) -> TurnResult:
         # TV-14: a known persisted session_id is restored into this process
         # (Session Restore); an unknown id behaves exactly as before — a fresh
         # session is minted, never trusting a stale client id.
         session = self._resolve_session(session_id)
+        self._bind_player(session.session_id, player_id)
         if character_id is None and self._speaker_selector is not None:
             state = self._state.state_for(session.session_id)
             available = set(state.chapter1.available_characters) or {self._characters.default_character}
@@ -459,6 +471,9 @@ class GameOrchestrator:
         # to persistence).
         if self._repository is not None:
             self._repository.save(self._snapshot(session.session_id))
+        # docs/13 §21.3: Auto Save runs AFTER the state commit and AFTER the
+        # session is persisted — never save-then-update (Task 8).
+        self.auto_save_if_reached(session.session_id)
 
         return TurnResult(
             session_id=session.session_id,
@@ -482,7 +497,9 @@ class GameOrchestrator:
             ),
         )
 
-    def open_turn(self, session_id: str | None) -> TurnResult:
+    def open_turn(
+        self, session_id: str | None, *, player_id: str | None = None
+    ) -> TurnResult:
         """Speak the active opening line (docs/01 §4), without player input.
 
         The opening is a scripted beat: it fires once per session and is
@@ -490,6 +507,7 @@ class GameOrchestrator:
         already opened returns an empty reply and never re-appends.
         """
         session = self._resolve_session(session_id)
+        self._bind_player(session.session_id, player_id)
         opening = self._script.opening_node() if self._script is not None else None
         if opening is None:
             return self._empty_turn(session)
@@ -523,6 +541,9 @@ class GameOrchestrator:
         self._script.consume(session.session_id, opening.node_id)
         if self._repository is not None:
             self._repository.save(self._snapshot(session.session_id))
+        # docs/13 §21.3: the opening checkpoint fires only after the session
+        # is persisted (Task 8).
+        self.auto_save_if_reached(session.session_id)
         return TurnResult(
             session_id=session.session_id,
             response=response,
@@ -609,9 +630,12 @@ class GameOrchestrator:
             if evidence_id in EVIDENCE_REGISTRY
         ]
 
-    def submit_deduction(self, session_id: str, message: str) -> dict:
+    def submit_deduction(
+        self, session_id: str, message: str, *, player_id: str | None = None
+    ) -> dict:
         state = self._load_known_state(session_id)
         self._assert_chapter_actions_available(state)
+        self._bind_player(session_id, player_id)
         result = submit_deduction(state, message)
         # docs/12 §33: an accepted deduction may open an arrival/final beat in
         # the same response (GPT after INF01, final reveal after INF03). The
@@ -629,6 +653,9 @@ class GameOrchestrator:
                     ]
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
+        # docs/13 §21.3: INF01 / INF03 checkpoints fire after the deduction
+        # committed and the session is persisted (Task 8).
+        self.auto_save_if_reached(session_id)
         return result
 
     def submit_private_interview_challenge(self, session_id: str, **payload) -> dict:
@@ -990,6 +1017,37 @@ class GameOrchestrator:
             if persisted is not None:
                 return self._restore_session(persisted)
         return self._sessions.get_or_create(session_id)
+
+    def _bind_player(self, session_id: str, player_id: str | None) -> None:
+        """Remember which player owns a session (docs/13 §15, Task 8).
+
+        player_id is the browser-localStorage namespace the API layer forwards
+        (anonymous, not a security boundary). The orchestrator stores it only to
+        fire the Auto Save side effect — the session itself carries no identity.
+        """
+        if player_id and player_id not in self._player_by_session:
+            self._player_by_session[session_id] = player_id
+
+    def auto_save_if_reached(self, session_id: str) -> None:
+        """docs/13 §21.3 / Task 8: the Auto Save side effect after a commit.
+
+        No save service → no-op (pre-Task-8 tests). No bound player → the save
+        service is unreachable and the side effect is skipped (the player_id is
+        a Frontend concept, docs/13 §15). Never raises: a checkpoint capture
+        failure must not fail the turn the checkpoint rides on.
+        """
+        if self._save_service is None:
+            return
+        player_id = self._player_by_session.get(session_id)
+        if player_id is None:
+            return
+        try:
+            self._save_service.auto_save_pending(self, player_id, session_id)
+        except Exception:  # pragma: no cover - defensive; a side effect must not
+            # crash the gameplay turn it follows (docs/13 §21.3).
+            logger.warning(
+                "auto save failed for session %s", session_id, exc_info=True
+            )
 
     def _assert_available(self, session_id: str, character_id: str) -> None:
         """Presence Gate (docs/03 §13.6): reject a not-yet-interactable character.

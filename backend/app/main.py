@@ -132,6 +132,9 @@ def create_app() -> FastAPI:
         # incident, GPT/豆包 arrivals, final reveal) as Script Sequences. The
         # runtime only proposes; the Narrative Runtime above stays authoritative.
         script_runtime=ScriptRuntime(build_script_registry()),
+        # Auto Save (docs/13 §21, Task 8): the orchestrator fires the
+        # checkpoint side effect after narrative commits, using the player_id
+        # the API layer forwards. Wired below once the save service exists.
     )
     # Save Snapshot layer (docs/13 §14-21, Task 6): PostgreSQL is the target
     # backend (docs/13 §16); GAL_SAVE_BACKEND=postgres opts in with a DSN. The
@@ -148,6 +151,11 @@ def create_app() -> FastAPI:
     else:
         save_repository = JsonSaveRepository(REPO_ROOT / "backend" / "data" / "saves")
     app.state.save_service = SaveSnapshotService(save_repository)
+    # docs/13 §21 / Task 8: bind the Auto Save side effect to the orchestrator
+    # now that the save service exists (constructed after the orchestrator).
+    # The orchestrator stores it as `_save_service` (constructor param name);
+    # assigning the public name would create a phantom attribute it never reads.
+    app.state.orchestrator._save_service = app.state.save_service
     app.include_router(chat_router)
     app.include_router(game_router)
     app.include_router(saves_router)

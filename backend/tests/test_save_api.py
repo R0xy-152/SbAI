@@ -8,6 +8,8 @@ client, and list responses carry slot metadata only (docs/13 §29).
 
 from __future__ import annotations
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from app.game.investigation import CH1_NOTE_01, INSPECT_HOTSPOT, PAPER_RUBBING_COMPLETE
@@ -17,11 +19,20 @@ from app.save import JsonSaveRepository, SaveSnapshotService
 from app.save.service import SCHEMA_VERSION
 
 
-def _app(tmp_path):
+def _app(tmp_path, monkeypatch):
+    # Pin the deterministic mock provider (CLAUDE.md fixture contract): the app
+    # must never reach a live model or depend on whether DEEPSEEK_API_KEY happens
+    # to be set in the environment (the narrative interpreter then degrades the
+    # turn to noop → the checkpoint side effect is skipped → flaky autos).
+    monkeypatch.setenv("GAL_PROVIDER", "mock")
     app = create_app()
     session_repo = JsonSessionRepository(tmp_path / "sessions")
-    app.state.orchestrator.repository = session_repo
-    app.state.save_service = SaveSnapshotService(JsonSaveRepository(tmp_path / "saves"))
+    save_service = SaveSnapshotService(JsonSaveRepository(tmp_path / "saves"))
+    # Inject both repositories so Task 8 auto-save tests stay isolated and the
+    # orchestrator's side effect uses the same repo the API layer does.
+    app.state.orchestrator._repository = session_repo
+    app.state.orchestrator._save_service = save_service
+    app.state.save_service = save_service
     return app
 
 
@@ -44,8 +55,8 @@ def _session_with_evidence(client: TestClient) -> str:
     return session_id
 
 
-def test_manual_save_list_and_load_roundtrip(tmp_path):
-    app = _app(tmp_path)
+def test_manual_save_list_and_load_roundtrip(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
     with TestClient(app) as client:
         session_id = _session_with_evidence(client)
 
@@ -80,8 +91,8 @@ def test_manual_save_list_and_load_roundtrip(tmp_path):
         assert any(e["evidence_id"] == "EV01_NOTE_V03" for e in ev)
 
 
-def test_auto_save_overwrites_single_slot(tmp_path):
-    app = _app(tmp_path)
+def test_auto_save_overwrites_single_slot(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
     with TestClient(app) as client:
         session_id = _opened_session(client)
         first = client.post("/api/saves/auto", json={"player_id": "p1", "session_id": session_id}).json()
@@ -95,15 +106,15 @@ def test_auto_save_overwrites_single_slot(tmp_path):
         assert listing["auto"]["source_session_id"] == session_id2
 
 
-def test_load_invalid_save_id_is_404(tmp_path):
-    app = _app(tmp_path)
+def test_load_invalid_save_id_is_404(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
     with TestClient(app) as client:
         res = client.post("/api/saves/nope/load", json={"player_id": "p1"})
         assert res.status_code == 404
 
 
-def test_delete_manual_slot(tmp_path):
-    app = _app(tmp_path)
+def test_delete_manual_slot(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
     with TestClient(app) as client:
         session_id = _opened_session(client)
         client.post("/api/saves/manual/2", json={"player_id": "p1", "session_id": session_id})
@@ -113,11 +124,53 @@ def test_delete_manual_slot(tmp_path):
         assert client.delete("/api/saves/manual/2", params={"player_id": "p1"}).json()["deleted"] is False
 
 
-def test_save_list_is_player_scoped(tmp_path):
-    app = _app(tmp_path)
+def test_save_list_is_player_scoped(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch)
     with TestClient(app) as client:
         session_id = _opened_session(client)
         client.post("/api/saves/manual/1", json={"player_id": "p1", "session_id": session_id})
         client.post("/api/saves/manual/1", json={"player_id": "p2", "session_id": session_id})
         assert client.get("/api/saves", params={"player_id": "p1"}).json()["manual"][0] is not None
         assert client.get("/api/saves", params={"player_id": "p3"}).json()["manual"][0] is None
+
+
+# ── docs/13 Task 8: Auto Save 是 Narrative commit 后的 side effect ─────────
+
+def _auto_meta(client: TestClient, player_id: str) -> dict | None:
+    return client.get("/api/saves", params={"player_id": player_id}).json()["auto"]
+
+
+def test_opening_complete_auto_saves_on_opening(tmp_path, monkeypatch):
+    """docs/13 Task 8 acceptance #1: the opening endpoint commits + persists,
+    then the AUTO slot appears (updated_at moves) for that player."""
+    app = _app(tmp_path, monkeypatch)
+    with TestClient(app) as client:
+        assert _auto_meta(client, "p1") is None
+        opened = client.post("/api/chat/opening", json={"player_id": "p1"}).json()
+        session_id = opened["session_id"]
+        auto = _auto_meta(client, "p1")
+        assert auto is not None and auto["source_session_id"] == session_id
+        # another player does not see it (docs/13 §15 namespace)
+        assert _auto_meta(client, "p2") is None
+
+
+def test_claude_appeared_auto_saves_after_0317(tmp_path, monkeypatch):
+    """docs/13 Task 8 acceptance #2: the turn that commits Claude's appearance
+    overwrites the AUTO slot with the same session."""
+    app = _app(tmp_path, monkeypatch)
+    with TestClient(app) as client:
+        session_id = _session_with_evidence(client)  # EV01 + chapter started
+        client.post(
+            "/api/chat",
+            json={"session_id": session_id, "message": "你好", "player_id": "p1"},
+        )
+        before = _auto_meta(client, "p1")
+        assert before is not None
+
+        client.post(
+            "/api/chat",
+            json={"session_id": session_id, "message": "03:17 是什么意思？", "player_id": "p1"},
+        )
+        after = _auto_meta(client, "p1")
+        assert after["source_session_id"] == session_id
+        assert after["updated_at"] > before["updated_at"]
