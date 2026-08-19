@@ -282,6 +282,29 @@ def test_doubao_arrival_after_chatgpt_first_turn():
     assert "doubao_has_appeared" in state.narrative_flags
 
 
+def test_gpt_arrival_does_not_replay_after_doubao_arrival():
+    """docs/12 §40.5：cursor 移到 DOUBAO 序列后，GPT 的完成状态仍须可见——
+    无状态 Gate（GPT_ARRIVAL_READY 恒真）否则会在每个后续回合重放登场行
+    （docs/14 T4 E2E 复现的回归）。"""
+    orchestrator = _wired_orchestrator()
+    session_id = _acquire_note(orchestrator)
+    # 按真实顺序先触发 03:17（Claude 登场、窗口关闭），再走 INF01 → GPT
+    orchestrator.handle_turn(session_id, "03:17 是什么意思？")
+    _grant_evidence(
+        orchestrator, session_id,
+        "EV04_CURRENT_DEEPSEEK_REGISTRY", "EV05_ARCHIVED_ACTOR_FRAGMENT",
+    )
+    orchestrator.submit_deduction(session_id, INF01_MESSAGE)  # GPT arrival 已播
+    first = orchestrator.handle_turn(session_id, "你好，请帮忙看看。", character_id="chatgpt")
+    assert [line.speaker for line in first.script_sequence] == ["doubao"]
+
+    # 后续普通回合不得重放 GPT 登场行（completed 只记当前 cursor 的 bug）
+    turn = orchestrator.handle_turn(session_id, "再确认一下现场。", character_id="deepseek")
+    assert turn.script_sequence == ()
+    turn2 = orchestrator.handle_turn(session_id, "还有别的线索吗？", character_id="deepseek")
+    assert turn2.script_sequence == ()
+
+
 def test_final_reveal_plays_on_inf03_accept():
     orchestrator = _wired_orchestrator()
     session_id = _acquire_note(orchestrator)

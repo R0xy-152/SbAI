@@ -26,7 +26,7 @@ One active script per session; a completed script is never begun again
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable
 
 from app.presentation.actions import PresentationAction
@@ -85,6 +85,10 @@ class ScriptCursorState:
     script_id: str
     step_index: int = 0
     status: str = "running"  # running | paused_player_input | paused_gate | complete
+    # 已完整跑完的脚本 id（docs/12 §40.5 once + 幂等）：cursor 移到下一个
+    # 脚本后，前一个脚本的完成状态必须仍然可见，否则无状态 Gate（如
+    # GPT_ARRIVAL_READY）会在每个后续回合重放（docs/14 T4 E2E 复现）。
+    completed: set[str] = field(default_factory=set)
 
 
 class ScriptRuntime:
@@ -114,7 +118,13 @@ class ScriptRuntime:
                 continue
             if self.is_completed(session_id, script_id):
                 continue
-            self._cursors[session_id] = ScriptCursorState(script_id=script_id)
+            # 新脚本 cursor 必须继承既有 completed 集合，否则前序脚本的
+            # once 语义在 cursor 切换时丢失（docs/14 T4 E2E 复现）。
+            previous = self._cursors.get(session_id)
+            completed = previous.completed if previous is not None else set()
+            self._cursors[session_id] = ScriptCursorState(
+                script_id=script_id, completed=completed
+            )
             return
 
     def is_active(self, session_id: str) -> bool:
@@ -133,7 +143,9 @@ class ScriptRuntime:
 
     def is_completed(self, session_id: str, script_id: str) -> bool:
         cursor = self._cursors.get(session_id)
-        return cursor is not None and cursor.script_id == script_id and cursor.status == "complete"
+        if cursor is None:
+            return False
+        return script_id in cursor.completed
 
     # ---- planning ----------------------------------------------------------
 
@@ -314,6 +326,8 @@ class ScriptRuntime:
             return
         cursor.step_index = plan.next_step_index
         cursor.status = plan.status
+        if plan.status == "complete" and plan.script_id is not None:
+            cursor.completed.add(plan.script_id)
 
     # ---- persistence -------------------------------------------------------
 
@@ -325,6 +339,7 @@ class ScriptRuntime:
             "script_id": cursor.script_id,
             "step_index": cursor.step_index,
             "status": cursor.status,
+            "completed": sorted(cursor.completed),
         }
 
     def restore(self, session_id: str, data: dict | None) -> None:
@@ -335,4 +350,5 @@ class ScriptRuntime:
             script_id=data["script_id"],
             step_index=data["step_index"],
             status=data["status"],
+            completed=set(data.get("completed", [])),
         )
