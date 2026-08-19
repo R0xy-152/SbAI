@@ -6,6 +6,7 @@
 // 所有展示变化来自 Backend presentation_actions / presentation_state，前端不
 // 从剧情条件推断角色在场（docs/13 §9.2）。
 import { onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePresentationStore } from '../stores/presentation'
 import {
   applyChatResponse,
@@ -25,6 +26,7 @@ import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
 import GameDialog from '../components/game/standard/GameDialog.vue'
 
 const presentation = usePresentationStore()
+const router = useRouter()
 
 const SESSION_KEY = 'gal_session_id'
 const BG = '/backgroud/background1.png'
@@ -294,11 +296,17 @@ onUnmounted(() => {
       />
     </div>
 
-    <!-- 顶部条：会话信息 -->
-    <header class="absolute left-0 top-0 z-20 px-4 py-2 text-sm text-[#d7effa]/70">
+    <!-- 顶部条：会话信息 + 返回标题（docs/13 Task 5：Back to Title） -->
+    <header class="absolute left-0 top-0 z-20 flex items-center gap-3 px-4 py-2 text-sm text-[#d7effa]/70">
       <span v-if="sessionId">会话 {{ sessionId.slice(0, 8) }}…</span>
       <span v-else>未连接</span>
       <span v-if="error" class="ml-3 text-red-300">{{ error }}</span>
+      <button
+        class="ml-auto rounded border border-white/15 px-2 py-1 text-xs text-[#d7effa]/80 hover:bg-white/10"
+        @click="router.push('/')"
+      >
+        返回标题
+      </button>
     </header>
   </div>
 </template>
