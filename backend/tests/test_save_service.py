@@ -519,3 +519,84 @@ def test_inf01_and_inf03_auto_save_after_deduction(tmp_path):
     # spoke (the deduction runtime never proposes; the opening spoke deepseek)
     memories = orchestrator._memory.store_for(new_id).snapshot()
     assert set(memories.keys()) <= {"deepseek"}
+
+
+# ── §26.3: investigation gates after load ─────────────────────────────────
+
+def test_investigation_gates_behave_identically_after_load(tmp_path):
+    """docs/13 §26.3: 推进到 EV01 → 03:17 确定性 Gate（轮数兜底 counter=2，
+    消息不含 03:17 字样，D6）→ EV04/EV05 → INF01 ACCEPTED 后存档；Load 的新
+    Active Session 中所有闸门保持关闭：推理重复提交 ALREADY_ACCEPTED（副作用
+    不重放）、03:17 轮数计数恢复、纸条 hotspot 仍 completed（重复检查
+    ALREADY_COMPLETED）、在场角色仍含 deepseek+claude。"""
+    from app.game.deduction import INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR
+
+    session_repo = JsonSessionRepository(tmp_path / "sess")
+    orchestrator = _orchestrator(repository=session_repo)
+    service, _ = _service(tmp_path)
+
+    # 1. 纸条（EV01）→ PRE_0317_WINDOW（首个物理交互开场，deepseek 入场）
+    session_id = _acquire_note(orchestrator)
+    # 2. 两个普通回合 → counter=2 → 03:17 确定性 Gate 自动发生（B 分支）
+    orchestrator.handle_turn(session_id, "你好")
+    orchestrator.handle_turn(session_id, "然后呢？")
+    state = orchestrator._state.state_for(session_id)
+    assert state.chapter1.pre_0317_player_turns == 2
+    assert "claude" in state.chapter1.available_characters
+    assert "EV_CH1_CLAUDE_APPEARS" in state.completed_events
+
+    # 3. EV04 + EV05 → CT01 → Claude 私审 → INF01 ACCEPTED
+    persisted = session_repo.load(session_id)
+    pstate = persisted.narrative_state
+    pstate.chapter1.claim_store[CL_CLAUDE_01] = {}
+    pstate.chapter1.claim_store[CL_CLAUDE_02] = {}
+    pstate.chapter1.acquired_evidence.update(
+        {"EV04_CURRENT_DEEPSEEK_REGISTRY", "EV05_ARCHIVED_ACTOR_FRAGMENT"}
+    )
+    assert submit_deduction(
+        pstate, "你说没看到 DeepSeek 本人，那你为什么说是她开的？"
+    )["outcome"] == "ACCEPTED"
+    submit_challenge(pstate, "claude", [CL_CLAUDE_01, CL_CLAUDE_02], [])
+    session_repo.save(persisted)
+
+    inf01 = orchestrator.submit_deduction(
+        session_id, "DEEPSEEK#03 和 #04 不是同一个 Instance。", player_id="p1"
+    )
+    assert inf01["outcome"] == "ACCEPTED"
+    assert (
+        INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR
+        in orchestrator._state.state_for(session_id).chapter1.accepted_inferences
+    )
+
+    # 4. save → load 新 Active Session（docs/13 §19.1）
+    saved = service.save_manual(orchestrator, "p1", session_id, 1)
+    loaded = service.load_save(orchestrator, "p1", saved.id)
+    new_id = loaded["session_id"]
+    assert new_id != session_id
+    # docs/13 §20.3 契约：history = {session_id, messages}，最后一条角色台词
+    # 是 03:17 序列的 DS 行（供前端恢复展示）
+    assert isinstance(loaded["history"], dict)
+    assert loaded["history"]["session_id"] == new_id
+    last_character = next(
+        (m for m in reversed(loaded["history"]["messages"]) if m.get("role") == "character"),
+        None,
+    )
+    assert last_character is not None
+    assert last_character["character_id"] == "deepseek"
+    assert last_character["content"] == "……你、你怎么会在这里？！"
+    chapter = orchestrator._state.state_for(new_id).chapter1
+
+    # 5. 所有闸门与存档时一致，不重开
+    assert INF01_CURRENT_DEEPSEEK_NOT_0317_ACTOR in chapter.accepted_inferences
+    again = orchestrator.submit_deduction(
+        new_id, "DEEPSEEK#03 和 #04 不是同一个 Instance。", player_id="p1"
+    )
+    assert again["outcome"] == "ALREADY_ACCEPTED"
+    assert orchestrator._state.state_for(new_id).chapter1.pre_0317_player_turns == 2
+    assert chapter.hotspot_states[CH1_NOTE_01] == "completed"
+    repeated = orchestrator.handle_investigation_action(
+        new_id, PAPER_RUBBING_COMPLETE, CH1_NOTE_01
+    )
+    assert repeated.outcome == "ALREADY_COMPLETED"
+    available = orchestrator._state.state_for(new_id).chapter1.available_characters
+    assert {"deepseek", "claude"} <= available

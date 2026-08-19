@@ -3,7 +3,7 @@
 Run (from backend/):
     .venv/Scripts/python -m uvicorn app.main:app --port 8000
 
-Then open http://localhost:8000/frontend/index.html in a browser.
+Then open http://localhost:8000/frontend-deprecated/index.html in a browser.
 """
 
 from __future__ import annotations

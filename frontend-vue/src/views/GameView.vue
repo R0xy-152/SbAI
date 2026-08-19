@@ -226,9 +226,9 @@ async function startOpening() {
         visible: true,
         emotion: opening.emotion || 'neutral',
       }
-      // opening 是开场演出：播放中不可输入，玩家点击推进后解锁
-      setInputMode(false)
-      // 让下一句（无剧本序列时）直接解锁：opening 单句，推进后进入输入
+      // opening 是开场演出：播放中不可输入（dialogue.mode 已由 setSpeakerLine
+      // 置为 'ai'，status 'streaming' 即 responding；勿再调用 setInputMode(false)，
+      // 其会把 status 覆盖为 thinking 使打字机永远不启动），玩家点击推进后解锁
       pendingOpeningAdvance = true
     } else {
       setInputMode(true)
@@ -277,8 +277,9 @@ function applyLoadedSession(result: LoadResult) {
     .find((m) => m.role === 'character' && m.content)
   if (lastCharacter && lastCharacter.character_id) {
     setSpeakerLine(lastCharacter.character_id, lastCharacter.content)
+    // status 'streaming' 即 responding：勿再 setInputMode(false)（会覆盖为
+    // thinking 使恢复的最后一句台词永远不打字）
     presentation.state.status = 'streaming'
-    setInputMode(false)
   } else {
     setInputMode(true)
   }
@@ -305,8 +306,8 @@ onMounted(async () => {
         .find((m) => m.role === 'character' && m.content)
       if (lastCharacter && lastCharacter.character_id) {
         setSpeakerLine(lastCharacter.character_id, lastCharacter.content)
+        // 同上：status 'streaming' 即 responding，勿覆盖为 thinking
         presentation.state.status = 'streaming'
-        setInputMode(false)
       } else {
         setInputMode(true)
       }

@@ -2,3 +2,6 @@ node_modules/
 dist/
 .vite/
 *.log
+# Playwright 运行产物（docs/13 §26.2/§26.4；视觉基线在 tests/visual/baselines/ 入库）
+test-results/
+playwright-report/

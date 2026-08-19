@@ -114,6 +114,10 @@ export const useGameStore = () => {
       )
     },
     get currentStatus(): 'input' | 'thinking' | 'responding' | 'presenting' {
+      // docs/13 §26.1：思考中（等待 AI 回复）与逐字播放用权威 status 区分，
+      // 使 GameDialog 的 thinking 占位/输入禁用与发送按钮禁用真正生效。
+      if (presentation.state.status === 'thinking') return 'thinking'
+      if (presentation.state.status === 'streaming') return 'responding'
       return presentation.state.dialogue.mode === 'ai' ? 'responding' : 'input'
     },
     get currentInteractRole() {

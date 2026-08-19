@@ -79,6 +79,11 @@ def submit_deduction(state: NarrativeState, message: str) -> dict:
         chapter.scene_facts.add("UNLOCK_CLAUDE_PRIVATE_INTERVIEW")
         return {"outcome": "ACCEPTED", "kind": kind, "id": identifier}
 
+    if identifier in chapter.accepted_inferences:
+        # 幂等闸门（docs/13 §26.3）：已接受的推理不再重复触发其副作用
+        #（EV06/chatgpt 解锁等），返回明确的 ALREADY_ACCEPTED，Load 后闸门同样不重开。
+        return {"outcome": "ALREADY_ACCEPTED", "kind": kind, "id": identifier}
+
     if identifier == INF04_GPT_NOT_NEUTRAL:
         ready = (
             CT04_GPT_SUMMARY_OMISSION in chapter.resolved_contradictions

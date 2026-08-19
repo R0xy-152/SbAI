@@ -114,3 +114,33 @@ def test_delete_slot(repository: SaveRepository):
     assert repository.delete_slot("p1", MANUAL, 1) is True
     assert repository.get_slot("p1", MANUAL, 1) is None
     assert repository.delete_slot("p1", MANUAL, 1) is False
+
+
+def test_json_upsert_is_atomic_on_replace_failure(json_repository, monkeypatch):
+    """docs/13 §18 / §26.3 transaction rollback: ``os.replace`` is the single
+    commit point of the JSON backend. A failed replace must leave the previous
+    slot content untouched and no readable partial .json behind (all-or-nothing)."""
+    import os as _os
+
+    json_repository.upsert(_make_save("p1", MANUAL, 1, save_id="m1", title="old"))
+    original = json_repository.get_slot("p1", MANUAL, 1)
+    assert original is not None and original.title == "old"
+
+    def _boom(_src, _dst):
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(_os, "replace", _boom)
+    with pytest.raises(OSError):
+        json_repository.upsert(_make_save("p1", MANUAL, 1, save_id="m1", title="new"))
+
+    # the previous committed content survives the failed overwrite
+    got = json_repository.get_slot("p1", MANUAL, 1)
+    assert got is not None and got.title == "old"
+    assert [s.id for s in json_repository.list_by_player("p1")] == ["m1"]
+    # no readable partial save: only the committed m1.json matches *.json
+    names = [
+        p.name
+        for p in (json_repository._data_dir / "p1").iterdir()
+        if p.name.endswith(".json")
+    ]
+    assert names == ["m1.json"]

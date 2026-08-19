@@ -1154,7 +1154,13 @@ class GameOrchestrator:
         state = self._load_known_state(session_id)
         return {
             "state": self._investigation_state_view(state),
-            "history": self.get_history(session_id),
+            # Frontend LoadResult contract (docs/13 §20.3)：history 携带
+            # session_id + messages，与 GET /api/chat/history 同形，
+            # 供 GameView 恢复最后一句已显示台词。
+            "history": {
+                "session_id": session_id,
+                "messages": self.get_history(session_id),
+            },
         }
 
     def _public_audience(self, session_id: str, character_id: str) -> set[str]:

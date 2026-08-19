@@ -8,5 +8,6 @@ backend/.pytest_cache/
 .git/
 docs/
 validation-results/
-frontend/
+# frontend-deprecated/ 与 char/ backgroud/ 必须留在 build context：
+# backend 镜像在容器根静态挂载三棵资源树（docs/13 Task 9 Step 3）。
 frontend-vue/

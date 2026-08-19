@@ -382,14 +382,14 @@ frontend-vue/
 
 ---
 
-# 7. 旧 React 前端处理策略
+# 7. 旧前端处理策略
 
 ## 7.1 第一阶段：冻结，不删除
 
 迁移开始时：
 
 ```text
-existing React / Next frontend
+existing vanilla HTML/CSS/JS frontend
 状态 = frozen
 ```
 
@@ -401,7 +401,7 @@ existing React / Next frontend
 - 不删除；
 - 保持当前可运行 commit 可回退。
 
-## 7.2 Vue 验收前禁止删除 React
+## 7.2 Vue 验收前禁止删除旧前端
 
 只有当 Vue 完成以下链路：
 
@@ -433,18 +433,18 @@ Load
 状态正确恢复
 ```
 
-才允许进入 React 删除阶段。
+才允许进入旧前端删除阶段。
 
 ## 7.3 回滚条件
 
-以下任一成立时，禁止删除 React：
+以下任一成立时，禁止删除旧前端：
 
 - Vue 无法稳定连接现有 backend；
 - 角色知识隔离出现回归；
 - Session restore 失效；
 - 第一章主线无法正常推进；
 - Load Save 后 Evidence / Memory / Narrative State 不一致；
-- Vue 视觉表现仍没有明显优于当前 React。
+- Vue 视觉表现仍没有明显优于当前旧前端。
 
 ---
 
@@ -2052,7 +2052,7 @@ AI streaming 中间态
 
 ---
 
-## Task 9 — 视觉回归与 React Cutover
+## Task 9 — 视觉回归与 Vue Cutover
 
 ### 做什么
 
@@ -2060,7 +2060,7 @@ AI streaming 中间态
 
 ```text
 LingChat reference
-当前 React implementation
+当前 vanilla implementation
 新 Vue implementation
 ```
 
@@ -2084,7 +2084,7 @@ resize
 必须同时满足：
 
 ```text
-Vue视觉显著优于旧React
+Vue视觉显著优于旧前端（vanilla）
 第一章主线可运行
 Save/Load可运行
 backend tests通过
@@ -2097,7 +2097,7 @@ AGPL notice完成
 
 - Vue 成为默认 Frontend；
 - Docker Compose 默认指向 Vue；
-- 旧 React Frontend 可删除或移动到明确 deprecated archive；
+- 旧前端（vanilla）可删除或移动到明确 deprecated archive；
 - 不再双前端长期维护。
 
 ---
@@ -2502,7 +2502,7 @@ Memory / Evidence / Narrative / Character State 必须一起恢复。
 - [ ] Save E2E 通过。
 - [ ] Visual regression 通过。
 - [ ] Docker Compose 默认运行 Vue。
-- [ ] 旧 React 不再承担生产/默认入口。
+- [ ] 旧前端（vanilla）不再承担生产/默认入口。
 
 ---
 

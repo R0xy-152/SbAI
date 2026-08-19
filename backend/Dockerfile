@@ -14,5 +14,12 @@ RUN pip install --no-cache-dir -r requirements.txt psycopg[binary]
 
 COPY backend/ /app/
 
+# Game static assets for the repo-root StaticFiles mount (app/main.py):
+# dev 下 REPO_ROOT = 仓库根；容器内 REPO_ROOT = 容器根 /，
+# 因此把三棵资源树拷到容器根（docs/13 Task 9 Step 3）。
+COPY char/ /char/
+COPY backgroud/ /backgroud/
+COPY frontend-deprecated/ /frontend-deprecated/
+
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

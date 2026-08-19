@@ -27,6 +27,12 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
+      // 旧前端已迁至 frontend-deprecated/（docs/13 Task 9 Vue Cutover），
+      // 其立绘等资源经此路径由后端仓库根静态挂载服务。
+      '/frontend-deprecated': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
     },
   },
 })
