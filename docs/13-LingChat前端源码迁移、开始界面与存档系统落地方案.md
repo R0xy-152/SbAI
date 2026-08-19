@@ -701,6 +701,14 @@ Script Editor入口
 Tauri-only功能
 ```
 
+> **第二轮（docs/15，2026-08 落地）：** 第一轮「粒子/音乐/环境音不迁移」的裁剪
+> 已按 docs/15 解除 —— 首页视差/流星星空/电影感菜单/首次加载演出/全局光标特效/
+> Ctrl+滚轮缩放/设置页特效开关/游戏内五种场景粒子（StarField/Rain/Sakura/Snow/
+> Fireworks，后端权威 `background_effect`）已全部实现。实现与验收记录见
+> `docs/15-视觉对齐LingChat与动效补齐落地方案.md` 与
+> `validation-results/docs15/result.md`。本文件其余「第一轮」裁剪条目只描述
+> 第一轮历史状态。
+
 ## 11.2 GameRoleAvatar
 
 重点保留：
@@ -794,6 +802,13 @@ Logo / title 区域
 读取存档
 设置
 ```
+
+> **落地状态（docs/15）：** MainMenu 的视觉层与动画层已按本节重建 ——
+> 背景层（全亮 120% 宽视差余量）/流星层/星星层/人物层（deepseek 立绘）/
+> 鼠标视差（useParallaxAnimation）/菜单 hover 回弹与入场 slide transition/
+> CSS 文字 Logo（自制，不迁移 LingChat 图片 Logo）全部就位；
+> 按钮仅保留 开始游戏/继续游戏/读取存档/设置 四项，并保留 `.title-btn` 类名。
+> 实现见 `frontend-vue/src/views/TitleView.vue` 与 `frontend-vue/src/components/title/`。
 
 不出现：
 
@@ -2239,6 +2254,17 @@ Settings
 ```
 
 则不能以“已经使用 LingChat 源码”为由通过验收。
+
+> **docs/15 逐条对照（2026-08）：**
+>
+> - 「角色更小」→ 未出现：立绘沿用 LingChat 原站位/缩放契约，角色完整铺满高度；
+> - 「站位更僵」→ 未出现：多角色自动站位 + 显式 slot + 入场 character-fade 保留；
+> - 「对话框更像普通Web表单」→ 已修正：对话框保留 scrim/名字/情绪标签/打字机；
+>   首页与 Save/Load/Settings 的普通表单风已按 docs/15 §8 统一为全站皮肤；
+> - 「动画被删掉」→ 已补齐：首页视差/流星星空/菜单回弹/加载演出/光标特效/场景粒子；
+> - 「层级感消失」→ 已修正：首页五层（背景/流星/星星/立绘/菜单）+ 面板 backdrop blur。
+>
+> 结论：§27 视觉验收在 docs/15 完成后满足（证据见 validation-results/docs15/result.md）。
 
 ---
 

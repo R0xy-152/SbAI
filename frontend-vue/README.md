@@ -17,8 +17,9 @@ src/
 ├── adapters/     # presentation-adapter / asset-resolver / lingchat-compat
 ├── stores/       # game / presentation / saves / settings / ui（Pinia）
 ├── components/
-│   ├── game/standard/   # Task 2 迁入 LingChat Standard Game UI
-│   ├── title/ save/ system/   # Task 5/7 占位
+│   ├── game/standard/   # Task 2 迁入 LingChat Standard Game UI（docs/15 起含 particles/ 场景粒子）
+│   ├── title/ save/ system/   # 标题菜单组件 / 存档面板 / 系统菜单
+│   └── effects/         # docs/15：CursorEffects / MeteorAnimation / StarAnimation / LoadingTransition
 ├── views/        # Title / Game / Load / Settings
 ├── types/        # Presentation State 等
 └── assets/       # 本项目自己的资源（不使用 LingChat bundled assets）
@@ -48,6 +49,9 @@ docker compose up --build    # 需本机装有 Docker；见根 docker-compose.ym
   本项目无 React，旧前端是 vanilla HTML/JS，现冻结于 frontend-deprecated/）
 - [x] docs/14 选项功能 T0-T4 全部完成（OptionsPanel 气泡条 + 出示/推理/
   私审/Recovery/Security Review 全链路，E2E 覆盖）
+- [x] docs/15 视觉对齐 LingChat 全部完成（首页视差/流星星空/电影感菜单/
+  首次加载演出/光标特效/Ctrl+滚轮缩放/设置特效开关/游戏内五种场景粒子
+  StarField·Rain·Sakura·Snow·Fireworks，后端权威 background_effect）
 
 验证入口：`npm run test:unit` / `test:visual` / `test:e2e`（后端需
 `GAL_PROVIDER=mock`；Playwright webServer 自起，默认不复用既有服务）。
