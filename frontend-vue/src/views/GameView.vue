@@ -5,8 +5,12 @@
 // Claude 由后端 CH01_INCIDENT_0317 脚本登场，随后可对话。
 // 所有展示变化来自 Backend presentation_actions / presentation_state，前端不
 // 从剧情条件推断角色在场（docs/13 §9.2）。
-import { onMounted, onUnmounted, ref } from 'vue'
+// Task 7：游戏内系统菜单（§13 Save/Load/History/Return Title）+ Load 消费
+//（§20.3：game.pendingLoad 在挂载时恢复新 Session）。
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useGameStore } from '../stores/game'
+import { useSavesStore } from '../stores/saves'
 import { usePresentationStore } from '../stores/presentation'
 import {
   applyChatResponse,
@@ -21,11 +25,18 @@ import {
   sendInvestigationAction,
 } from '../api/game'
 import type { ChatResponse } from '../api/game'
+import type { LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
 import GameDialog from '../components/game/standard/GameDialog.vue'
+import SavePanel from '../components/save/SavePanel.vue'
+import LoadPanel from '../components/save/LoadPanel.vue'
+import SystemMenu from '../components/system/SystemMenu.vue'
+import HistoryPanel from '../components/system/HistoryPanel.vue'
 
 const presentation = usePresentationStore()
+const game = useGameStore()
+const saves = useSavesStore()
 const router = useRouter()
 
 const SESSION_KEY = 'gal_session_id'
@@ -46,6 +57,15 @@ const currentResponse = ref<ChatResponse | null>(null)
 // 剧本序列逐行播放队列（03:17 / GPT / 豆包 / FINAL_REVEAL 等多行演出）
 const scriptQueue = ref<ChatResponse['script_sequence']>([])
 let scriptIndex = 0
+
+// 系统菜单 / 面板（docs/13 §13）。systemPanel 表示当前打开的面板：
+// null 无，'menu' 系统菜单，'save'/'load'/'history' 对应面板。
+const systemPanel = ref<'menu' | 'save' | 'load' | 'history' | null>(null)
+
+// LLM 中间态（docs/13 §22）：thinking/streaming 时手动 Save / Load 禁用。
+const llmBusy = computed(() =>
+  ['thinking', 'streaming'].includes(presentation.state.status),
+)
 
 function roleNameOf(id: string): string {
   const names: Record<string, string> = {
@@ -77,6 +97,7 @@ async function reconcileStage() {
   try {
     const state = await fetchGameState(sessionId.value)
     applyPresentationStateView(presentation.state, state.presentation_state)
+    availableHotspots.value = state.available_hotspots ?? []
   } catch (e) {
     console.warn('[GameView] reconcile stage failed', e)
   }
@@ -145,10 +166,15 @@ function onDialogProceed() {
   }
 }
 
-// 调查纸（03:17 前置：EV01_NOTE_V03）
+// 调查纸（03:17 前置：EV01_NOTE_V03）。可调查性来自后端权威
+// available_hotspots（docs/13 §9.2：前端不从剧情条件推断；拓印完成后该
+// hotspot 从列表消失，Load 后同样正确恢复）。
 const investigationBusy = ref(false)
 const investigationMsg = ref('')
-const investigationDone = ref(false)
+const availableHotspots = ref<Array<{ hotspot_id: string }>>([])
+const paperAvailable = computed(() =>
+  availableHotspots.value.some((h) => h.hotspot_id === 'CH1_NOTE_01'),
+)
 
 async function inspectPaper() {
   if (!sessionId.value || investigationBusy.value) return
@@ -159,6 +185,9 @@ async function inspectPaper() {
     if (res.state?.presentation_state) {
       applyPresentationStateView(presentation.state, res.state.presentation_state)
     }
+    if (res.state?.available_hotspots) {
+      availableHotspots.value = res.state.available_hotspots
+    }
     // 纸面拓印：inspect 后立即可做 PAPER_RUBBING_COMPLETE（后端要求先 inspect）
     const rubbed = await sendInvestigationAction(
       sessionId.value,
@@ -166,11 +195,12 @@ async function inspectPaper() {
       'CH1_NOTE_01',
     )
     if (rubbed.evidence_id) {
-      investigationDone.value = true
       investigationMsg.value = '纸面拓印完成，获得了「03:17 的笔记」线索。'
     } else if (rubbed.outcome === 'ALREADY_COMPLETED') {
-      investigationDone.value = true
       investigationMsg.value = '这张纸已经拓印过了。'
+    }
+    if (rubbed.state?.available_hotspots) {
+      availableHotspots.value = rubbed.state.available_hotspots
     }
   } catch (e) {
     investigationMsg.value = e instanceof Error ? e.message : '调查失败，请重试。'
@@ -203,13 +233,65 @@ async function startOpening() {
     } else {
       setInputMode(true)
     }
+    // 初始热点（调查纸）由后端权威 available_hotspots 决定（docs/13 §9.2）
+    void reconcileStage()
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
     setInputMode(true)
   }
 }
 
+// 游戏内 Load（docs/13 §20.3）：Backend 创建新 Active Session，返回
+// GameViewState；此处就地恢复（applyLoadedSession），不离开 GameView。
+const loadBusy = ref(false)
+
+async function onLoadFromGame(saveId: string) {
+  if (loadBusy.value || llmBusy.value) return
+  loadBusy.value = true
+  error.value = null
+  try {
+    const result = await saves.load(saveId)
+    applyLoadedSession(result)
+    systemPanel.value = null
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loadBusy.value = false
+  }
+}
+
+// Load 消费（docs/13 §20.3 / §19.1）：Backend 已创建新 Active Session 并
+// 返回 initial GameViewState；此处就地渲染，不重新走 Opening。
+function applyLoadedSession(result: LoadResult) {
+  sessionId.value = result.session_id
+  localStorage.setItem(SESSION_KEY, result.session_id)
+  const view = result.state?.presentation_state
+  if (view) {
+    applyPresentationStateView(presentation.state, view)
+  }
+  availableHotspots.value = result.state?.available_hotspots ?? []
+  // 恢复最后一句角色台词（画面回到对话流，docs/13 §19.2 restore order 末端）
+  const messages = result.history?.messages ?? []
+  const lastCharacter = [...messages]
+    .reverse()
+    .find((m) => m.role === 'character' && m.content)
+  if (lastCharacter && lastCharacter.character_id) {
+    setSpeakerLine(lastCharacter.character_id, lastCharacter.content)
+    presentation.state.status = 'streaming'
+    setInputMode(false)
+  } else {
+    setInputMode(true)
+  }
+  game.pendingLoad = null
+}
+
 onMounted(async () => {
+  // 0. 优先消费 Load 结果（docs/13 §20.3：LoadView/TitleView 暂存的 new
+  // Active Session + GameViewState）
+  if (game.pendingLoad) {
+    applyLoadedSession(game.pendingLoad)
+    return
+  }
   // 1. 恢复已有会话（localStorage）—— refresh 后 Session restore（docs/13 §27）
   const stored = localStorage.getItem(SESSION_KEY)
   if (stored) {
@@ -253,9 +335,9 @@ onUnmounted(() => {
     <!-- 角色舞台 -->
     <GameRolesStage class="pointer-events-none absolute inset-0 z-1" />
 
-    <!-- 调查纸入口（03:17 前置，docs/13 §27 最小闭环） -->
+    <!-- 调查纸入口（03:17 前置；可调查性来自后端 available_hotspots，docs/13 §9.2） -->
     <div
-      v-if="!investigationDone"
+      v-if="paperAvailable"
       class="absolute bottom-40 left-4 z-20 flex flex-col gap-2 rounded-lg border border-white/15 bg-black/60 p-3 text-sm text-[#d7effa]"
     >
       <button
@@ -296,17 +378,45 @@ onUnmounted(() => {
       />
     </div>
 
-    <!-- 顶部条：会话信息 + 返回标题（docs/13 Task 5：Back to Title） -->
+    <!-- 顶部条：会话信息 + 系统菜单 + 返回标题（docs/13 §13 / Task 5） -->
     <header class="absolute left-0 top-0 z-20 flex items-center gap-3 px-4 py-2 text-sm text-[#d7effa]/70">
       <span v-if="sessionId">会话 {{ sessionId.slice(0, 8) }}…</span>
       <span v-else>未连接</span>
       <span v-if="error" class="ml-3 text-red-300">{{ error }}</span>
-      <button
-        class="ml-auto rounded border border-white/15 px-2 py-1 text-xs text-[#d7effa]/80 hover:bg-white/10"
-        @click="router.push('/')"
-      >
-        返回标题
-      </button>
+      <div class="ml-auto flex items-center gap-2">
+        <button
+          class="rounded border border-white/15 px-2 py-1 text-xs text-[#d7effa]/80 hover:bg-white/10"
+          @click="systemPanel = 'menu'"
+        >
+          系统菜单
+        </button>
+        <button
+          class="rounded border border-white/15 px-2 py-1 text-xs text-[#d7effa]/80 hover:bg-white/10"
+          @click="router.push('/')"
+        >
+          返回标题
+        </button>
+      </div>
     </header>
+
+    <!-- 系统菜单 / 面板（docs/13 §13；Save/Load 在 LLM 中间态禁用 §22） -->
+    <SystemMenu v-if="systemPanel === 'menu'" @open="systemPanel = $event" @close="systemPanel = null" />
+    <SavePanel
+      v-if="systemPanel === 'save'"
+      :session-id="sessionId ?? ''"
+      :busy="llmBusy"
+      @close="systemPanel = null"
+    />
+    <LoadPanel
+      v-if="systemPanel === 'load'"
+      :busy="llmBusy || loadBusy"
+      @load="onLoadFromGame"
+      @close="systemPanel = null"
+    />
+    <HistoryPanel
+      v-if="systemPanel === 'history'"
+      :session-id="sessionId"
+      @close="systemPanel = null"
+    />
   </div>
 </template>

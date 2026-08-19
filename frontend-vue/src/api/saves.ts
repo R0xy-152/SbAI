@@ -1,5 +1,8 @@
-// Save API（docs/13 §20）。Task 6 后端 Save Snapshot、Task 7 存档 UI 时接入。
-// 此处仅定义未来契约类型，避免 Task 1 提前实现后端未提供的能力。
+import { http } from './http'
+
+// Save API（docs/13 §20）。Task 6 后端 Save Snapshot、Task 7 存档 UI 接入。
+// Snapshot 由 Backend Capture（docs/13 §14.2），前端只传 player_id /
+// session_id / slot_index；List 只返回 slot 元数据，不含 snapshot（§29）。
 
 export type SaveSlotType = 'AUTO' | 'MANUAL'
 
@@ -9,10 +12,10 @@ export interface GameSaveInfo {
   slot_type: SaveSlotType
   /** AUTO 为 null，MANUAL 为 1..6。 */
   slot_index: number | null
-  title: string
-  source_session_id: string
-  chapter_id: string
-  phase: string
+  title: string | null
+  source_session_id: string | null
+  chapter_id: string | null
+  phase: string | null
   created_at: string
   updated_at: string
 }
@@ -20,4 +23,86 @@ export interface GameSaveInfo {
 export interface SaveListResponse {
   auto: GameSaveInfo | null
   manual: Array<GameSaveInfo | null>
+}
+
+/** Load 结果（docs/13 §20.3）：new_session_id + initial GameViewState。 */
+export interface LoadResult {
+  session_id: string
+  state: {
+    presentation_state: PresentationStateView
+    available_hotspots: Array<{
+      hotspot_id: string
+      title: string
+      preview: string
+      interaction_type: string
+    }>
+    hotspots: Record<string, string>
+  }
+  history: {
+    session_id: string
+    messages: Array<{ role: string; character_id: string | null; content: string }>
+  }
+}
+
+// 复用 game.ts 的权威角色在场类型（同一契约，docs/13 §9.2）
+import type { PresentationStateView } from './game'
+
+const PLAYER_KEY = 'gal_player_id'
+
+/** 匿名 Player 身份（docs/13 §15）：首次打开生成 crypto.randomUUID() 存
+ * localStorage，之后所有 Save API 带上该 player_id。不是登录凭据/安全边界。 */
+export function getPlayerId(): string {
+  let id = localStorage.getItem(PLAYER_KEY)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem(PLAYER_KEY, id)
+  }
+  return id
+}
+
+/** docs/13 §20.1：列出该 player 的存档（auto + manual[6]，空 slot 由前端渲染）。 */
+export async function listSaves(): Promise<SaveListResponse> {
+  const { data } = await http.get<SaveListResponse>('/saves', {
+    params: { player_id: getPlayerId() },
+  })
+  return data
+}
+
+/** docs/13 §20.2：手动保存到 1..6 号 slot；snapshot 由 Backend Capture。 */
+export async function manualSave(
+  sessionId: string,
+  slot: number,
+  title?: string | null,
+): Promise<GameSaveInfo> {
+  const { data } = await http.post<GameSaveInfo>(`/saves/manual/${slot}`, {
+    player_id: getPlayerId(),
+    session_id: sessionId,
+    ...(title ? { title } : {}),
+  })
+  return data
+}
+
+/** docs/13 §21：覆盖唯一 AUTO slot（checkpoint 由 Task 8 接线；端点 Task 6 可用）。 */
+export async function autoSave(sessionId: string): Promise<GameSaveInfo> {
+  const { data } = await http.post<GameSaveInfo>('/saves/auto', {
+    player_id: getPlayerId(),
+    session_id: sessionId,
+  })
+  return data
+}
+
+/** docs/13 §20.3：Load 创建新 Active Session，返回 new_session_id + GameViewState。 */
+export async function loadSave(saveId: string): Promise<LoadResult> {
+  const { data } = await http.post<LoadResult>(`/saves/${saveId}/load`, {
+    player_id: getPlayerId(),
+  })
+  return data
+}
+
+/** docs/13 §26.3：删除一个手动 slot。 */
+export async function deleteSave(slot: number): Promise<boolean> {
+  const { data } = await http.delete<{ deleted: boolean }>('/saves/manual/' + slot, {
+    params: { player_id: getPlayerId() },
+  })
+  return data.deleted
 }

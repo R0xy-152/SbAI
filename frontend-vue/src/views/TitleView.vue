@@ -9,7 +9,9 @@ import { useUiStore } from '../stores/ui'
 // New Game 语义（§12.2）：显式新建会话，直接落 Opening；已有 localStorage
 // session_id 时清掉再新建（不删除旧存档，docs/13 §14.1）。
 // Continue（§12.3）：加载「该 player 最近更新的有效存档」；无存档时禁用。
-// Task 6/7 落地后端 Save 前，Continue 数据源为 saves store（当前恒空）。
+// Task 7 接入后端 Save 后，Continue 加载 mostRecent（docs/13 §12.3 优先级 =
+// 更新时间，不强制 Auto/Manual），结果暂存 game.pendingLoad 由 GameView
+// 挂载时消费（docs/13 §20.3）。
 const router = useRouter()
 const game = useGameStore()
 const saves = useSavesStore()
@@ -18,6 +20,8 @@ const ui = useUiStore()
 const BG = '/backgroud/background1.png'
 const newGameBusy = ref(false)
 const newGameError = ref<string | null>(null)
+const continueBusy = ref(false)
+const continueError = ref<string | null>(null)
 
 async function onNewGame() {
   if (newGameBusy.value) return
@@ -35,11 +39,22 @@ async function onNewGame() {
   }
 }
 
-function onContinue() {
+async function onContinue() {
   // 无存档时禁用（按钮 disabled，兜底提示，docs/13 §12.3：不得创建空 Session）。
-  if (!saves.hasAnySave) return
-  // 有存档：加载最近存档 → 进入对应会话（Task 6/7 接入后端后实现）。
-  void router.push('/game')
+  if (!saves.hasAnySave || !saves.mostRecent || continueBusy.value) return
+  continueBusy.value = true
+  continueError.value = null
+  try {
+    // Load 创建新 Active Session（docs/13 §19.1）；结果由 GameView 消费。
+    const result = await saves.load(saves.mostRecent.id)
+    game.pendingLoad = result
+    localStorage.removeItem('gal_session_id')
+    await router.push('/game')
+  } catch (e) {
+    continueError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    continueBusy.value = false
+  }
 }
 
 async function refreshSaves() {
@@ -73,17 +88,18 @@ onMounted(refreshSaves)
       <button class="title-btn" :disabled="newGameBusy" @click="onNewGame">开始游戏</button>
       <button
         class="title-btn"
-        :disabled="!saves.hasAnySave || newGameBusy"
+        :disabled="!saves.hasAnySave || newGameBusy || continueBusy"
         :title="saves.hasAnySave ? '' : '暂无可继续的存档'"
         @click="onContinue"
       >
-        继续游戏
+        {{ continueBusy ? '读取中…' : '继续游戏' }}
       </button>
       <button class="title-btn" :disabled="newGameBusy" @click="router.push('/load')">读取存档</button>
       <button class="title-btn" :disabled="newGameBusy" @click="router.push('/settings')">设置</button>
     </nav>
 
     <p v-if="newGameError" class="relative z-10 mt-5 max-w-sm text-center text-sm text-red-300">{{ newGameError }}</p>
+    <p v-else-if="continueError" class="relative z-10 mt-5 max-w-sm text-center text-sm text-red-300">{{ continueError }}</p>
     <p v-else class="relative z-10 mt-5 text-xs text-[#a9e8ff]/70">
       {{ ui.backendOk === true ? '后端已连接' : ui.backendOk === false ? '后端未连接' : '连接后端中…' }}
     </p>
