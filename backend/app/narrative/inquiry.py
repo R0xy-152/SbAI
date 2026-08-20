@@ -50,7 +50,9 @@ def _system_prompt(available_characters: set[str], acquired_evidence: set[str]) 
         "- ASK_CHARACTER_SUSPICION：询问某角色是否隐瞒或怀疑什么。\n"
         "只输出一个 JSON：{\"intent\": \"...\", \"target\": null|角色ID, "
         "\"subject\": null|角色ID, \"topic\": null|door_open|timestamp_0317|admin_session|evidence}。\n"
-        "普通闲聊输出 {\"intent\": \"noop\"}；语义不清输出 {\"intent\": \"ambiguous\"}。"
+        "普通闲聊输出 {\"intent\": \"noop\"}；语义不清输出 {\"intent\": \"ambiguous\"}。\n"
+        "注意：即使产生内部推理也必须极短；JSON 对象必须是输出的最后内容，绝不能为空"
+        "（DeepSeek JSON Output 已知概率性空 content 问题的 prompt 侧缓解）。"
     )
 
 
@@ -65,7 +67,8 @@ class Chapter1InquiryInterpreter:
         raw = self._provider.complete(
             system=_system_prompt(chapter.available_characters, chapter.acquired_evidence),
             user=player_message,
-            max_tokens=256,
+            # 512：给 reasoning 留余量，降低空 content 概率（真机 503 复盘）
+            max_tokens=512,
             response_format={"type": "json_object"},
         )
         parsed = self._parse(raw, chapter.available_characters)

@@ -44,7 +44,11 @@ def _system_prompt(scene: str, story_phase: str, eligible: frozenset[str]) -> st
         "2. signal 只能是上面列出的 Signal 之一，或 \"noop\"（普通闲聊、与剧情无关，"
         "这是正常结果），或 \"ambiguous\"（看似有剧情意图，但缺少上下文无法可靠判断）。\n"
         "3. 不要强行把普通聊天解释成某个 Signal；没有可靠判断就是 noop。\n"
-        "4. 语义等价的不同说法应映射到同一个 Signal。"
+        "4. 语义等价的不同说法应映射到同一个 Signal。\n"
+        "5. 若模型产生内部推理，推理必须极短（一两句以内）；无论如何，"
+        "JSON 对象必须是输出的最后内容，绝不能因为推理占用长度而缺失。"
+        "（DeepSeek JSON Output 已知概率性空 content 问题的 prompt 侧缓解，"
+        "官方建议：修改 prompt 以缓解）"
     )
 
 
@@ -60,7 +64,9 @@ class NarrativeInterpreter:
         raw = self._provider.complete(
             system=_system_prompt(state.current_scene, state.story_phase, eligible),
             user=player_message,
-            max_tokens=512,
+            # 1024：reasoning 与 content 共享预算，给推理留出余量以降低
+            # 空 content 概率（真机 503 复盘；兜底重试见 DeepSeekProvider）
+            max_tokens=1024,
             response_format={"type": "json_object"},
         )
         return self._parse(raw, eligible)

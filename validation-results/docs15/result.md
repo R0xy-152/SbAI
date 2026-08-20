@@ -139,6 +139,21 @@ StarAnimation / StarField 在特效开启时确实绘制，不依赖肉眼判断
 验证：backend `407 passed, 12 skipped`（+7 重试/降级语义测试）；真机连续 4 回合
 全部 200（8~15s/回合，thinking 推理质量保留）。
 
+### 官方文档确认 + 第三层缓解（v2.1）
+
+DeepSeek 官方 API 文档证实：「在使用 JSON Output 功能时，API 有概率会返回
+空的 content。我们正在积极优化该问题，您可以尝试修改 prompt 以缓解此类问题。」
+—— 与探针结论一致，属上游已知问题。按官方建议追加 prompt 侧缓解并加宽预算：
+
+1. interpreter / inquiry 的系统提示新增规则：内部推理必须极短，JSON 对象
+   必须是输出的最后内容、绝不能为空；
+2. 预算加宽：interpreter 512→1024，inquiry 256→512（reasoning 有更多余量，
+   进一步降低空 content 概率）。
+
+至此防御共三层：①prompt 缓解（压概率）→ ②预算加宽（压概率）→
+③空 content 自动降级重试（保底可用）。backend `407 passed` 全绿，
+真机回合稳定 200。
+
 ## 6. 已知限制（如实记录）
 
 - **粒子不进视觉基线**：canvas 动画不可确定性冻结；基线在特效关闭状态拍摄
