@@ -77,6 +77,18 @@ export const EMOTION_CONFIG_EMO: Record<string, string> = {
   surprised: 'surprised',
 }
 
+// ── emotion → 中文标签（docs/16 P1：聊天框上方情绪标签显示中文） ──
+// 映射经用户确认（docs/16 §0 问题4）：后端 ALLOWED_EMOTIONS 七个值的固定译文。
+export const EMOTION_ZH: Record<string, string> = {
+  neutral: '平静',
+  happy: '开心',
+  annoyed: '不悦',
+  angry: '生气',
+  embarrassed: '害羞',
+  serious: '认真',
+  surprised: '惊讶',
+}
+
 // ── 兼容 GameDialog / GameRolesStage / GameRoleAvatar 的 Game Store ──
 // 读本项目 Presentation Store；status / userName 等由 GameView 注入。
 export const useGameStore = () => {
@@ -236,9 +248,11 @@ export const useUIStore = () => {
       return id ? (ROLE_META[id]?.roleSubTitle ?? '') : ''
     },
     get showCharacterEmotion() {
-      return presentation.state.dialogue.speakerId
-        ? (presentation.state.characters[presentation.state.dialogue.speakerId]?.emotion ?? '')
-        : ''
+      // docs/16 P1：情绪标签显示中文（EMOTION_ZH 映射），未知 emotion 原样透出
+      if (!presentation.state.dialogue.speakerId) return ''
+      const raw =
+        presentation.state.characters[presentation.state.dialogue.speakerId]?.emotion ?? ''
+      return EMOTION_ZH[raw] ?? raw
     },
     get showCharacterLine() {
       return presentation.state.dialogue.text
