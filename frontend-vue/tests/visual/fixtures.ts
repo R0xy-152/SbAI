@@ -23,6 +23,7 @@ export async function freezeAnimations(page: Page): Promise<void> {
           clickAnimationEnabled: false,
           sceneEffectsEnabled: false,
           loadingTransitionEnabled: false,
+          eyeOpenTransitionEnabled: false,
           uiZoom: 1,
         }),
       )

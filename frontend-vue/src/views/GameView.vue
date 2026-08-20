@@ -45,6 +45,7 @@ import HistoryPanel from '../components/system/HistoryPanel.vue'
 import OptionsPanel from '../components/game/standard/OptionsPanel.vue'
 import SubActionPanel from '../components/game/standard/SubActionPanel.vue'
 import LoadingTransition from '../components/effects/LoadingTransition.vue'
+import EyeOpenTransition from '../components/effects/EyeOpenTransition.vue'
 import { useSettingsStore } from '../stores/settings'
 
 const presentation = usePresentationStore()
@@ -81,6 +82,22 @@ const currentResponse = ref<ChatResponse | null>(null)
 const showLoading = ref(false)
 const openingReady = ref(false)
 const bufferedOpening = ref<OpeningResponse | null>(null)
+
+// docs/16 P5：黑幕眼睑式睁眼转场 —— 每次进入游戏画面播一次（新游戏排在猫爪
+// 演出之后，读档/会话恢复直接播）；pointer-events:none 不挡点击。
+const prefersReducedMotion =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+const showEyeOpen = ref(false)
+function armEyeOpen() {
+  if (settings.eyeOpenTransitionEnabled && !prefersReducedMotion) {
+    showEyeOpen.value = true
+  }
+}
+function onEyeOpenComplete() {
+  showEyeOpen.value = false
+}
 
 // 剧本序列逐行播放队列（03:17 / GPT / 豆包 / FINAL_REVEAL 等多行演出）
 const scriptQueue = ref<ChatResponse['script_sequence']>([])
@@ -590,6 +607,8 @@ function onLoadingComplete() {
   if (opening) {
     applyOpeningResponse(opening)
   }
+  // docs/16 P5：猫爪揭幕结束后播睁眼转场
+  armEyeOpen()
 }
 
 onMounted(async () => {
@@ -597,6 +616,7 @@ onMounted(async () => {
   // Active Session + GameViewState）
   if (game.pendingLoad) {
     applyLoadedSession(game.pendingLoad)
+    armEyeOpen()
     return
   }
   // 0.5 首次加载演出：仅无存量会话的新游戏入口（docs/15 §7）
@@ -627,6 +647,7 @@ onMounted(async () => {
       } else {
         setInputMode(true)
       }
+      armEyeOpen()
       return
     } catch (e) {
       // 会话未知/已失效 → 视为新开
@@ -637,6 +658,8 @@ onMounted(async () => {
   }
   // 2. 新会话 → Opening
   await startOpening()
+  // docs/16 P5：无加载演出（设置关闭）的新游戏路径直接播睁眼
+  if (!showLoading.value) armEyeOpen()
 })
 
 onUnmounted(() => {
@@ -738,5 +761,8 @@ onUnmounted(() => {
 
     <!-- 首次加载演出（docs/15 §7：New Game 专用；ready = opening 数据就绪） -->
     <LoadingTransition v-if="showLoading" :ready="openingReady" @complete="onLoadingComplete" />
+
+    <!-- 睁眼转场（docs/16 P5：每次进入游戏画面播一次，纯视觉、不挡点击） -->
+    <EyeOpenTransition v-if="showEyeOpen" @complete="onEyeOpenComplete" />
   </div>
 </template>

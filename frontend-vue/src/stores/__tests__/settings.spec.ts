@@ -23,6 +23,7 @@ describe('settings store（docs/15 §5.3）', () => {
     expect(s.clickAnimationEnabled).toBe(true)
     expect(s.sceneEffectsEnabled).toBe(true)
     expect(s.loadingTransitionEnabled).toBe(true)
+    expect(s.eyeOpenTransitionEnabled).toBe(true)
     expect(s.uiZoom).toBe(1)
   })
 

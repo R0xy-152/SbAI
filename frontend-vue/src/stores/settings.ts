@@ -20,6 +20,8 @@ export const DEFAULT_SETTINGS = {
   clickAnimationEnabled: true,
   sceneEffectsEnabled: true,
   loadingTransitionEnabled: true,
+  // docs/16 P5：进入游戏画面时的黑幕睁眼转场
+  eyeOpenTransitionEnabled: true,
   // docs/15 §5.2 Ctrl+滚轮 UI 缩放（0.8~1.5）
   uiZoom: 1,
 }
@@ -34,6 +36,7 @@ export interface PersistedSettings {
   clickAnimationEnabled: boolean
   sceneEffectsEnabled: boolean
   loadingTransitionEnabled: boolean
+  eyeOpenTransitionEnabled: boolean
   uiZoom: number
 }
 
@@ -70,6 +73,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const clickAnimationEnabled = ref(initial.clickAnimationEnabled)
   const sceneEffectsEnabled = ref(initial.sceneEffectsEnabled)
   const loadingTransitionEnabled = ref(initial.loadingTransitionEnabled)
+  const eyeOpenTransitionEnabled = ref(initial.eyeOpenTransitionEnabled)
   const uiZoom = ref(initial.uiZoom)
 
   const state = {
@@ -82,6 +86,7 @@ export const useSettingsStore = defineStore('settings', () => {
     clickAnimationEnabled,
     sceneEffectsEnabled,
     loadingTransitionEnabled,
+    eyeOpenTransitionEnabled,
     uiZoom,
   }
 
@@ -96,6 +101,7 @@ export const useSettingsStore = defineStore('settings', () => {
       clickAnimationEnabled.value,
       sceneEffectsEnabled.value,
       loadingTransitionEnabled.value,
+      eyeOpenTransitionEnabled.value,
       uiZoom.value,
     ],
     () => {

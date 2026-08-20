@@ -16,6 +16,7 @@ const effectToggles = computed(() => [
   { key: 'click', label: '点击涟漪', hint: '点击时的扩散光圈', model: settings.clickAnimationEnabled },
   { key: 'scene', label: '场景粒子特效', hint: '游戏内雨/雪/星空等氛围粒子', model: settings.sceneEffectsEnabled },
   { key: 'loading', label: '首次加载演出', hint: '新游戏开场进度动画', model: settings.loadingTransitionEnabled },
+  { key: 'eyeOpen', label: '睁眼转场', hint: '进入游戏画面时的黑幕睁眼动画', model: settings.eyeOpenTransitionEnabled },
 ])
 </script>
 
