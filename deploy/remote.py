@@ -8,6 +8,13 @@ import sys
 
 import paramiko
 
+# Windows GBK 控制台下按 UTF-8 输出远端内容（build 进度含 ✓ 等字符）
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except AttributeError:  # pragma: no cover - Linux 下无 reconfigure
+    pass
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()

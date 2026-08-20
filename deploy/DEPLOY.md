@@ -39,6 +39,17 @@ vim .env   # 至少改两处：
 > 快速上线版不需要 DEEPSEEK_API_KEY / ANTHROPIC_API_KEY：GAL_PROVIDER 缺省
 > auto，无 key 自动回落 mock（docs/17：AI 回复已停用，剧本不依赖任何 LLM）。
 
+## 2.5 国内服务器（阿里云等）必做：Docker 镜像加速
+
+国内服务器直连 docker.io 会超时（实测阿里云杭州区 registry-1.docker.io 不可达），
+首次构建前配置镜像加速：
+
+```bash
+bash deploy/setup-docker-mirror.sh   # 写入 daemon.json（docker.m.daocloud.io）并重启 docker
+```
+
+> 阿里云用户也可用「容器镜像服务 → 镜像加速器」里的个人专属地址替换。
+
 ## 3. 构建并启动
 
 ```bash
@@ -52,7 +63,10 @@ docker compose ps          # 三个服务：frontend-vue / backend / postgres(he
 自动化脚本（推荐，覆盖 4.1–4.3 + 静态资源 + 页面）：
 
 ```bash
-pwsh -File deploy/verify.ps1 -BaseUrl http://127.0.0.1:<FRONTEND_PORT>
+# Linux 服务器上（无需 pwsh）：
+bash deploy/server-verify.sh http://127.0.0.1:<FRONTEND_PORT>
+# 或部署机远端：
+pwsh -File deploy/verify.ps1 -BaseUrl http://<server>:<FRONTEND_PORT>
 ```
 
 手动等价清单：
