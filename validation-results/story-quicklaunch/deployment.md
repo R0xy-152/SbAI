@@ -18,12 +18,22 @@
 | 8 | 服务器端验收 server-verify.sh：health / 剧本首节点 / postgres AUTO 存档 / 静态资源 / 页面 | PASS 5/5 |
 | 9 | 服务器端完整剧本走查 server-walk.py：178 行、3 选项、14 场景边界、结局、刷新恢复、AUTO 存档 | PASS（与本机一致） |
 
-## 待办（用户侧）
+## 公网复核（安全组 80 放行后）
 
-- 阿里云安全组入方向放行 TCP 80/80 → 0.0.0.0/0（当前公网 80 仍 closed/filtered）；
-- 放行后从部署机跑 deploy/verify.ps1 -BaseUrl http://114.55.133.96 + Playwright 浏览器走查完成公网复核；
-- 建议：部署完成后修改 root 密码（当前为临时密码）；
-- 可选：绑定域名 + HTTPS（DEPLOY.md §5，443 需同时放行）。
+| 项 | 结果 |
+|---|---|
+| 公网 80 连通 | OPEN |
+| deploy/verify.ps1 -BaseUrl http://114.55.133.96 | PASS 5/5 |
+| Playwright 公网浏览器走查（开始游戏→全程推进→3 选项窗口→结局→返回标题） | PASS |
+
+**公网复核中修复的坑**：`crypto.randomUUID` 只在安全上下文（HTTPS/localhost）可用，公网 HTTP IP 直连下抛 "crypto.randomUUID is not a function"，导致 player_id 生成失败、存档/剧本请求报错。修复：getPlayerId 加手工 UUID 回退（frontend-vue/src/api/saves.ts，commit 5da1326），服务器前端镜像已重建。
+
+## 建议（用户侧，可选）
+
+- 部署完成后在阿里云控制台重置 root 密码（当前为临时密码）；
+- 绑定域名 + HTTPS（DEPLOY.md §5，443 需同时放行）。
+
+**玩家访问地址：http://114.55.133.96/**
 
 ## 新增部署工具
 

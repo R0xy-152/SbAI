@@ -3,7 +3,8 @@
 import { chromium } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 
-const BASE = 'http://localhost:8080'
+// 默认本机 docker 栈；公网/服务器复核用 GAL_BASE_URL 环境变量覆盖
+const BASE = process.env.GAL_BASE_URL || 'http://localhost:8080'
 const OUT = 'D:/gal/validation-results/story-quicklaunch/evidence'
 mkdirSync(OUT, { recursive: true })
 
