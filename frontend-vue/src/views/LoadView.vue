@@ -23,7 +23,7 @@ async function onLoad(saveId: string) {
     const result = await saves.load(saveId)
     game.pendingLoad = result
     localStorage.removeItem('gal_session_id')
-    await router.push('/game')
+    await router.push('/story')
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {

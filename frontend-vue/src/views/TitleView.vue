@@ -30,10 +30,11 @@ async function onNewGame() {
   newGameBusy.value = true
   newGameError.value = null
   try {
-    // 显式新建会话：清掉旧 session 标识，交给 GameView 走 Opening（docs/13 §12.2）。
+    // 显式新建会话：清掉旧 session 标识，交给 StoryView 走 07 固定剧本
+    //（快速上线：AI 停用；docs/13 §12.2 的 Opening 流程保留在旧 GameView）。
     localStorage.removeItem('gal_session_id')
     game.sessionId = null
-    await router.push('/game')
+    await router.push('/story')
   } catch (e) {
     newGameError.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -51,7 +52,7 @@ async function onContinue() {
     const result = await saves.load(saves.mostRecent.id)
     game.pendingLoad = result
     localStorage.removeItem('gal_session_id')
-    await router.push('/game')
+    await router.push('/story')
   } catch (e) {
     continueError.value = e instanceof Error ? e.message : String(e)
   } finally {
