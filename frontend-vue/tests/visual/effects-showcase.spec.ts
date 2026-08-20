@@ -4,7 +4,7 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { waitTypedStable, waitImagesComplete } from './fixtures'
+import { waitTypedStable, waitImagesComplete, waitInputUnlocked } from './fixtures'
 
 /** 统计 canvas 上非透明像素数（粒子确实在绘制，docs/15 §9.3 机器证据）。 */
 async function canvasPaintedPixels(page: Page, selector: string): Promise<number> {
@@ -62,10 +62,7 @@ test('特效展示：游戏内星空粒子（binding_room → StarField）', asy
   await page.waitForURL('**/game')
   await waitTypedStable(page)
   await page.locator('#sendButton').click()
-  await page.waitForFunction(() => {
-    const ta = document.querySelector<HTMLTextAreaElement>('#inputMessage')
-    return !!ta && !ta.readOnly
-  })
+  await waitInputUnlocked(page) // 自动关闭选项窗口（docs/16 P8）
   await waitImagesComplete(page)
   await page.waitForTimeout(700) // 让星空粒子绘制几帧
   // 机器证据：游戏内星空粒子 canvas（StarField）确实在绘制

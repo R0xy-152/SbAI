@@ -103,11 +103,41 @@ export async function waitInputUnlocked(page: Page, timeout = 60_000): Promise<v
       return !!ta && !ta.readOnly
     })
     if (unlocked) return
+    // 选项窗口打开 → 点「继续对话」关闭（docs/16 P8：窗口是选项唯一入口，D4 可跳过）
+    const win = page.locator('[data-testid="option-window"]')
+    if (await win.isVisible().catch(() => false)) {
+      await page.locator('[data-testid="option-window-dismiss"]').click()
+      await page.waitForTimeout(120)
+      continue
+    }
     const disabled = await page.locator('#sendButton').isDisabled().catch(() => true)
     if (!disabled) await page.locator('#sendButton').click()
     await page.waitForTimeout(100)
   }
   throw new Error('waitInputUnlocked timeout')
+}
+
+/** 打开选项窗口（点顶栏「行动」）；已打开则直接返回。 */
+export async function openOptionWindow(page: Page): Promise<void> {
+  const win = page.locator('[data-testid="option-window"]')
+  if (!(await win.isVisible().catch(() => false))) {
+    await page.getByRole('button', { name: '行动', exact: true }).click()
+    await win.waitFor({ timeout: 15_000 })
+  }
+}
+
+/** 打开选项窗口并在其中点击指定选项。 */
+export async function clickOption(page: Page, name: string, exact = true): Promise<void> {
+  await openOptionWindow(page)
+  await page.getByRole('button', { name, exact }).click()
+}
+
+/** 有选项则打开选项窗口（无选项时静默跳过）。用于 D3「未解锁选项不可见」断言。 */
+export async function openOptionWindowIfAny(page: Page): Promise<void> {
+  const act = page.getByRole('button', { name: '行动', exact: true })
+  if (await act.isVisible().catch(() => false)) {
+    await openOptionWindow(page)
+  }
 }
 
 /** Title → 开始游戏 → opening 完整打出 → 推进解锁输入。 */
@@ -139,12 +169,13 @@ export async function chatRound(page: Page, text: string): Promise<void> {
   await waitInputUnlocked(page)
 }
 
-/** 调查桌上的纸（inspect + 自动拓印 → EV01），docs/14 T2 起经选项气泡执行
- *（后端下发 label=「桌上的纸」的 investigate 选项，payload.steps 两步）。完成后
- * 该选项消失（D3：已完成热点不下发）。 */
+/** 调查桌上的纸（inspect + 自动拓印 → EV01）。docs/16 P7/P8：经选项窗口执行，
+ *  成功后弹线索窗口展示获得证据，点「关闭」继续。完成后该选项消失（D3）。 */
 export async function inspectPaper(page: Page): Promise<void> {
-  await page.getByRole('button', { name: '桌上的纸', exact: true }).click()
-  await page.getByText('调查完成，获得新线索。').waitFor({ timeout: 30_000 })
+  await clickOption(page, '桌上的纸')
+  await page.locator('[data-testid="clue-window"]').waitFor({ timeout: 30_000 })
+  await page.locator('[data-testid="clue-window-close"]').click()
+  await waitInputUnlocked(page)
 }
 
 /** 确定性 Gate 驱动 Claude 出现（D6：任何消息不得含 03:17 字样）。 */

@@ -19,6 +19,7 @@ import {
 } from '../adapters/presentation-adapter'
 import {
   createOpening,
+  fetchEvidence,
   fetchGameState,
   fetchHistory,
   presentEvidence,
@@ -42,7 +43,8 @@ import SavePanel from '../components/save/SavePanel.vue'
 import LoadPanel from '../components/save/LoadPanel.vue'
 import SystemMenu from '../components/system/SystemMenu.vue'
 import HistoryPanel from '../components/system/HistoryPanel.vue'
-import OptionsPanel from '../components/game/standard/OptionsPanel.vue'
+import OptionWindow from '../components/game/standard/OptionWindow.vue'
+import ClueWindow from '../components/game/standard/ClueWindow.vue'
 import SubActionPanel from '../components/game/standard/SubActionPanel.vue'
 import LoadingTransition from '../components/effects/LoadingTransition.vue'
 import EyeOpenTransition from '../components/effects/EyeOpenTransition.vue'
@@ -235,7 +237,12 @@ function onDialogProceed() {
   }
   lineQueue.value = []
   lineIndex = 0
-  setInputMode(true)
+  // docs/16 P7/P8：台词播完点继续，若有可用选项 → 弹选项窗口（否则解锁输入）
+  if (options.value.length > 0) {
+    showOptionWindow.value = true
+  } else {
+    setInputMode(true)
+  }
 }
 
 // 选项功能（docs/14 T2/T3）：后端权威下发当前合法选项（D3），前端只回传
@@ -257,8 +264,113 @@ const panelMessage = ref<string | null>(null)
 
 const routeLabel = computed(() => {
   if (!routedCharacter.value) return null
-  return `正在与 ${roleNameOf(routedCharacter.value)} 对话：再点同一气泡回到公共对话`
+  return `正在与 ${roleNameOf(routedCharacter.value)} 对话：再点同一选项回到公共对话`
 })
+
+// docs/16 P7/P8：选项窗口 + 线索窗口。窗口取代 docs/14 D6 气泡条；AI 台词播完
+// 点继续时若存在选项则弹窗（D4：窗口含「继续对话」关闭项，自由输入不受限）。
+const showOptionWindow = ref(false)
+const activeClue = ref<{ title: string; summary: string } | null>(null)
+
+function openOptionWindow() {
+  if (options.value.length > 0 && !llmBusy.value) showOptionWindow.value = true
+}
+
+function closeOptionWindow() {
+  showOptionWindow.value = false
+  if (!activeClue.value) setInputMode(true)
+}
+
+async function onOptionWindowSelect(option: GameOption) {
+  if (!sessionId.value || optionBusy.value || llmBusy.value) return
+  if (option.kind === 'investigate') {
+    showOptionWindow.value = false
+    const evidenceId = await performInvestigate(option)
+    if (evidenceId) {
+      await openClueWindow(evidenceId)
+    } else {
+      setInputMode(true)
+    }
+    return
+  }
+  showOptionWindow.value = false
+  await executeOption(option)
+  // 出提示行/证词行的选项（deduction；narrative 的 testify）自身控制输入态（后续点
+  // 继续解锁）；evidence_present/private_interview 弹小面板（面板关闭时解锁）；
+  // 其余（chat_routing/recovery/narrative 其它动作）统一解锁。
+  const setsLine =
+    option.kind === 'deduction' ||
+    (option.kind === 'narrative' && option.payload?.action === 'testify')
+  if (
+    !setsLine &&
+    option.kind !== 'evidence_present' &&
+    option.kind !== 'private_interview'
+  ) {
+    setInputMode(true)
+  }
+}
+
+async function performInvestigate(option: GameOption): Promise<string | null> {
+  if (!sessionId.value) return null
+  optionBusy.value = true
+  const epoch = viewEpoch
+  try {
+    const steps = Array.isArray(option.payload?.steps) ? option.payload.steps : []
+    let last: Awaited<ReturnType<typeof sendInvestigationAction>> | null = null
+    for (const step of steps) {
+      const action = (step as { action?: unknown })?.action
+      const hotspotId = (step as { hotspot_id?: unknown })?.hotspot_id
+      if (typeof action !== 'string' || typeof hotspotId !== 'string') continue
+      last = await sendInvestigationAction(
+        sessionId.value,
+        action as 'INSPECT_HOTSPOT' | 'PAPER_RUBBING_COMPLETE',
+        hotspotId,
+      )
+      if (last.state?.presentation_state) {
+        applyPresentationStateView(presentation.state, last.state.presentation_state)
+      }
+    }
+    if (epoch !== viewEpoch) return null
+    await reconcileStage()
+    if (epoch !== viewEpoch) return null
+    if (last) {
+      feedback.value =
+        last.outcome === 'ALREADY_COMPLETED'
+          ? '已经调查过了。'
+          : last.evidence_id
+            ? '调查完成，获得新线索。'
+            : '调查完成。'
+      return typeof last.evidence_id === 'string' ? last.evidence_id : null
+    }
+    return null
+  } catch (e) {
+    feedback.value = e instanceof Error ? e.message : '调查失败，请重试。'
+    return null
+  } finally {
+    optionBusy.value = false
+  }
+}
+
+async function openClueWindow(evidenceId: string) {
+  if (!sessionId.value) return
+  try {
+    const evidence = await fetchEvidence(sessionId.value)
+    const found = evidence.find((ev) => ev.evidence_id === evidenceId)
+    if (found) {
+      activeClue.value = { title: found.title, summary: found.summary }
+    } else {
+      setInputMode(true)
+    }
+  } catch (e) {
+    console.warn('[GameView] fetch evidence failed', e)
+    setInputMode(true)
+  }
+}
+
+function onClueClose() {
+  activeClue.value = null
+  setInputMode(true)
+}
 
 async function executeOption(option: GameOption) {
   if (!sessionId.value || optionBusy.value || llmBusy.value) return
@@ -288,43 +400,10 @@ async function executeOption(option: GameOption) {
     panelMessage.value = null
     return
   }
-  // investigate：payload.steps 逐条执行既有权威端点（/api/game/action）
+  // investigate：payload.steps 逐条执行既有权威端点（/api/game/action）。
+  // 执行细节收敛到 performInvestigate（P7 线索窗口也复用）。
   if (option.kind === 'investigate') {
-    optionBusy.value = true
-    const epoch = viewEpoch
-    try {
-      const steps = Array.isArray(option.payload?.steps) ? option.payload.steps : []
-      let last: Awaited<ReturnType<typeof sendInvestigationAction>> | null = null
-      for (const step of steps) {
-        const action = (step as { action?: unknown })?.action
-        const hotspotId = (step as { hotspot_id?: unknown })?.hotspot_id
-        if (typeof action !== 'string' || typeof hotspotId !== 'string') continue
-        last = await sendInvestigationAction(
-          sessionId.value,
-          action as 'INSPECT_HOTSPOT' | 'PAPER_RUBBING_COMPLETE',
-          hotspotId,
-        )
-        if (last.state?.presentation_state) {
-          applyPresentationStateView(presentation.state, last.state.presentation_state)
-        }
-      }
-      if (epoch !== viewEpoch) return
-      // 先对账（选项随热点完成而消失，D3），再给反馈，避免测试先看到文案
-      await reconcileStage()
-      if (epoch !== viewEpoch) return
-      if (last) {
-        feedback.value =
-          last.outcome === 'ALREADY_COMPLETED'
-            ? '已经调查过了。'
-            : last.evidence_id
-              ? '调查完成，获得新线索。'
-              : '调查完成。'
-      }
-    } catch (e) {
-      feedback.value = e instanceof Error ? e.message : '调查失败，请重试。'
-    } finally {
-      optionBusy.value = false
-    }
+    await performInvestigate(option)
     return
   }
   // recovery（T4）：进入 Recovery / 单步节点操作，均走既有权威端点
@@ -504,11 +583,18 @@ async function onPanelSubmit(payload: {
       }
     }
     await reconcileStage()
+    // docs/16 P8：面板提交成功后（activePanel 已关闭）解锁输入
+    if (!activePanel.value) setInputMode(true)
   } catch (e) {
     panelMessage.value = e instanceof Error ? e.message : '提交失败，请重试。'
   } finally {
     panelBusy.value = false
   }
+}
+
+function closePanel() {
+  activePanel.value = null
+  setInputMode(true)
 }
 
 async function startOpening() {
@@ -690,17 +776,15 @@ onUnmounted(() => {
     <!-- 角色舞台 -->
     <GameRolesStage class="pointer-events-none absolute inset-0 z-1" />
 
-    <!-- 对话框（底部）+ 选项气泡条（docs/14 §2.2：选项在对话框上方，D6；
-         选项由后端权威下发，可调查性不再由前端 hotspot 推断） -->
+    <!-- 对话框（底部）+ 状态行（routeLabel / feedback，docs/16 P8 取代气泡条） -->
     <div class="absolute inset-x-0 bottom-0 z-10 flex flex-col">
-      <OptionsPanel
-        :options="options"
-        :busy="optionBusy || llmBusy"
-        :feedback="feedback"
-        :route-label="routeLabel"
-        :active-route-id="routedCharacter ? 'chat_routing:' + routedCharacter : null"
-        @select="executeOption"
-      />
+      <div
+        v-if="routeLabel || feedback"
+        class="flex w-full flex-col items-center gap-1 pb-1"
+      >
+        <div v-if="routeLabel" class="px-4 text-xs text-[#a9e8ff]">{{ routeLabel }}</div>
+        <div v-if="feedback" class="max-w-[560px] px-4 text-xs text-[#a9e8ff]/80">{{ feedback }}</div>
+      </div>
       <GameDialog
         class="mx-auto"
         @player-continued="onPlayerMessage"
@@ -722,6 +806,14 @@ onUnmounted(() => {
       </span>
       <span v-if="error" class="ml-3 text-red-300">{{ error }}</span>
       <div class="ml-auto flex items-center gap-2">
+        <button
+          v-if="options.length"
+          class="rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs text-[#d7effa]/85 backdrop-blur-sm transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="llmBusy"
+          @click="openOptionWindow"
+        >
+          行动
+        </button>
         <button
           class="rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs text-[#d7effa]/85 backdrop-blur-sm transition-colors hover:bg-white/10"
           @click="systemPanel = 'menu'"
@@ -769,8 +861,26 @@ onUnmounted(() => {
       :option="activePanel"
       :busy="panelBusy"
       :message="panelMessage"
-      @close="activePanel = null"
+      @close="closePanel"
       @submit="onPanelSubmit"
+    />
+
+    <!-- 选项窗口（docs/16 P7/P8：取代气泡条；AI 台词播完点继续 / 点「行动」打开） -->
+    <OptionWindow
+      v-if="showOptionWindow"
+      :options="options"
+      :busy="optionBusy || llmBusy"
+      :active-route-id="routedCharacter ? 'chat_routing:' + routedCharacter : null"
+      @select="onOptionWindowSelect"
+      @dismiss="closeOptionWindow"
+    />
+
+    <!-- 线索窗口（docs/16 P7：调查成功后展示获得证据的标题 + 描述） -->
+    <ClueWindow
+      v-if="activeClue"
+      :title="activeClue.title"
+      :summary="activeClue.summary"
+      @close="onClueClose"
     />
 
     <!-- 首次加载演出（docs/15 §7：New Game 专用；ready = opening 数据就绪） -->

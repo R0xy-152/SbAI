@@ -15,6 +15,9 @@ import {
   inspectPaper,
   sendPlayerMessage,
   manualSaveSlot1,
+  openOptionWindow,
+  openOptionWindowIfAny,
+  clickOption,
 } from '../visual/fixtures'
 
 const SYS_0317_WARNING = '警告：检测到与当前运行记录不一致的内存访问痕迹。'
@@ -43,13 +46,15 @@ test('第一章主线可运行（docs/13 §7.2 验收链路）', async ({ page }
 
   // D3：开场只下发「桌上的纸」调查选项；Claude 未登场 → 无对话路由选项，
   // 默认回应者 DeepSeek 也不占路由选项（docs/14 §2.3 / D5）
+  await openOptionWindow(page)
   await expect(page.getByRole('button', { name: '桌上的纸', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: '找 Claude 谈谈' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '找 DeepSeek 谈谈' })).toHaveCount(0)
 
-  // 调查桌上的纸 → EV01（03:17 前置），经选项气泡执行（docs/14 T2）
+  // 调查桌上的纸 → EV01（03:17 前置），经选项窗口执行（docs/16 P7/P8）
   await inspectPaper(page)
   // D3：拓印完成后「桌上的纸」选项随热点 completed 消失
+  await openOptionWindowIfAny(page)
   await expect(page.getByRole('button', { name: '桌上的纸', exact: true })).toHaveCount(0)
 
   // 确定性 Gate：普通回合 ×2 → counter=2 → 03:17 自动发生
@@ -81,6 +86,7 @@ test('第一章主线可运行（docs/13 §7.2 验收链路）', async ({ page }
   await waitInputUnlocked(page)
 
   // D3 + D5：Claude 登场后下发「找 Claude 谈谈」；默认回应者 DeepSeek 不占选项
+  await openOptionWindow(page)
   await expect(page.getByRole('button', { name: '找 Claude 谈谈' })).toBeVisible()
   await expect(page.getByRole('button', { name: '找 DeepSeek 谈谈' })).toHaveCount(0)
   // T2 其余 3 个热点（docs/14 §2.3）：后端下发 investigate 选项（BEGIN_CHAPTER
@@ -88,13 +94,14 @@ test('第一章主线可运行（docs/13 §7.2 验收链路）', async ({ page }
   for (const label of ['主终端', 'C-02 隔离门', '角色注册表']) {
     await expect(page.getByRole('button', { name: label, exact: true })).toBeVisible()
   }
+  await page.locator('[data-testid="option-window-dismiss"]').click()
 
   // 手动保存 Slot 1
   await manualSaveSlot1(page, 'E2E 主线存档')
 
   // D5 粘性路由：点「找 Claude 谈谈」→ 下一条消息由 Claude 回应（后端历史权威断言）；
   // 再点同一气泡取消 → 回到公共对话（mock SpeakerSelector 恒选 DeepSeek）
-  await page.getByRole('button', { name: '找 Claude 谈谈' }).click()
+  await clickOption(page, '找 Claude 谈谈')
   track('你好呀')
   await sendPlayerMessage(page, '你好呀')
   await waitTypingStarted(page)
@@ -111,7 +118,7 @@ test('第一章主线可运行（docs/13 §7.2 验收链路）', async ({ page }
     expect(lastChar.character_id).toBe(expected)
   }
   await assertLastCharacter('claude')
-  await page.getByRole('button', { name: '找 Claude 谈谈' }).click()
+  await clickOption(page, '找 Claude 谈谈')
   track('回到公共对话')
   await sendPlayerMessage(page, '回到公共对话')
   await waitTypingStarted(page)
@@ -155,10 +162,12 @@ test('第一章主线可运行（docs/13 §7.2 验收链路）', async ({ page }
 
   // 显示的是存档时的对话（03:17 序列最后一行），而非「继续」回合的回应
   await waitTyped(page, DS_0317_REACTION)
+  await page.locator('#sendButton').click()  // 推进 → 选项窗口弹出
 
   // 纸条 hotspot 状态恢复为 completed（闸门未重开）：T2 起已完成热点的调查
-  // 选项不再下发（D3：气泡条无「桌上的纸」）；Claude 仍在场 → 路由选项恢复。
+  // 选项不再下发（D3：窗口无「桌上的纸」）；Claude 仍在场 → 路由选项恢复。
   // 并用权威 /api/game/state 直接断言恢复后的 hotspot_states
+  await openOptionWindow(page)
   await expect(page.getByRole('button', { name: '桌上的纸', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: '找 Claude 谈谈' })).toBeVisible()
   const restoredSid = await page.evaluate(() => localStorage.getItem('gal_session_id'))

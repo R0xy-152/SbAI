@@ -164,6 +164,24 @@ export async function fetchGameState(sessionId: string): Promise<{
   return data
 }
 
+/** 已获得证据（GET /api/game/evidence，docs/16 P7 线索窗口内容源）。 */
+export interface EvidenceView {
+  evidence_id: string
+  title: string
+  summary: string
+  facts: string[]
+  source_hotspot: string
+  acquired: boolean
+  presented_to: string[]
+}
+
+export async function fetchEvidence(sessionId: string): Promise<EvidenceView[]> {
+  const { data } = await http.get<EvidenceView[]>('/game/evidence', {
+    params: { session_id: sessionId },
+  })
+  return data
+}
+
 /** 会话对话历史（docs/01 §18）。 */
 export async function fetchHistory(sessionId: string): Promise<{
   session_id: string
