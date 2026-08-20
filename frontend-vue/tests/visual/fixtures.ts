@@ -67,28 +67,47 @@ export async function waitTypingStarted(page: Page, timeout = 60_000): Promise<s
   return page.locator('#inputMessage').inputValue()
 }
 
-/** 等待 #inputMessage 打出精确文本（确定性 script 行）。 */
+/** 反复点 #sendButton 直到 #inputMessage 值 === exactText（确定性 script 行）。
+ *  docs/16 P6：台词按换行分段后，从玩家发言到目标 script 行之间可能隔着多段
+ *  AI 回声（mock 回声内嵌多行上下文）。本助手仅在「当前值非空且不是目标前缀」
+ * 时点继续（即跳过回声段）；一旦值成为目标的前缀（目标正在逐字打出）或为空
+ *（刚推进、下一段即将打出）就等待，绝不打断目标行。 */
 export async function waitTyped(
   page: Page,
   exactText: string,
   timeout = 60_000,
 ): Promise<void> {
-  await page.waitForFunction(
-    (t) => {
-      const ta = document.querySelector<HTMLTextAreaElement>('#inputMessage')
-      return ta !== null && ta.value === t
-    },
-    exactText,
-    { timeout },
-  )
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    const v = await page.locator('#inputMessage').inputValue().catch(() => '')
+    if (v === exactText) return
+    // 仅在「非空且不是目标前缀」时点继续（跳过回声段）；空（刚推进，下一段即将
+    // 打出）或目标前缀（目标正在逐字打出）一律等待，绝不跳过目标行。
+    const skip = v.length > 0 && !exactText.startsWith(v)
+    if (skip) {
+      const disabled = await page.locator('#sendButton').isDisabled().catch(() => true)
+      if (!disabled) await page.locator('#sendButton').click()
+    }
+    await page.waitForTimeout(100)
+  }
+  throw new Error('waitTyped timeout: ' + exactText)
 }
 
-/** 等待输入解锁（textarea 非 readonly）。 */
-export async function waitInputUnlocked(page: Page): Promise<void> {
-  await page.waitForFunction(() => {
-    const ta = document.querySelector<HTMLTextAreaElement>('#inputMessage')
-    return !!ta && !ta.readOnly
-  })
+/** 等待输入解锁（textarea 非 readonly）；锁定期间在按钮可用时连续点继续快速
+ *  跳过多段回声（不等待整段打完，与旧 fixture「开始打字即推进」语义一致）。 */
+export async function waitInputUnlocked(page: Page, timeout = 60_000): Promise<void> {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    const unlocked = await page.evaluate(() => {
+      const ta = document.querySelector('textarea#inputMessage') as HTMLTextAreaElement | null
+      return !!ta && !ta.readOnly
+    })
+    if (unlocked) return
+    const disabled = await page.locator('#sendButton').isDisabled().catch(() => true)
+    if (!disabled) await page.locator('#sendButton').click()
+    await page.waitForTimeout(100)
+  }
+  throw new Error('waitInputUnlocked timeout')
 }
 
 /** Title → 开始游戏 → opening 完整打出 → 推进解锁输入。 */

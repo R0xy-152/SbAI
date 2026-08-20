@@ -47,6 +47,7 @@ import SubActionPanel from '../components/game/standard/SubActionPanel.vue'
 import LoadingTransition from '../components/effects/LoadingTransition.vue'
 import EyeOpenTransition from '../components/effects/EyeOpenTransition.vue'
 import { useSettingsStore } from '../stores/settings'
+import { splitTextSegments } from '../utils/text-segments'
 
 const presentation = usePresentationStore()
 const game = useGameStore()
@@ -99,9 +100,16 @@ function onEyeOpenComplete() {
   showEyeOpen.value = false
 }
 
-// 剧本序列逐行播放队列（03:17 / GPT / 豆包 / FINAL_REVEAL 等多行演出）
-const scriptQueue = ref<ChatResponse['script_sequence']>([])
-let scriptIndex = 0
+// docs/16 P6：统一演出队列 —— 主台词按换行切段后逐段播放，随后接
+// script_sequence 行；onDialogProceed 逐行推进，播完解锁输入（P7 再叠加
+// 「有选项则弹窗口」）。
+interface QueuedLine {
+  speaker: string
+  text: string
+  emotion?: string | null
+}
+const lineQueue = ref<QueuedLine[]>([])
+let lineIndex = 0
 
 // 系统菜单 / 面板（docs/13 §13）。systemPanel 表示当前打开的面板：
 // null 无，'menu' 系统菜单，'save'/'load'/'history' 对应面板。
@@ -159,16 +167,16 @@ async function reconcileStage() {
   }
 }
 
-// 播放剧本序列（逐行打字机推进；多角色演出由后端 script_sequence 下发）
-function playNextScriptLine(): boolean {
-  if (scriptIndex >= scriptQueue.value.length) {
-    scriptQueue.value = []
-    scriptIndex = 0
+// 播放队列下一行（台词分段 / 剧本行）；播完返回 false
+function playNextLine(): boolean {
+  if (lineIndex >= lineQueue.value.length) {
+    lineQueue.value = []
+    lineIndex = 0
     return false
   }
-  const line = scriptQueue.value[scriptIndex]
-  scriptIndex++
-  setSpeakerLine(line.speaker, line.dialogue, line.emotion)
+  const line = lineQueue.value[lineIndex]
+  lineIndex++
+  setSpeakerLine(line.speaker, line.text, line.emotion)
   presentation.state.status = 'streaming'
   return true
 }
@@ -195,14 +203,21 @@ async function onPlayerMessage(text?: unknown) {
     // 结构化指令 → 舞台（CHARACTER_SHOW / EMOTION / GLITCH 等）
     applyChatResponse(presentation.state, data)
     presentation.state.dialogue.speakerName = roleNameOf(data.character_id)
-    scriptQueue.value = data.script_sequence ?? []
-    scriptIndex = 0
-    // 主台词（若有剧本序列，主台词后仍依次播放序列）
-    if (!data.dialogue) {
-      playNextScriptLine()
-    } else {
-      presentation.state.status = 'streaming'
-    }
+    // docs/16 P6：主台词按换行切段 → 统一队列（段在前，script_sequence 行在后）
+    lineQueue.value = [
+      ...splitTextSegments(data.dialogue).map((t) => ({
+        speaker: data.character_id,
+        text: t,
+        emotion: data.emotion,
+      })),
+      ...(data.script_sequence ?? []).map((s) => ({
+        speaker: s.speaker,
+        text: s.dialogue,
+        emotion: s.emotion,
+      })),
+    ]
+    lineIndex = 0
+    if (!playNextLine()) setInputMode(true)
     await reconcileStage()
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
@@ -212,21 +227,15 @@ async function onPlayerMessage(text?: unknown) {
   }
 }
 
-// 打字机完成（dialog-proceed）→ 推进下一句剧本序列；播完解锁输入
-let pendingOpeningAdvance = false
+// 打字机完成（dialog-proceed）→ 推进队列下一行（台词分段 / 剧本行）；播完解锁输入
 function onDialogProceed() {
-  if (pendingOpeningAdvance) {
-    pendingOpeningAdvance = false
-    setInputMode(true)
+  if (lineIndex < lineQueue.value.length) {
+    playNextLine()
     return
   }
-  if (scriptQueue.value.length > 0 && scriptIndex < scriptQueue.value.length) {
-    playNextScriptLine()
-  } else {
-    scriptQueue.value = []
-    scriptIndex = 0
-    setInputMode(true)
-  }
+  lineQueue.value = []
+  lineIndex = 0
+  setInputMode(true)
 }
 
 // 选项功能（docs/14 T2/T3）：后端权威下发当前合法选项（D3），前端只回传
@@ -442,13 +451,13 @@ async function submitPlayerDeduction(message: string) {
     const seq = Array.isArray(result.script_sequence)
       ? (result.script_sequence as ChatResponse['script_sequence'])
       : []
-    scriptQueue.value = seq
-    scriptIndex = 0
-    if (seq.length > 0) {
-      playNextScriptLine()
-    } else {
-      setInputMode(true)
-    }
+    lineQueue.value = seq.map((s) => ({
+      speaker: s.speaker,
+      text: s.dialogue,
+      emotion: s.emotion,
+    }))
+    lineIndex = 0
+    if (!playNextLine()) setInputMode(true)
     await reconcileStage()
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
@@ -527,8 +536,14 @@ function applyOpeningResponse(opening: OpeningResponse) {
   sessionId.value = opening.session_id
   localStorage.setItem(SESSION_KEY, opening.session_id)
   if (opening.dialogue) {
-      setSpeakerLine(opening.character_id, opening.dialogue, opening.emotion)
-      presentation.state.status = 'streaming'
+      // docs/16 P6：opening 台词同样按换行切段进统一队列逐段播放
+      lineQueue.value = splitTextSegments(opening.dialogue).map((t) => ({
+        speaker: opening.character_id,
+        text: t,
+        emotion: opening.emotion,
+      }))
+      lineIndex = 0
+      playNextLine()
       // 初始场景背景（binding_room → background1）；后续由 reconcileStage 对账
       presentation.state.scene.backgroundId = BG
       // opening 角色（DeepSeek）已在场
@@ -541,7 +556,6 @@ function applyOpeningResponse(opening: OpeningResponse) {
       // opening 是开场演出：播放中不可输入（dialogue.mode 已由 setSpeakerLine
       // 置为 'ai'，status 'streaming' 即 responding；勿再调用 setInputMode(false)，
       // 其会把 status 覆盖为 thinking 使打字机永远不启动），玩家点击推进后解锁
-      pendingOpeningAdvance = true
     } else {
       setInputMode(true)
     }
