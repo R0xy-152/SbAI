@@ -98,8 +98,12 @@ const backendLabel = computed(() =>
 
 <template>
   <div class="relative h-full w-full overflow-hidden bg-[#04070f] text-[#f4f8ff]">
-    <!-- 1. 背景层（docs/15 §4.1：全亮无遮罩，120% 宽给视差留余量） -->
-    <div ref="bgRef" class="title-bg-layer"></div>
+    <!-- 1. 背景层（docs/15 §4.1 + docs/16 P3：整图完整显示不裁切，左右用同图
+         模糊放大填充，120% 宽给视差留余量） -->
+    <div ref="bgRef" class="title-bg-layer">
+      <div class="title-bg-fill"></div>
+      <div class="title-bg-sharp"></div>
+    </div>
 
     <!-- 2. 流星层 -->
     <MeteorAnimation :meteors-enabled="settings.mainMenuMeteorsEnabled" :meteor-fps="30" />
@@ -169,11 +173,30 @@ const backendLabel = computed(() =>
   left: -10%;
   width: 120%;
   height: 100%;
+  z-index: 0;
+  will-change: transform;
+  overflow: hidden;
+}
+
+/* docs/16 P3：模糊填充层 —— 同图 cover + blur 覆盖整层，视差位移不露底 */
+.title-bg-fill {
+  position: absolute;
+  inset: 0;
   background-image: url('/backgroud/background_title.png');
   background-size: cover;
   background-position: center;
-  z-index: 0;
-  will-change: transform;
+  filter: blur(24px) brightness(0.72) saturate(1.05);
+  transform: scale(1.08);
+}
+
+/* docs/16 P3：清晰层 —— 高度铺满、宽度按比例居中，整图完整显示不裁切 */
+.title-bg-sharp {
+  position: absolute;
+  inset: 0;
+  background-image: url('/backgroud/background_title.png');
+  background-size: auto 100%;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 /* 菜单入场（docs/15 §4.4） */
