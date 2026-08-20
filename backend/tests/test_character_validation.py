@@ -51,14 +51,14 @@ def test_missing_field_is_rejected(field):
         _parse(payload)
 
 
-@pytest.mark.parametrize("emotion", ["angry", "neutral", "embarrassed", "serious", "annoyed", "happy"])
+@pytest.mark.parametrize("emotion", ["neutral", "happy", "annoyed", "angry", "embarrassed", "serious", "surprised", "jealous", "nervous", "sad"])
 def test_all_allowed_emotions_accepted(emotion):
     payload = _valid_output()
     payload["emotion"] = emotion
     assert _parse(payload).emotion == emotion
 
 
-@pytest.mark.parametrize("emotion", ["sad", "ANGRY", "crying", "", "摇头晃脑"])
+@pytest.mark.parametrize("emotion", ["gloomy", "ANGRY", "crying", "", "摇头晃脑"])
 def test_invalid_emotion_is_rejected(emotion):
     payload = _valid_output()
     payload["emotion"] = emotion

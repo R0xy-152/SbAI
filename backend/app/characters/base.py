@@ -75,7 +75,11 @@ class ActionProposal:
 # the Script DSL's deterministic reactions (docs/12 §19); the small_jump /
 # slide_in_* animations are the CharacterStage's recommended named set
 # (docs/12 §11).
-ALLOWED_EMOTIONS = frozenset({"neutral", "happy", "annoyed", "angry", "embarrassed", "serious", "surprised"})
+# docs/16 §0 问题4 固定译文对齐；jealous/nervous 于 docs/16 之后的
+# 差分立绘规范化任务加入（chatgpt_chicu→jealous、deepseek_jinzhang→nervous）。
+ALLOWED_EMOTIONS = frozenset(
+    {"neutral", "happy", "annoyed", "angry", "embarrassed", "serious", "surprised", "jealous", "nervous", "sad"}
+)
 ALLOWED_ANIMATIONS = frozenset({"none", "shake", "strong_shake", "fade_in", "fade_out", "small_jump", "slide_in_left", "slide_in_right"})
 
 
@@ -331,7 +335,7 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
     '"mood": {"positive": 0.0, "excitement": 0.0}}\n'
     "字段要求：\n"
     "- dialogue：你要说的话本身，保持你的口癖，是完整的自然句子。\n"
-    "- emotion：必须且只能是 neutral、happy、annoyed、angry、embarrassed、serious 之一。\n"
+    "- emotion：必须且只能是 neutral、happy、annoyed、angry、embarrassed、serious、surprised、jealous、nervous、sad 之一。\n"
     "- animation_proposal：必须且只能是 none、shake、strong_shake、fade_in、fade_out 之一。\n"
     "- memory_proposals：只有 Player 明确提到值得长期记住的信息"
     "（如名字、喜好、害怕的事物）时才填入，否则为空数组。\n"

@@ -1053,9 +1053,13 @@ annoyed
 angry
 embarrassed
 serious
+surprised
+jealous
+nervous
+sad
 ```
 
-Frontend根据名称映射具体立绘。
+Frontend根据名称映射具体立绘（`surprised` 为 Script DSL 确定性反应加入；`jealous`/`nervous` 为差分立绘规范化任务加入，`sad` 为悲伤情绪扩展加入，中文标签见 docs/16 §0 问题4）。
 
 模型不得生成：
 

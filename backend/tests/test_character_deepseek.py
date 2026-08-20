@@ -136,7 +136,7 @@ def test_character_id_mismatch_falls_back():
 def test_repair_feedback_names_the_specific_validation_error():
     # docs/04 §53: Repair should tell the model what actually failed. The
     # first output has an invalid emotion; the repair prompt must say so.
-    bad = _valid_json().replace('"emotion": "neutral"', '"emotion": "sad"')
+    bad = _valid_json().replace('"emotion": "neutral"', '"emotion": "crying"')
     provider = _SequencedProvider([bad, _valid_json("修复后的回复。")])
     runtime = DeepSeekRuntime(provider)
     response = runtime.respond(

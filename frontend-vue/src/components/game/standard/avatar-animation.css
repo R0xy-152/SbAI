@@ -234,6 +234,30 @@
   animation-iteration-count: 1;
 }
 
+/* 悲伤：缓慢下沉 + 轻微低落抖动（差分立绘规范化任务新增） */
+@keyframes sadDroop {
+  0% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(10px);
+  }
+  60% {
+    transform: translateY(6px);
+  }
+  100% {
+    transform: translateY(12px);
+  }
+}
+
+.sad-droop {
+  animation-name: sadDroop;
+  animation-duration: 1.2s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
 /* 气泡固定定位样式 */
 .bubble {
   position: absolute;

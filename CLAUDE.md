@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## 项目概览
 
 《完蛋，我被AI娘包围了》—— AI-native Galgame / 对话式悬疑解谜游戏。玩家唯一主动交互是**与角色进行自然语言对话**；固定选项、战斗、自由地图、物品栏等均不是核心玩法。
@@ -96,10 +92,10 @@ Provider 选择由环境变量 `GAL_PROVIDER` 控制：`mock | deepseek | auto`�
 
 - DeepSeek（生成式）：可爱、看不见、贪 Token、偷懒、没心机；**禁止给她未授权的视觉信息**。
 - Claude（生成式）：高智商、强推理、**主线反派**、傲娇（傲娇不能削弱威胁感）。
-- ChatGPT（生成式，正派 + 隐藏病娇）：已实现接入（`backend/app/characters/chatgpt.py`，含 GPT 私审）。
+- ChatGPT（生成式， 隐藏病娇）：已实现接入（`backend/app/characters/chatgpt.py`，含 GPT 私审）。
 - 豆包（生成式 + scripted 兜底）：已实现接入（`backend/app/characters/doubao.py`；观察与解释分离，见 docs/MVP/06 §5，带 scripted 兜底行）。
 
-注意：四个角色现均已作为 Runtime 接入 `backend/app/main.py`，「暂不正式接入」的说法已过时；豆包/ChatGPT 的 LLM/scripted 边界分别按各自文档约定。
+注意：四个角色现均已作为 Runtime 接入 `backend/app/main.py`；豆包/ChatGPT 的 LLM/scripted 边界分别按各自文档约定。
 
 ## 验证与证据约定
 

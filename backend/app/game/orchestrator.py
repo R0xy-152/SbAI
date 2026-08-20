@@ -807,7 +807,13 @@ class GameOrchestrator:
         if excitement > 0.45:
             return "happy" if positive >= 0.5 else "angry"
         if positive < 0.35:
-            return "annoyed"
+            # 吃醋：不高兴但情绪起伏；低落极点归 sad；平缓的不悦归 annoyed
+            if excitement > 0.25:
+                return "jealous"
+            return "sad" if excitement <= -0.2 else "annoyed"
+        if positive < 0.5 and excitement < 0.45:
+            # 紧张：微低积极 + 不亢奋
+            return "nervous"
         return "neutral"
 
     def _character_emotion(self, session_id: str | None, character_id: str) -> str:

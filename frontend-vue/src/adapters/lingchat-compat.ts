@@ -38,6 +38,9 @@ const ANIMATION_BY_EMOTION: Record<string, string> = {
   embarrassed: 'embarrassed-emo',
   serious: 'serious-think',
   surprised: 'suprised-jump',
+  jealous: 'embarrassed-emo',
+  nervous: 'shake',
+  sad: 'sad-droop',
   neutral: 'normal',
 }
 
@@ -64,6 +67,9 @@ export const EMOTION_CONFIG: Record<string, MockEmotionConfig> = {
   embarrassed: { ...NONE_CONFIG, animation: 'embarrassed-emo' },
   serious: { ...NONE_CONFIG, animation: 'serious-think' },
   surprised: { ...NONE_CONFIG, animation: 'suprised-jump' },
+  jealous: { ...NONE_CONFIG, animation: 'embarrassed-emo' },
+  nervous: { ...NONE_CONFIG, animation: 'shake' },
+  sad: { ...NONE_CONFIG, animation: 'sad-droop' },
 }
 
 /** LingChat 组件用 EMOTION_CONFIG_EMO[emotion] 把 emotion 归一到词表 */
@@ -75,10 +81,14 @@ export const EMOTION_CONFIG_EMO: Record<string, string> = {
   embarrassed: 'embarrassed',
   serious: 'serious',
   surprised: 'surprised',
+  jealous: 'jealous',
+  nervous: 'nervous',
+  sad: 'sad',
 }
 
 // ── emotion → 中文标签（docs/16 P1：聊天框上方情绪标签显示中文） ──
-// 映射经用户确认（docs/16 §0 问题4）：后端 ALLOWED_EMOTIONS 七个值的固定译文。
+// 映射经用户确认（docs/16 §0 问题4）：后端 ALLOWED_EMOTIONS 九值的固定译文；
+// jealous/nervous 为差分立绘规范化任务新增。
 export const EMOTION_ZH: Record<string, string> = {
   neutral: '平静',
   happy: '开心',
@@ -87,6 +97,9 @@ export const EMOTION_ZH: Record<string, string> = {
   embarrassed: '害羞',
   serious: '认真',
   surprised: '惊讶',
+  jealous: '吃醋',
+  nervous: '紧张',
+  sad: '悲伤',
 }
 
 // ── 兼容 GameDialog / GameRolesStage / GameRoleAvatar 的 Game Store ──
