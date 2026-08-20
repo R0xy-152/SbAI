@@ -31,6 +31,16 @@
 - 验证：StoryChoiceWindow 单测 3 例（渲染/离场后 emit/busy 禁用）+ 冒烟测试重跑通过（3 选项、结局、返回标题）+ 视觉核验（glm-4v-flash）：3 个胶囊按钮纵向排布、半透明玻璃质感、背景场景透出，与 LingChat 一致。前端单测总数 45 → 48。
 - 冒烟脚本修复：选项点击后等待窗口真正消失再继续（离场动画期间窗口仍在，避免对同一窗口二次定位超时）。
 
+## 补充2（部署前加固验证，第2轮）
+
+| # | 用例 | 结果 |
+|---|---|---|
+| 17 | 旧调查玩法回归（入口隐藏但代码完好）：/api/chat/opening + /api/chat + /api/game/state 经 nginx 均正常（mock provider） | PASS |
+| 18 | 容器重启恢复：backend 容器 restart 后 health ok，故事会话当前节点恢复（CONNECTION ESTABLISHED） | PASS |
+| 19 | postgres 落库实证：game_saves 表存在 AUTO 行（chapter=ch1，psql 直查） | PASS |
+| 20 | 选项节点刷新恢复：刷新后同一选项窗口重现（3 个选项逐字一致），可继续选择推进 | PASS（evidence/05-refresh-at-choice.png） |
+| 21 | deploy/verify.ps1 验收脚本：本机 5/5 PASS；错误端口 5/5 FAIL + exit 1 | PASS |
+
 ## 证据
 
 - evidence/01-title.png、02-story-start.png、03-choice-1..3.png、04-ending.png（docker 栈 8080 实机截图）；
