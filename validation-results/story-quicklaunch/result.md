@@ -25,6 +25,12 @@
 | 15 | UI 冒烟（Playwright）：标题 → 开始游戏 → 全程推进 → 3 个选项窗口 → 结局 → 返回标题 | scripts/story-smoke.mjs | PASS（choiceCount=3, ended=true） |
 | 16 | 截图视觉核验：选项窗口按钮逐字 = 07 的 A/B/C；结局画面 =「第一章 完 / 《03:17 Incident》 / TO BE CONTINUED / 返回标题」 | vision-router（glm-4v-flash） | PASS |
 
+## 补充（选项窗口借鉴 LingChat）
+
+- StoryChoiceWindow 按 LingChat GameChoices（components/game/standard/extra/GameChoices.vue，AGPL 参考源码）重做：全屏悬浮胶囊按钮组（无面板卡片）、交错入场动画（100ms 逐个上浮 + 回弹缓动）、选择后 300ms 缩放渐隐离场、悬停微光扫射 + 静态/漂浮粒子，配色换用本项目皮肤 token；prefers-reduced-motion 下停用循环动画。
+- 验证：StoryChoiceWindow 单测 3 例（渲染/离场后 emit/busy 禁用）+ 冒烟测试重跑通过（3 选项、结局、返回标题）+ 视觉核验（glm-4v-flash）：3 个胶囊按钮纵向排布、半透明玻璃质感、背景场景透出，与 LingChat 一致。前端单测总数 45 → 48。
+- 冒烟脚本修复：选项点击后等待窗口真正消失再继续（离场动画期间窗口仍在，避免对同一窗口二次定位超时）。
+
 ## 证据
 
 - evidence/01-title.png、02-story-start.png、03-choice-1..3.png、04-ending.png（docker 栈 8080 实机截图）；

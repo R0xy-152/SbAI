@@ -50,9 +50,16 @@ for (let i = 0; i < 500; i++) {
   const choice = page.locator('[data-testid="story-choice-window"]')
   if ((await choice.count()) > 0) {
     choiceCount++
+    // 等交错入场动画完成（每个按钮延迟 100ms + 500ms 过渡）再截图
+    await page.waitForTimeout(1300)
     await page.screenshot({ path: OUT + '/03-choice-' + choiceCount + '.png' })
     await choice.locator('button:not(:disabled)').first().click()
-    await page.waitForTimeout(250)
+    // 离场动画（300ms）+ 后端提交期间窗口仍在，等它真正消失再继续，
+    // 避免对同一窗口二次截图/点击（定位器会一直等待不存在的按钮）。
+    await page.waitForFunction(
+      () => !document.querySelector('[data-testid="story-choice-window"]'),
+      { timeout: 15000 },
+    )
     continue
   }
   const ending = page.locator('[data-testid="story-ending"]')
