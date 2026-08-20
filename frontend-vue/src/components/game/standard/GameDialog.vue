@@ -67,7 +67,7 @@
       <!-- 发送按钮（内层右侧外部） -->
       <button
         id="sendButton"
-        class="absolute right-0 bottom-0 translate-x-full cursor-pointer rounded-[5px] border-none bg-transparent px-2 py-2 font-[inherit] text-sm font-bold text-[#04bcff] transition-all duration-300 text-shadow-[inherit] hover:bg-transparent hover:text-[rgba(136,255,251,0.827)] disabled:cursor-not-allowed disabled:bg-[#333] disabled:opacity-70"
+        class="send-hit-area absolute right-0 bottom-0 translate-x-full cursor-pointer rounded-[5px] border-none bg-transparent px-2 py-2 font-[inherit] text-sm font-bold text-[#04bcff] transition-all duration-300 text-shadow-[inherit] hover:bg-transparent hover:text-[rgba(136,255,251,0.827)] disabled:cursor-not-allowed disabled:bg-[#333] disabled:opacity-70"
         :disabled="isSending"
         @click="sendOrContinue"
       >
@@ -222,6 +222,18 @@ defineExpose({
 .custom-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
+}
+
+/* docs/16 P4：继续/发送按钮命中区扩大 —— 视觉按钮不动，用透明 ::after 向
+   右/下/上方扩展触发范围（不向左，避免压到 textarea 右侧输入区；上方扩展
+   停在选项气泡条下方，不与其它功能按键重合）。 */
+.send-hit-area::after {
+  content: '';
+  position: absolute;
+  top: -40px;
+  bottom: -24px;
+  left: 0;
+  right: -24px;
 }
 
 /* docs/16 P2：思考中动画省略号 —— 4 个点逐点循环亮起（纯 CSS，无素材） */
