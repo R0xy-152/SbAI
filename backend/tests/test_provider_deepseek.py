@@ -88,13 +88,39 @@ def test_complete_forwards_thinking():
     ) == "{}"
 
 
-def test_json_mode_implies_thinking_disabled():
-    # 真机接入 503 复盘：json_object 输出模式必须关闭默认开启的 thinking，
-    # 否则推理消耗 token 预算导致空 content。调用方未显式传 thinking 时，
-    # provider 自动补 {"type": "disabled"}。
+def test_json_mode_keeps_default_thinking():
+    # 真机 503 复盘 v2：json_object 与 thinking 可同时开启（探针实证），
+    # provider 不强制关闭 thinking —— 调用方未显式指定时不注入 thinking 键。
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert body["response_format"] == {"type": "json_object"}
+        assert "thinking" not in body
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "{}"}}]},
+        )
+
+    provider = _provider_with_transport(handler)
+    assert (
+        provider.complete(system="s", user="u", response_format={"type": "json_object"})
+        == "{}"
+    )
+
+
+def test_empty_content_with_thinking_falls_back_to_disabled():
+    # 真机 503 复盘 v2：thinking 开启时 reasoning 耗尽 max_tokens → 空 content
+    #（API 200、finish=length，与余额无关）；provider 自动降级重试一次
+    #（thinking=disabled），成功则返回内容。
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        body = json.loads(request.content)
+        if calls["n"] == 1:
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": ""}}]},
+            )
         assert body["thinking"] == {"type": "disabled"}
         return httpx.Response(
             200,
@@ -106,6 +132,50 @@ def test_json_mode_implies_thinking_disabled():
         provider.complete(system="s", user="u", response_format={"type": "json_object"})
         == "{}"
     )
+    assert calls["n"] == 2
+
+
+def test_empty_content_with_explicit_disabled_raises_no_loop():
+    # thinking 已显式禁用仍空 content：直接 ProviderError，不得无限降级。
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": ""}}]},
+        )
+
+    provider = _provider_with_transport(handler)
+    with pytest.raises(ProviderError):
+        provider.complete(
+            system="s", user="u", thinking={"type": "disabled"}
+        )
+    assert calls["n"] == 1
+
+
+def test_empty_content_without_json_mode_also_falls_back():
+    # 角色对话（无 response_format）同样可能被 reasoning 挤空 content，
+    # 降级重试对所有调用生效。
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        body = json.loads(request.content)
+        if calls["n"] == 1:
+            return httpx.Response(
+                200,
+                json={"choices": [{"message": {"content": ""}}]},
+            )
+        assert body["thinking"] == {"type": "disabled"}
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "好"}}]},
+        )
+
+    provider = _provider_with_transport(handler)
+    assert provider.complete(system="s", user="u") == "好"
+    assert calls["n"] == 2
 
 
 def test_complete_omits_thinking_when_none():

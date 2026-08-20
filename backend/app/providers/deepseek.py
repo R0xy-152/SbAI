@@ -71,70 +71,84 @@ class DeepSeekProvider(LLMProvider):
             # may pass {"type": "disabled"} to turn it off for cheaper, faster
             # non-reasoning turns (docs 思考模式).
             payload["thinking"] = thinking
-        elif response_format is not None:
-            # 真机接入 503 复盘：json_object 输出模式下若保持默认开启的
-            # thinking，推理过程会消耗 token 预算，模型常返回空 content
-            #（"DeepSeek response content is empty" → ProviderError → 503）。
-            # DeepSeek 官方约束：JSON 输出需关闭 thinking。调用方未显式指定
-            # thinking 时，JSON 模式强制关闭。
-            payload["thinking"] = {"type": "disabled"}
+        # 注意：JSON 模式不强制关 thinking —— 真机探针证实 json_object 与
+        # thinking 可以同时开启并正常返回 JSON；失败模式是概率性的：
+        # reasoning 较长时会把 max_tokens 全部耗尽（finish=length），content
+        # 为空。修复策略见下方「空 content 自动降级重试」，而不是一刀切关
+        # 掉 thinking（真机 503 复盘 v2）。
         headers = {"Authorization": f"Bearer {self._api_key}"}
 
-        # 瞬时故障自动重试一次（5xx / 网络超时）；4xx（鉴权/余额等）立即失败
-        # 不重试 —— 避免把配置错误伪装成瞬时抖动（真机接入 503 复盘）。
-        last_error: httpx.HTTPError | None = None
-        for attempt in range(2):
-            try:
-                response = self._client.post(
-                    self._base_url,
-                    headers=headers,
-                    json=payload,
-                    timeout=self._timeout,
-                )
-                response.raise_for_status()
-                break
-            except httpx.HTTPStatusError as exc:
-                last_error = exc
-                if exc.response.status_code >= 500 and attempt == 0:
-                    logger.warning(
-                        "DeepSeek upstream 5xx, retrying once: %s", exc
+        def post(p: dict) -> httpx.Response:
+            # 瞬时故障自动重试一次（5xx / 网络超时）；4xx（鉴权/余额等）
+            # 立即失败不重试 —— 避免把配置错误伪装成瞬时抖动。
+            last_error: httpx.HTTPError | None = None
+            for attempt in range(2):
+                try:
+                    response = self._client.post(
+                        self._base_url,
+                        headers=headers,
+                        json=p,
+                        timeout=self._timeout,
                     )
-                    time.sleep(0.4)
-                    continue
-                raise ProviderError(f"DeepSeek request failed: {exc}") from exc
-            except httpx.HTTPError as exc:
-                last_error = exc
-                if attempt == 0:
-                    logger.warning(
-                        "DeepSeek transport error, retrying once: %s", exc
-                    )
-                    time.sleep(0.4)
-                    continue
-                raise ProviderError(f"DeepSeek request failed: {exc}") from exc
-        else:
+                    response.raise_for_status()
+                    return response
+                except httpx.HTTPStatusError as exc:
+                    last_error = exc
+                    if exc.response.status_code >= 500 and attempt == 0:
+                        logger.warning(
+                            "DeepSeek upstream 5xx, retrying once: %s", exc
+                        )
+                        time.sleep(0.4)
+                        continue
+                    raise ProviderError(f"DeepSeek request failed: {exc}") from exc
+                except httpx.HTTPError as exc:
+                    last_error = exc
+                    if attempt == 0:
+                        logger.warning(
+                            "DeepSeek transport error, retrying once: %s", exc
+                        )
+                        time.sleep(0.4)
+                        continue
+                    raise ProviderError(f"DeepSeek request failed: {exc}") from exc
             raise ProviderError(f"DeepSeek request failed: {last_error}") from last_error
 
-        # T2review P1-14：非 JSON / 非对象响应必须落入统一 ProviderError
-        # 边界，而不是逃逸成 400/500。
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise ProviderError(f"DeepSeek returned a non-JSON body: {exc}") from exc
-        if not isinstance(data, dict):
-            raise ProviderError("DeepSeek response is not a JSON object")
-        # Context caching observability (docs 上下文硬盘缓存): surface how much
-        # of the input prefix hit the cache vs. was recomputed, so the hit rate
-        # of the fixed system prompt can be measured in the backend logs.
-        usage = data.get("usage") or {}
-        logger.info(
-            "DeepSeek cache tokens: hit=%s miss=%s",
-            usage.get("prompt_cache_hit_tokens", 0),
-            usage.get("prompt_cache_miss_tokens", 0),
-        )
-        choices = data.get("choices") or []
-        if not choices:
-            raise ProviderError("DeepSeek response contains no choices")
-        content = choices[0].get("message", {}).get("content", "").strip()
+        def parse(response: httpx.Response) -> str:
+            # T2review P1-14：非 JSON / 非对象响应必须落入统一 ProviderError
+            # 边界，而不是逃逸成 400/500。
+            try:
+                data = response.json()
+            except ValueError as exc:
+                raise ProviderError(f"DeepSeek returned a non-JSON body: {exc}") from exc
+            if not isinstance(data, dict):
+                raise ProviderError("DeepSeek response is not a JSON object")
+            # Context caching observability (docs 上下文硬盘缓存): surface how
+            # much of the input prefix hit the cache vs. was recomputed.
+            usage = data.get("usage") or {}
+            logger.info(
+                "DeepSeek cache tokens: hit=%s miss=%s",
+                usage.get("prompt_cache_hit_tokens", 0),
+                usage.get("prompt_cache_miss_tokens", 0),
+            )
+            choices = data.get("choices") or []
+            if not choices:
+                raise ProviderError("DeepSeek response contains no choices")
+            return choices[0].get("message", {}).get("content", "").strip()
+
+        content = parse(post(payload))
+
+        # 空 content 自动降级重试一次（真机 503 复盘 v2 根因修复）：
+        # thinking 开启时 reasoning 可能耗尽 max_tokens 预算 → content 为空
+        #（API 本身 200，finish_reason=length，与账户余额无关）。此时用
+        # thinking=disabled 重试一次：默认保持推理质量，空回复不再变成 503。
+        thinking_disabled = thinking is not None and thinking.get("type") == "disabled"
+        if not content and not thinking_disabled:
+            logger.warning(
+                "DeepSeek returned empty content with thinking on; "
+                "retrying once with thinking disabled"
+            )
+            fallback = dict(payload)
+            fallback["thinking"] = {"type": "disabled"}
+            content = parse(post(fallback))
         if not content:
             raise ProviderError("DeepSeek response content is empty")
         return content

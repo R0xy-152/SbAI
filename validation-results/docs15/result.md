@@ -106,19 +106,38 @@ StarAnimation / StarField 在特效开启时确实绘制，不依赖肉眼判断
   同步修订 docs/15 §2/§4.1/§4.2 与 docs/13 §11.5 落地状态；
   标题页视觉基线（TITLE_EMPTY_SAVE ×2）与展示截图已重拍。
 
-## 5.1 真机 API 接入复盘（2026-08-20，v1.2）
+## 5.1 真机 API 接入复盘（2026-08-20）
 
 真实 DeepSeek API 接入后玩家回合偶发 `503 character provider unavailable`。
-复盘定位到两个根因并修复（backend `404 passed` 全绿）：
 
-1. **json_object 输出模式 + 默认开启 thinking → 空 content**：推理过程消耗
-   token 预算，模型返回空 `content`（日志证据：
-   `DeepSeek response content is empty`）→ ProviderError → 503。
-   修复：调用方未显式指定 thinking 时，JSON 模式强制 `thinking={"type":"disabled"}`
-   （DeepSeek 官方约束），回合耗时从 10s+ 降到 3~4s；
-2. **瞬时故障无重试 + 超时过短**：provider 超时 30s→60s；上游 5xx/网络超时
-   自动重试一次（4xx 不重试）；前端 axios 超时 30s→130s 覆盖最坏情形；
-   `POST /api/chat` 的 503 现在会把真实原因写入日志（此前不可诊断）。
+### 根因（真机探针实证，非文档推断）
+
+对 `api.deepseek.com`（deepseek-v4-flash）做了 4 组组合探针（各 2 次）：
+
+| 组合 | 结果 |
+|---|---|
+| json_object + thinking=enabled | 1/2 次 `finish=length`：512 预算全部被 reasoning 消耗（reasoning_len≈1135），**content 为空**；另一次正常返回 JSON |
+| json_object + 无 thinking 键（默认开） | 同上：概率性空 content |
+| json_object + thinking=disabled | 2/2 正常，1.7~1.9s |
+| 无 json + thinking=enabled | 1/2 次同样 reasoning 耗尽预算 → 空 content |
+
+结论：**不是「JSON 与 thinking 不兼容」，而是 thinking 的 reasoning 与 content
+共享 max_tokens 预算（interpreter 512 / inquiry 256 / 对话 256）**。推理长时
+`finish_reason=length`、content 为空，API 本身返回 200 —— 是我们的校验把它
+转成了 ProviderError → 503。**与账户余额无关**（未出现 402，余额正常）。
+
+### 修复（v2 策略：保留 thinking，不牺牲推理质量）
+
+1. **不强制关 thinking**：json_object 与 thinking 照常同时开启（探针证实可行）；
+2. **空 content 自动降级重试一次**：content 为空且本次未显式禁用 thinking 时，
+   自动以 `thinking=disabled` 重试一次（对所有调用生效，含角色对话），
+   空回复不再演变成 503；
+3. **瞬时故障重试**：上游 5xx/网络超时自动重试一次（4xx 不重试）；
+4. **超时放宽**：provider 30s→60s，前端 axios 30s→130s；
+5. **可诊断**：503 的真实原因写入后端日志。
+
+验证：backend `407 passed, 12 skipped`（+7 重试/降级语义测试）；真机连续 4 回合
+全部 200（8~15s/回合，thinking 推理质量保留）。
 
 ## 6. 已知限制（如实记录）
 
