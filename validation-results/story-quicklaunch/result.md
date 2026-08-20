@@ -65,6 +65,9 @@
 | 25 | 本机 docker 栈（重建镜像）完整冒烟：首个登台立绘 URL = /char/deepseek/pic/deepseek_surprised.png；3 选项 + 结局 + 返回标题全通 | PASS |
 | 26 | 4xx 全量诊断（完整剧本走查）：仅 doubao_embarrassed.png 404（预期——豆包无立绘，回落占位图）；deepseek / claude 全部差分命中 | PASS |
 | 27 | 视觉核验（glm-4v-flash）：05-portrait.png 显示 DeepSeek「惊讶」差分立绘（眼睛睁大），完整无裁切、无破图黑屏 | PASS |
+| 28 | 服务器部署（bundle d2b27c8）：重建 backend / frontend 镜像并重启，deepseek_embarrassed / claude_serious 经 nginx 均 200，health 200 | PASS |
+| 29 | 公网完整冒烟（http://114.55.133.96）：首个登台立绘 = deepseek_surprised.png，3 选项 + 结局 + 返回标题全通 | PASS（evidence-public/） |
+| 30 | 公网截图视觉核验（glm-4v-flash）：立绘完整、惊讶表情差分正确，无异常 | PASS |
 
 实现：asset-resolver.ts 接入 emotion → {角色}_{emotion英文id}.png 差分映射（编程式 Image 探测 + 模块级缓存与在途去重，404/加载失败回落 main 单图，组件不感知资源细节）；豆包补图后无需改代码自动生效。docs/17 §3.2 / §6.2 / §6.3 同步更新。
 

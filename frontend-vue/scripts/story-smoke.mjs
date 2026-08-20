@@ -5,7 +5,8 @@ import { mkdirSync } from 'node:fs'
 
 // 默认本机 docker 栈；公网/服务器复核用 GAL_BASE_URL 环境变量覆盖
 const BASE = process.env.GAL_BASE_URL || 'http://localhost:8080'
-const OUT = 'D:/gal/validation-results/story-quicklaunch/evidence'
+// 证据目录：公网复核可用 GAL_OUT_DIR 指向独立目录，避免覆盖本机证据
+const OUT = process.env.GAL_OUT_DIR || 'D:/gal/validation-results/story-quicklaunch/evidence'
 mkdirSync(OUT, { recursive: true })
 
 const browser = await chromium.launch()
