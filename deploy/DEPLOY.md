@@ -2,6 +2,9 @@
 
 > 对应 docs/17 §4。服务器信息（IP / SSH / 域名）由部署执行人持有；本手册
 > 覆盖从「拿到一台空 Linux 服务器」到「公网可玩」的全流程与验证/回滚。
+>
+> - 一键部署脚本：deploy/up.sh（Ubuntu / Alibaba Cloud Linux 3）
+> - Windows Server 2022 备选方案：deploy/WINDOWS-SERVER-2022.md（主推仍是换 Linux）
 
 ## 0. 前提
 
