@@ -7,11 +7,15 @@ details (docs/02 §12).
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.game.orchestrator import CharacterUnavailable, GameOrchestrator
 from app.providers.base import ProviderError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -88,6 +92,8 @@ def chat(
     except ProviderError as exc:
         # docs/04 §55: a provider failure is a recoverable error, not a reason
         # to fabricate a reply. The player can retry.
+        # 真机接入复盘：503 的根因必须落到日志，否则上游错误不可诊断。
+        logger.warning("provider unavailable: %s", exc)
         raise HTTPException(status_code=503, detail="character provider unavailable") from exc
     except CharacterUnavailable as exc:
         # Presence Gate (docs/03 §13.6): the character is not interactable yet.

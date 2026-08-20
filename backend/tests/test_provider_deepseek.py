@@ -88,6 +88,26 @@ def test_complete_forwards_thinking():
     ) == "{}"
 
 
+def test_json_mode_implies_thinking_disabled():
+    # 真机接入 503 复盘：json_object 输出模式必须关闭默认开启的 thinking，
+    # 否则推理消耗 token 预算导致空 content。调用方未显式传 thinking 时，
+    # provider 自动补 {"type": "disabled"}。
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert body["response_format"] == {"type": "json_object"}
+        assert body["thinking"] == {"type": "disabled"}
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "{}"}}]},
+        )
+
+    provider = _provider_with_transport(handler)
+    assert (
+        provider.complete(system="s", user="u", response_format={"type": "json_object"})
+        == "{}"
+    )
+
+
 def test_complete_omits_thinking_when_none():
     # thinking is optional: absent from the payload unless requested (it is
     # on by default server-side).
@@ -207,3 +227,59 @@ def test_timeout_raises_provider_error():
     provider = _provider_with_transport(handler)
     with pytest.raises(ProviderError):
         provider.complete(system="s", user="u")
+def test_transient_5xx_retries_once_and_succeeds():
+    # 真机接入 503 复盘：上游瞬时 5xx 自动重试一次后成功。
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(503, json={"error": {"message": "upstream busy"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    provider = _provider_with_transport(handler)
+    assert provider.complete(system="s", user="u") == "ok"
+    assert calls["n"] == 2
+
+
+def test_persistent_5xx_raises_after_one_retry():
+    # 两次 5xx：最终仍以 ProviderError 上抛（HTTP 503 给前端）。
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(503, json={"error": {"message": "upstream busy"}})
+
+    provider = _provider_with_transport(handler)
+    with pytest.raises(ProviderError):
+        provider.complete(system="s", user="u")
+    assert calls["n"] == 2
+
+
+def test_transient_timeout_retries_once_and_succeeds():
+    # 网络超时同样视为瞬时故障，重试一次。
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.TimeoutException("timeout after 60s")
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    provider = _provider_with_transport(handler)
+    assert provider.complete(system="s", user="u") == "ok"
+    assert calls["n"] == 2
+
+
+def test_4xx_is_not_retried():
+    # 鉴权/余额等 4xx 是配置错误，立即失败且只发一次请求。
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(401, json={"error": {"message": "invalid key"}})
+
+    provider = _provider_with_transport(handler)
+    with pytest.raises(ProviderError):
+        provider.complete(system="s", user="u")
+    assert calls["n"] == 1

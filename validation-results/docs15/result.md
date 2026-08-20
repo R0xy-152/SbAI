@@ -106,6 +106,20 @@ StarAnimation / StarField 在特效开启时确实绘制，不依赖肉眼判断
   同步修订 docs/15 §2/§4.1/§4.2 与 docs/13 §11.5 落地状态；
   标题页视觉基线（TITLE_EMPTY_SAVE ×2）与展示截图已重拍。
 
+## 5.1 真机 API 接入复盘（2026-08-20，v1.2）
+
+真实 DeepSeek API 接入后玩家回合偶发 `503 character provider unavailable`。
+复盘定位到两个根因并修复（backend `404 passed` 全绿）：
+
+1. **json_object 输出模式 + 默认开启 thinking → 空 content**：推理过程消耗
+   token 预算，模型返回空 `content`（日志证据：
+   `DeepSeek response content is empty`）→ ProviderError → 503。
+   修复：调用方未显式指定 thinking 时，JSON 模式强制 `thinking={"type":"disabled"}`
+   （DeepSeek 官方约束），回合耗时从 10s+ 降到 3~4s；
+2. **瞬时故障无重试 + 超时过短**：provider 超时 30s→60s；上游 5xx/网络超时
+   自动重试一次（4xx 不重试）；前端 axios 超时 30s→130s 覆盖最坏情形；
+   `POST /api/chat` 的 503 现在会把真实原因写入日志（此前不可诊断）。
+
 ## 6. 已知限制（如实记录）
 
 - **粒子不进视觉基线**：canvas 动画不可确定性冻结；基线在特效关闭状态拍摄
