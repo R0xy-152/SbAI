@@ -31,7 +31,10 @@ docs/13 §4.4 素材白名单不自动包含字体/Logo/立绘/背景/音效，�
 - **不复制** LingChat 的字体文件（MaokenAssortedSans）、Logo 图、alona 立绘、
   background2.png 背景与任何音效素材；
 - 首页背景用仓库现有 `backgroud/background_title.png`（全亮展示，不做遮罩压暗）；
-- 首页角色立绘用 `char/deepseek/pic/deepseek_main.png`（本项目自有素材）；
+- ~~首页角色立绘用 `char/deepseek/pic/deepseek_main.png`（本项目自有素材）~~
+  **v1.1 修订：首页不放角色立绘层** —— background_title.png 背景图本身已含人物，
+  再叠立绘会双人撞车；首页为四层结构（背景/流星/星星/菜单），视差作用于
+  背景与星星层（修订前为五层 + 角色视差）。
 - 文字 Logo 用 CSS 渐变 + 辉光自制（无新素材依赖）；
 - 加载演出音效用 WebAudio 合成（正弦 tick/chime/pop/unveil，无采样文件）；
 - 字体栈升级为系统可用中文字体候选列表（PingFang SC / HarmonyOS Sans SC /
@@ -60,12 +63,13 @@ docs/13 §4.4 素材白名单不自动包含字体/Logo/立绘/背景/音效，�
 
 - 背景层：全亮 `background_title.png`，`left:-10%; width:120%` 给视差留余量，
   `background-size:cover`，`will-change:transform`；**删除** opacity-60 与深色遮罩；
-- 层级（自底向上）：背景(-2) → 流星层(2) → 星星层(2) → 角色立绘(3) → 菜单(5)；
-- 角色立绘：deepseek_main.png，`max-width/max-height:100%` 居中，pointer-events:none。
+- 层级（自底向上）：背景(-2) → 流星层(2) → 星星层(2) → 菜单(5)；
+- **v1.1 修订：无角色立绘层**（背景图已含人物，叠立绘会撞车）；
+  useParallaxAnimation 的 charRef 因此改为可选参数。
 
 ### 4.2 鼠标视差
 
-`useParallaxAnimation`：char ±10px / bg ±6px / stars ±20px；rAF 阻尼插值
+`useParallaxAnimation`：bg ±6px / stars ±20px（v1.1 起无角色层，char 通道保留为可选参数），rAF 阻尼插值
 （DAMPING 0.08）；16ms 节流；收敛自动停；页面隐藏暂停；will-change 优化。
 仅当 `prefers-reduced-motion` 未启用时运行（可访问性）。
 
