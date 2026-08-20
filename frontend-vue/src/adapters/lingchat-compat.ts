@@ -101,7 +101,7 @@ export const useGameStore = () => {
       roleId: characterId,
       roleName: meta?.roleName ?? characterId,
       roleSubTitle: meta?.roleSubTitle ?? '',
-      thinkMessage: '思考中…',
+      thinkMessage: '····',
       emotion: c?.emotion ?? 'neutral',
       originalEmotion: c?.emotion ?? 'neutral',
       scale: c?.scale ?? 1,
@@ -264,7 +264,7 @@ export const useUIStore = () => {
       return ''
     },
     get showCharacterThinkLine() {
-      return '思考中…'
+      return '····'
     },
     get showSettings() {
       return false

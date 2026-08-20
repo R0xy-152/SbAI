@@ -40,8 +40,17 @@
 
         <!-- 输入区 -->
         <div
-          class="my-1.25 flex min-h-10 w-full resize-none flex-col border-none bg-transparent text-xl font-bold whitespace-pre-line text-white transition-all duration-300 outline-none"
+          class="relative my-1.25 flex min-h-10 w-full resize-none flex-col border-none bg-transparent text-xl font-bold whitespace-pre-line text-white transition-all duration-300 outline-none"
         >
+          <!-- thinking 动画省略号（docs/16 P2：思考中占位改为逐点循环亮起的····） -->
+          <div
+            v-if="gameStore.currentStatus === 'thinking'"
+            data-testid="thinking-dots"
+            class="thinking-dots"
+            aria-label="思考中"
+          >
+            <span>·</span><span>·</span><span>·</span><span>·</span>
+          </div>
           <!-- 标准 textarea（显示台词 + 玩家输入） -->
           <textarea
             id="inputMessage"
@@ -139,7 +148,8 @@ const placeholderText = computed(() => {
     case 'input':
       return '输入你的台词…'
     case 'thinking':
-      return '思考中…'
+      // docs/16 P2：占位由 thinking-dots 动画省略号呈现，textarea placeholder 留空
+      return ''
     case 'responding':
     case 'presenting':
       return ''
@@ -212,5 +222,45 @@ defineExpose({
 .custom-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
+}
+
+/* docs/16 P2：思考中动画省略号 —— 4 个点逐点循环亮起（纯 CSS，无素材） */
+.thinking-dots {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  display: flex;
+  gap: 0.15em;
+  align-items: baseline;
+  pointer-events: none;
+  z-index: 1;
+}
+.thinking-dots span {
+  animation: dot-pulse 1.2s ease-in-out infinite;
+}
+.thinking-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.thinking-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.thinking-dots span:nth-child(4) {
+  animation-delay: 0.45s;
+}
+@keyframes dot-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dots span {
+    animation: none;
+    opacity: 0.6;
+  }
 }
 </style>

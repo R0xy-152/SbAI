@@ -18,13 +18,16 @@ describe('GameDialog（输入状态与长文本打字机）', () => {
     vi.useRealTimers()
   })
 
-  it('thinking：占位「思考中…」、textarea 只读、发送按钮禁用', () => {
+  it('thinking：动画省略号覆盖层、textarea 只读、发送按钮禁用', () => {
     const store = usePresentationStore()
     store.state.status = 'thinking'
     store.state.dialogue.mode = 'ai'
     const wrapper = mount(GameDialog)
     const ta = wrapper.find('#inputMessage')
-    expect(ta.attributes('placeholder')).toBe('思考中…')
+    // docs/16 P2：思考中占位由 thinking-dots 动画省略号呈现
+    expect(ta.attributes('placeholder')).toBe('')
+    expect(wrapper.find('[data-testid="thinking-dots"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="thinking-dots"]').text()).toBe('····')
     expect(ta.attributes('readonly')).toBeDefined()
     expect(wrapper.find('#sendButton').attributes('disabled')).toBeDefined()
   })
@@ -42,6 +45,8 @@ describe('GameDialog（输入状态与长文本打字机）', () => {
     await nextTick()
     expect(wrapper.find('#inputMessage').attributes('readonly')).toBeUndefined()
     expect(wrapper.find('#sendButton').attributes('disabled')).toBeUndefined()
+    // docs/16 P2：离开 thinking 后动画省略号消失
+    expect(wrapper.find('[data-testid="thinking-dots"]').exists()).toBe(false)
   })
 
   it('长文本经打字机完整显示（fake timers 推进）', async () => {
