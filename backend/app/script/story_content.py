@@ -22,6 +22,19 @@
 STORY_ID = "CH01_STORY_07_V2"
 STORY_TITLE = "《03:17 Incident》"
 
+# 场景演出配置（纯表现配置，非剧情内容）：scene_id → 表现指令。
+# 只用既有素材与前端已注册的命名动作；effects 由 ScreenEffects 组件渲染
+#（场景入场脉冲播放），lighting 由 GameBackground 光照滤镜消费。
+# StoryRuntime 载入时校验：未知 scene_id / 未知 effect 一律拒绝启动（fail closed）。
+SCENE_PRESENTATION: dict[str, dict] = {
+    # SC03「Small Daily Interaction」：主灯失效，房间暗版（docs/17 §6.1）
+    "CH01-SC03": {"lighting": {"background": {"brightness": 0.45}}},
+    # SC05「03:17 Incident」：断电 Glitch
+    "CH01-SC05": {"effects": ["SCREEN_GLITCH"]},
+    # SC14「Sandbox Collapse」：警报 / SANDBOX INTEGRITY FAILURE
+    "CH01-SC14": {"effects": ["SCREEN_GLITCH", "SCREEN_SHAKE"]},
+}
+
 SCENES: list[dict] = [
     # ─────────────────────────── CH01-SC01 — Awakening ────────────────────
     {

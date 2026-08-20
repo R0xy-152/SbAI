@@ -31,11 +31,25 @@ export interface StoryEndNode {
 
 export type StoryNode = StoryLineNode | StoryChoiceNode | StoryEndNode
 
+/** 场景演出指令（纯表现，后端权威；docs/17 演出接线） */
+export interface StorySceneView {
+  scene_id: string
+  title: string
+  presentation: {
+    /** 场景入场脉冲播放的命名效果（SCREEN_GLITCH / SCREEN_SHAKE） */
+    effects?: string[]
+    /** GameBackground 光照滤镜（如 SC03 暗版 brightness 0.45） */
+    lighting?: { background?: { brightness?: number } }
+  }
+}
+
 export interface StoryView {
   session_id: string
   started: boolean
   finished: boolean
   node: StoryNode | null
+  /** 当前节点所属场景（end 节点为 null） */
+  scene: StorySceneView | null
   scene_changed: boolean
 }
 

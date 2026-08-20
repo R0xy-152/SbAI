@@ -307,8 +307,12 @@ class SaveSnapshotService:
             )
         self._validate_snapshot_invariants(save.snapshot)
         new_session_id = orchestrator.import_snapshot(save.snapshot)
+        # 故事进度摘要：前端据此路由（故事存档 → /story；已完结/旧玩法存档
+        # → /game），不改变 GameViewState 契约（docs/17 结局后自由聊天）。
+        progress = orchestrator.story_progress(new_session_id)
         return {
             "session_id": new_session_id,
+            **progress,
             **orchestrator.gameview_state(new_session_id),
         }
 

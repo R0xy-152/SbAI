@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import LoadPanel from '../components/save/LoadPanel.vue'
 import { useGameStore } from '../stores/game'
 import { useSavesStore } from '../stores/saves'
+import { saveTargetRoute } from '../api/saves'
 
 // 读取存档页（docs/13 §12.4 / §20.3）：Load 创建新 Active Session，返回
 // new_session_id + GameViewState，暂存 game.pendingLoad 后进入 GameView，
@@ -23,7 +24,8 @@ async function onLoad(saveId: string) {
     const result = await saves.load(saveId)
     game.pendingLoad = result
     localStorage.removeItem('gal_session_id')
-    await router.push('/story')
+    // 故事未完结 → /story；已完结 / 旧玩法 → /game（docs/17）
+    await router.push(saveTargetRoute(result.story_cursor, result.story_finished))
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {

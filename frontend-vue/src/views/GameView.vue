@@ -44,6 +44,7 @@ import LoadPanel from '../components/save/LoadPanel.vue'
 import SystemMenu from '../components/system/SystemMenu.vue'
 import HistoryPanel from '../components/system/HistoryPanel.vue'
 import OptionWindow from '../components/game/standard/OptionWindow.vue'
+import ScreenEffects from '../components/game/standard/ScreenEffects.vue'
 import ClueWindow from '../components/game/standard/ClueWindow.vue'
 import SubActionPanel from '../components/game/standard/SubActionPanel.vue'
 import LoadingTransition from '../components/effects/LoadingTransition.vue'
@@ -769,12 +770,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative h-full w-full overflow-hidden bg-black">
+  <div
+    class="relative h-full w-full overflow-hidden bg-black"
+    :class="{ 'screen-shake': presentation.state.effects.includes('SCREEN_SHAKE') }"
+  >
     <!-- 背景 -->
     <GameBackground />
 
     <!-- 角色舞台 -->
     <GameRolesStage class="pointer-events-none absolute inset-0 z-1" />
+
+    <!-- 屏幕故障特效层（SCREEN_GLITCH 脉冲；docs/17 演出接线） -->
+    <ScreenEffects :effects="presentation.state.effects" />
 
     <!-- 对话框（底部）+ 状态行（routeLabel / feedback，docs/16 P8 取代气泡条） -->
     <div class="absolute inset-x-0 bottom-0 z-10 flex flex-col">

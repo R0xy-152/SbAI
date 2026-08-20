@@ -1278,17 +1278,31 @@ class GameOrchestrator:
             raise ValueError("story mode is not wired")
         return self._story_runtime
 
+    def story_progress(self, session_id: str) -> dict:
+        """故事进度摘要（存档路由用）：游标快照 + 是否已走到结局。
+        仅读操作；story_cursor 为 None 表示该会话从未开始故事模式。
+        未接线 story runtime 的部署（旧玩法测试环境）优雅降级为全 None。"""
+        runtime = self._story_runtime
+        if runtime is None:
+            return {"story_cursor": None, "story_finished": False}
+        return {
+            "story_cursor": runtime.snapshot(session_id),
+            "story_finished": runtime.finished(session_id),
+        }
+
     def story_current(self, session_id: str | None) -> dict:
         """读取当前展示节点（不移动游标）。未知会话经 _resolve_session 造新
         会话但不动游标，前端用 started 判断是否需要 advance。"""
         session = self._resolve_session(session_id)
         runtime = self._require_story_runtime()
         started = runtime.started(session.session_id)
+        node = runtime.current(session.session_id) if started else None
         return {
             "session_id": session.session_id,
             "started": started,
             "finished": runtime.finished(session.session_id),
-            "node": runtime.current(session.session_id) if started else None,
+            "node": node,
+            "scene": runtime.scene_info(node.get("scene_id") if node else None),
         }
 
     def story_advance(
@@ -1312,6 +1326,7 @@ class GameOrchestrator:
             "started": True,
             "finished": runtime.finished(session.session_id),
             "node": node,
+            "scene": runtime.scene_info(node.get("scene_id")),
             "scene_changed": scene_changed,
         }
 
@@ -1341,6 +1356,7 @@ class GameOrchestrator:
             "started": True,
             "finished": runtime.finished(session.session_id),
             "node": node,
+            "scene": runtime.scene_info(node.get("scene_id")),
             "scene_changed": False,
         }
 

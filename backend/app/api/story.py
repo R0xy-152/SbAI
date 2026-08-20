@@ -45,6 +45,8 @@ class StoryView(BaseModel):
     started: bool
     finished: bool
     node: StoryNodeView | None = None
+    # 当前节点所属场景的标题与演出指令（纯表现数据；end 节点为 None）
+    scene: dict | None = None
     scene_changed: bool = False
 
 

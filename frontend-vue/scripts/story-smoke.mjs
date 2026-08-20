@@ -43,6 +43,14 @@ await page.waitForFunction(
   () => (document.querySelector('textarea#inputMessage')?.value ?? '').length > 0,
   { timeout: 30000 },
 )
+// 场景标题卡（docs/17 演出接线）：首个场景切换即应出现「Awakening」
+const titleCard = page.locator('[data-testid="scene-title-card"]')
+if ((await titleCard.count()) > 0) {
+  console.log('scene-title:', (await titleCard.textContent())?.trim())
+  await page.screenshot({ path: OUT + '/06-scene-title.png' })
+} else {
+  console.log('scene-title: NONE')
+}
 await page.screenshot({ path: OUT + '/02-story-start.png' })
 
 const btn = page.locator('#sendButton')
@@ -71,7 +79,15 @@ if (portraitSeen) {
 }
 let choiceCount = 0
 let ended = false
+let glitchSeen = false
 for (let i = 0; i < 500; i++) {
+  // SC05 / SC14 入场 glitch 脉冲（docs/17 演出接线）
+  const glitch = page.locator('[data-testid="screen-glitch"]')
+  if (!glitchSeen && (await glitch.count()) > 0) {
+    glitchSeen = true
+    await page.waitForTimeout(300)
+    await page.screenshot({ path: OUT + '/07-glitch.png' })
+  }
   const choice = page.locator('[data-testid="story-choice-window"]')
   if ((await choice.count()) > 0) {
     choiceCount++
@@ -99,10 +115,15 @@ for (let i = 0; i < 500; i++) {
   await page.waitForTimeout(140)
 }
 
-console.log(JSON.stringify({ choiceCount, ended, url: page.url() }))
-// 结局后点「返回标题」验证可回标题
+console.log(JSON.stringify({ choiceCount, ended, glitchSeen, url: page.url() }))
+// 结局 → 自由聊天（docs/17）：继续聊天 → /game（复用同一会话），再回标题收尾
 if (ended) {
-  await page.locator('[data-testid="story-ending-return"]').click()
+  await page.locator('[data-testid="story-ending-chat"]').click()
+  await page.waitForURL('**/game', { timeout: 15000 })
+  await page.waitForTimeout(1500)
+  await page.screenshot({ path: OUT + '/08-free-chat.png' })
+  console.log('ending -> free chat: OK')
+  await page.goto(BASE + '/')
   await page.waitForURL(BASE + '/', { timeout: 15000 })
   console.log('return to title: OK')
 }

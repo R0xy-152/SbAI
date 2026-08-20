@@ -15,6 +15,7 @@ vi.mock('../../api/saves', () => ({
   loadSave: vi.fn(),
   deleteSave: vi.fn(),
   getPlayerId: vi.fn(() => 'test-player'),
+  saveTargetRoute: vi.fn(() => '/story'),
 }))
 
 import { listSaves } from '../../api/saves'

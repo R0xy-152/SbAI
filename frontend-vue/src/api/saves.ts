@@ -28,6 +28,10 @@ export interface SaveListResponse {
 /** Load 结果（docs/13 §20.3）：new_session_id + initial GameViewState。 */
 export interface LoadResult {
   session_id: string
+  /** 故事游标快照；null = 该存档从未进入故事模式（旧玩法存档）。 */
+  story_cursor: { node_index: number } | null
+  /** 故事是否已走到结局（结局后为自由聊天态，应进 /game）。 */
+  story_finished: boolean
   state: {
     presentation_state: PresentationStateView
     available_hotspots: Array<{
@@ -48,6 +52,17 @@ export interface LoadResult {
 
 // 复用 game.ts 的权威角色在场 / 选项类型（同一契约，docs/13 §9.2 / docs/14）
 import type { GameOption, PresentationStateView } from './game'
+
+/** 存档目标路由：故事未完结 → /story（继续剧本）；已完结 / 旧玩法 → /game（自由聊天）。 */
+export type SaveTargetRoute = '/story' | '/game'
+
+export function saveTargetRoute(
+  storyCursor: { node_index: number } | null,
+  storyFinished: boolean,
+): SaveTargetRoute {
+  if (storyCursor && !storyFinished) return '/story'
+  return '/game'
+}
 
 const PLAYER_KEY = 'gal_player_id'
 

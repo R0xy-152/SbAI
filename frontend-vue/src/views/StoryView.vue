@@ -21,13 +21,15 @@ import {
   storyAdvance,
   storyChoose,
 } from '../api/story'
-import type { StoryLineNode, StoryOptionView, StoryView } from '../api/story'
+import type { StoryLineNode, StoryOptionView, StorySceneView, StoryView } from '../api/story'
 import type { LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
 import GameDialog from '../components/game/standard/GameDialog.vue'
 import StoryChoiceWindow from '../components/game/standard/StoryChoiceWindow.vue'
 import StoryEnding from '../components/game/standard/StoryEnding.vue'
+import ScreenEffects from '../components/game/standard/ScreenEffects.vue'
+import SceneTitleCard from '../components/game/standard/SceneTitleCard.vue'
 import SavePanel from '../components/save/SavePanel.vue'
 import LoadPanel from '../components/save/LoadPanel.vue'
 import SystemMenu from '../components/system/SystemMenu.vue'
@@ -61,6 +63,35 @@ const showEnding = ref(false)
 
 const choiceOptions = ref<StoryOptionView[]>([])
 const systemPanel = ref<'menu' | 'save' | 'load' | 'history' | null>(null)
+
+// ── 场景演出接线（docs/17）───────────────────────────────────────────────
+const sceneView = ref<StorySceneView | null>(null)
+const showTitleCard = ref(false)
+let titleCardKey = 0
+let effectTimer: ReturnType<typeof setTimeout> | null = null
+
+// 光照随场景常驻；入场效果（glitch/shake）脉冲播放；标题卡在场景切换时淡入淡出。
+function applyScene(scene: StorySceneView | null, changed: boolean) {
+  sceneView.value = scene
+  presentation.state.scene.lighting = scene?.presentation?.lighting ?? undefined
+  if (changed) {
+    const fx = scene?.presentation?.effects ?? []
+    if (effectTimer) {
+      clearTimeout(effectTimer)
+      effectTimer = null
+    }
+    presentation.state.effects = fx
+    if (fx.length > 0) {
+      effectTimer = setTimeout(() => {
+        presentation.state.effects = []
+      }, 2600)
+    }
+    if (scene?.title) {
+      titleCardKey++
+      showTitleCard.value = true
+    }
+  }
+}
 
 function roleNameOf(id: string): string {
   const names: Record<string, string> = {
@@ -96,6 +127,7 @@ function showLine(line: StoryLineNode) {
 function applyView(data: StoryView) {
   finished.value = data.finished
   node.value = data.node
+  applyScene(data.scene, data.scene_changed)
   if (!data.node) return
   if (data.node.kind === 'line') {
     showLine(data.node)
@@ -276,16 +308,40 @@ onMounted(async () => {
 
 onUnmounted(() => {
   invalidateView()
+  if (effectTimer) {
+    clearTimeout(effectTimer)
+    effectTimer = null
+  }
 })
+
+// 结局 → 自由聊天：复用同一会话进入 /game（AI 回复，docs/17）
+function onContinueChat() {
+  showEnding.value = false
+  router.push('/game')
+}
 </script>
 
 <template>
-  <div class="relative h-full w-full overflow-hidden bg-black">
+  <div
+    class="relative h-full w-full overflow-hidden bg-black"
+    :class="{ 'screen-shake': presentation.state.effects.includes('SCREEN_SHAKE') }"
+  >
     <!-- 背景 -->
     <GameBackground />
 
     <!-- 角色舞台 -->
     <GameRolesStage class="pointer-events-none absolute inset-0 z-1" />
+
+    <!-- 屏幕故障特效层（SCREEN_GLITCH 脉冲） -->
+    <ScreenEffects :effects="presentation.state.effects" />
+
+    <!-- 场景标题卡（场景切换时淡入淡出） -->
+    <SceneTitleCard
+      v-if="showTitleCard"
+      :key="titleCardKey"
+      :title="sceneView?.title ?? ''"
+      @complete="showTitleCard = false"
+    />
 
     <!-- 对话框（底部） -->
     <div class="absolute inset-x-0 bottom-0 z-10 flex flex-col">
@@ -355,7 +411,7 @@ onUnmounted(() => {
     />
 
     <!-- 结局画面 -->
-    <StoryEnding v-if="showEnding" @return-title="router.push('/')" />
+    <StoryEnding v-if="showEnding" @return-title="router.push('/')" @continue-chat="onContinueChat" />
 
     <!-- 首次加载演出（docs/15 §7：New Game 专用） -->
     <LoadingTransition v-if="showLoading" :ready="openingReady" @complete="onLoadingComplete" />

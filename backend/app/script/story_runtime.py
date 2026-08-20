@@ -25,7 +25,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.characters.base import ALLOWED_EMOTIONS
-from app.script.story_content import SCENES
+from app.script.story_content import SCENE_PRESENTATION, SCENES
+
+# 场景演出允许的命名效果（与前端 ScreenEffects 渲染白名单一致；
+# presentation/actions.py 的 SCREEN_GLITCH / SCREEN_SHAKE 同源命名）。
+KNOWN_STORY_EFFECTS = frozenset({"SCREEN_GLITCH", "SCREEN_SHAKE"})
 
 # 允许的说话者。chatgpt 在 07 骨架中没有字面台词（只有转述），但保留在集合
 # 内以便后续补充对白时无需改校验。
@@ -60,6 +64,7 @@ class StoryRuntime:
         self._scenes = list(scenes if scenes is not None else SCENES)
         self._nodes: list[StoryLine | StoryChoice] = []
         self._cursors: dict[str, int] = {}
+        self._scene_titles: dict[str, str] = {}
         self._build()
 
     # ---- 内容载入与校验（fail closed） ------------------------------------
@@ -78,6 +83,8 @@ class StoryRuntime:
             if scene_id in seen_scene_ids:
                 raise StoryContentError(f"duplicate scene_id {scene_id!r}")
             seen_scene_ids.add(scene_id)
+            title = scene.get("title")
+            self._scene_titles[scene_id] = title if isinstance(title, str) else ""
             steps = scene.get("steps")
             if not isinstance(steps, list) or not steps:
                 raise StoryContentError(f"[{scene_id}] steps must be a non-empty list")
@@ -88,6 +95,31 @@ class StoryRuntime:
         for i, node in enumerate(self._nodes):
             if isinstance(node, StoryLine) and node.next_index == -1:
                 node.next_index = i + 1
+        self._check_scene_presentation(seen_scene_ids)
+
+    def _check_scene_presentation(self, seen_scene_ids: set[str]) -> None:
+        """演出配置 fail closed 校验：未知场景 / 未知效果 / 非法光照拒绝启动。"""
+        for scene_id, presentation in SCENE_PRESENTATION.items():
+            if scene_id not in seen_scene_ids:
+                raise StoryContentError(
+                    f"SCENE_PRESENTATION references unknown scene {scene_id!r}"
+                )
+            if not isinstance(presentation, dict):
+                raise StoryContentError(
+                    f"SCENE_PRESENTATION[{scene_id!r}] must be an object"
+                )
+            effects = presentation.get("effects", [])
+            if not isinstance(effects, list) or any(
+                e not in KNOWN_STORY_EFFECTS for e in effects
+            ):
+                raise StoryContentError(
+                    f"SCENE_PRESENTATION[{scene_id!r}] has unknown effects"
+                )
+            lighting = presentation.get("lighting")
+            if lighting is not None and not isinstance(lighting, dict):
+                raise StoryContentError(
+                    f"SCENE_PRESENTATION[{scene_id!r}] lighting must be an object"
+                )
 
     def _append_step(
         self, scene_id: str, index: int, step, seen_choice_ids: set[str]
@@ -244,6 +276,16 @@ class StoryRuntime:
             "text": node.text,
             "emotion": node.emotion,
             "scene_id": node.scene_id,
+        }
+
+    def scene_info(self, scene_id: str | None) -> dict | None:
+        """场景标题与演出指令（纯表现数据，不含剧情文字；未知场景返回 None）。"""
+        if scene_id is None or scene_id not in self._scene_titles:
+            return None
+        return {
+            "scene_id": scene_id,
+            "title": self._scene_titles[scene_id],
+            "presentation": SCENE_PRESENTATION.get(scene_id) or {},
         }
 
     # ---- 持久化 -----------------------------------------------------------

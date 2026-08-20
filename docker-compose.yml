@@ -28,6 +28,8 @@ services:
       # T2review P2-6：生产门禁——不再把 Compose 固定为 mock。默认 auto：
       # 有 DEEPSEEK_API_KEY 即走真实链路；部署时可用 GAL_PROVIDER 显式覆盖。
       GAL_PROVIDER: ${GAL_PROVIDER:-auto}
+      # 结局后自由聊天 / 旧玩法的真实 DeepSeek 链路；缺省为空 = 回落 mock
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       GAL_SAVE_BACKEND: postgres
       GAL_POSTGRES_DSN: postgresql://gal:${POSTGRES_PASSWORD:-gal}@postgres:5432/gal
       GAL_CORS_ORIGINS: ${GAL_CORS_ORIGINS:-}

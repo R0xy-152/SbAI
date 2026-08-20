@@ -71,8 +71,23 @@
 
 实现：asset-resolver.ts 接入 emotion → {角色}_{emotion英文id}.png 差分映射（编程式 Image 探测 + 模块级缓存与在途去重，404/加载失败回落 main 单图，组件不感知资源细节）；豆包补图后无需改代码自动生效。docs/17 §3.2 / §6.2 / §6.3 同步更新。
 
+## 补充4（结局后自由聊天 + 场景演出接线 + 旧玩法入口，2026-08-21）
+
+| # | 用例 | 结果 |
+|---|---|---|
+| 31 | 故事会话直接进 /api/chat：全流程走完（176 advance / 3 choose / 14 场景边界）后 POST /api/chat 连续两轮均 200、character=deepseek、历史上下文延续 | PASS |
+| 32 | 演出配置 fail closed：SCENE_PRESENTATION 未知场景 / 未知效果 / 非法光照均拒绝启动（pytest 3 例）；scene_info 已知/未知场景行为（2 例） | PASS |
+| 33 | 故事视图携带 scene（标题 + presentation）+ story_progress（游标/finished）（pytest 2 例）；后端全量回归 434 passed | PASS |
+| 34 | 前端全量：typecheck + 57 单测（含 saveTargetRoute 3 例）+ 生产构建 | PASS |
+| 35 | 本机 docker 冒烟：场景标题卡「Awakening」出现、SC05/SC14 glitch 脉冲捕获（glitchSeen=true）、3 选项 + 结局、结局→「继续聊天」→ /game 成功、返回标题 | PASS |
+| 36 | 视觉核验（glm-4v-flash）：06 标题卡（半透明、居中「Awakening」）/ 07 glitch 扫描线与故障纹 / 08 自由聊天界面（输入框 + 立绘 + 行动/系统菜单/返回标题） | PASS |
+| 37 | 存档路由：故事存档 → /story、结局后/旧玩法存档 → /game（单测 + load 响应新增 story_cursor/story_finished） | PASS |
+
+实现：结局后自由聊天复用旧 /game 全链路（零剧情新增）；SCENE_PRESENTATION 与台词分离；ScreenEffects / SceneTitleCard 新组件；标题画面「AI 对话玩法」正式入口。AI 仅 DeepSeek（用户决策）；服务器未配 DEEPSEEK_API_KEY 时为 mock 回复。
+
 ## 下一步
 
-1. 部署到服务器（重建 backend / frontend 镜像并复核）；
-2. 豆包立绘（至少主立绘 + embarrassed）到位后替换占位图；
-3. 场景背景图（SC03 亮/暗版等，docs/17 §6.1）待用户补充。
+1. 部署到服务器（重建镜像 + 公网复核）；
+2. 等用户提供 DEEPSEEK_API_KEY 后写入服务器环境变量，真实 AI 回复联调；
+3. 豆包立绘（至少主立绘 + embarrassed）到位后替换占位图；
+4. 场景背景图（SC03 亮/暗版等，docs/17 §6.1）待用户补充。

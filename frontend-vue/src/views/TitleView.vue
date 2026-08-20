@@ -9,6 +9,7 @@ import { StartPage, StartLogo, StartItem, StartLine, StartList } from '../compon
 import MeteorAnimation from '../components/effects/MeteorAnimation.vue'
 import StarAnimation from '../components/effects/StarAnimation.vue'
 import { useParallaxAnimation } from '../composables/useParallaxAnimation'
+import { saveTargetRoute } from '../api/saves'
 
 // docs/15 §4：基于 LingChat MainMenu 视觉层与动画层重建 TitleView ——
 // 全亮背景（无遮罩）+ 流星/星星粒子 + 角色立绘 + 鼠标视差 + 电影感菜单。
@@ -49,14 +50,32 @@ async function onContinue() {
   continueError.value = null
   try {
     // Load 创建新 Active Session（docs/13 §19.1）；结果由 GameView 消费。
+    // 按存档类型路由：故事未完结 → /story；已完结（结局后自由聊天）/
+    // 旧玩法存档 → /game（docs/17 结局后自由聊天）。
     const result = await saves.load(saves.mostRecent.id)
     game.pendingLoad = result
     localStorage.removeItem('gal_session_id')
-    await router.push('/story')
+    await router.push(saveTargetRoute(result.story_cursor, result.story_finished))
   } catch (e) {
     continueError.value = e instanceof Error ? e.message : String(e)
   } finally {
     continueBusy.value = false
+  }
+}
+
+// 旧 AI 对话玩法：新开一局（清掉故事会话标识，GameView 走新会话 Opening）
+async function onClassicGame() {
+  if (newGameBusy.value) return
+  newGameBusy.value = true
+  newGameError.value = null
+  try {
+    localStorage.removeItem('gal_session_id')
+    game.sessionId = null
+    await router.push('/game')
+  } catch (e) {
+    newGameError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    newGameBusy.value = false
   }
 }
 
@@ -139,6 +158,10 @@ const backendLabel = computed(() =>
             </StartLine>
             <StartLine>
               <StartItem :disabled="newGameBusy" @click="router.push('/settings')">设置</StartItem>
+            </StartLine>
+            <StartLine>
+              <!-- 旧 AI 对话 + 调查玩法（docs/17：入口恢复为正式可见） -->
+              <StartItem :disabled="newGameBusy" @click="onClassicGame">AI 对话玩法</StartItem>
             </StartLine>
           </StartList>
         </Transition>
