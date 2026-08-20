@@ -19,10 +19,12 @@
 # 方式 A：git（服务器能访问代码仓库时）
 git clone <repo-url> gal && cd gal
 
-# 方式 B：本机打包上传（无仓库访问时）
-#   本机：  git archive --format=tar.gz -o gal-deploy.tar.gz HEAD
-#   上传：  scp gal-deploy.tar.gz user@server:/srv/
-#   服务器：mkdir -p /srv/gal && tar -xzf gal-deploy.tar.gz -C /srv/gal && cd /srv/gal
+# 方式 B：git bundle 打包上传（无仓库访问时，推荐；已验证中文文件名完好）
+#   本机：  git bundle create gal.bundle HEAD
+#   上传：  scp gal.bundle user@server:/srv/
+#   服务器：git clone gal.bundle gal && cd gal
+#   注意：不要用 Windows 下的 git archive 打包——中文文件名会在 tar 解包时损坏
+#   （实测 deepseek_开心.png 等文件丢失），bundle 是二进制格式，编码安全。
 ```
 
 ## 2. 配置环境变量
