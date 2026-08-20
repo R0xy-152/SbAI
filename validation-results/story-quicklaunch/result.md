@@ -20,6 +20,15 @@
 | 10 | 存档载入：结局 AUTO 载入 → 新会话当前节点 = end | HTTP API | PASS |
 | 11 | 中段手动存档 → 读档 → 恢复同一节点（SC01「好吧，有一点。」） | HTTP API | PASS |
 | 12 | 前端 typecheck / 单测 / 生产构建 | npm typecheck / test:unit / build | PASS（45 单测全绿） |
+| 13 | docker-compose 全栈：index.html / nginx 反代 health / 静态资源（deepseek png、doubao 占位） | docker compose up + HTTP | PASS |
+| 14 | 经 nginx 完整走查剧本 + postgres 存档读档 | HTTP（8080） | PASS（176 行、3 选项、14 场景边界、AUTO 在 postgres、load 恢复 end） |
+| 15 | UI 冒烟（Playwright）：标题 → 开始游戏 → 全程推进 → 3 个选项窗口 → 结局 → 返回标题 | scripts/story-smoke.mjs | PASS（choiceCount=3, ended=true） |
+| 16 | 截图视觉核验：选项窗口按钮逐字 = 07 的 A/B/C；结局画面 =「第一章 完 / 《03:17 Incident》 / TO BE CONTINUED / 返回标题」 | vision-router（glm-4v-flash） | PASS |
+
+## 证据
+
+- evidence/01-title.png、02-story-start.png、03-choice-1..3.png、04-ending.png（docker 栈 8080 实机截图）；
+- 后端 pytest 全量输出、API 走查输出见本会话执行记录。
 
 ## 失败与修复记录
 
