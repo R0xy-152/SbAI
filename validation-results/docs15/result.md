@@ -83,7 +83,7 @@ StarAnimation / StarField 在特效开启时确实绘制，不依赖肉眼判断
 
 | docs/15 §1 差距 | 状态 |
 |---|---|
-| 首页背景压暗/无景深/无视差 | ✅ 全亮 120% 宽 + 五层景深 + 阻尼视差（prefers-reduced-motion 禁用） |
+| 首页背景压暗/无景深/无视差 | ✅ 全亮 120% 宽 + 多层景深 + 阻尼视差（prefers-reduced-motion 禁用）；v1.1 起为四层（背景/流星/星星/菜单），无独立角色立绘 |
 | 菜单表单风 | ✅ clamp 大字 + text-shadow + 回弹 hover（cubic-bezier 0.18/0.89/0.32/1.28） |
 | 无流星/星星 | ✅ MeteorAnimation + StarAnimation（离屏预渲染缓存、30fps、隐藏暂停） |
 | 无转场/无面板模糊 | ✅ 菜单 slide 入场 + 路由淡入 + .gal-modal-mask 背景 blur |
@@ -97,7 +97,16 @@ StarAnimation / StarField 在特效开启时确实绘制，不依赖肉眼判断
 | 对话框缺 subtitle | ✅ character-sub 行补齐（ROLE_META.roleSubTitle，窄屏隐藏） |
 | 五页风格不统一 | ✅ 共享 token + .gal-panel/.gal-btn + 统一页壳（Load/Settings） |
 
-## 4. 已知限制（如实记录）
+## 5. 修订记录
+
+- **v1.1（2026-08-20）**：首页移除 DeepSeek 独立立绘层 ——
+  `background_title.png` 背景图本身已含人物，叠加立绘会双人撞车。
+  TitleView 改为四层结构；useParallaxAnimation 的 `charRef` 改为可选参数
+  （char ±10px 视差通道保留，供后续主视觉 KV 立绘回归时启用）。
+  同步修订 docs/15 §2/§4.1/§4.2 与 docs/13 §11.5 落地状态；
+  标题页视觉基线（TITLE_EMPTY_SAVE ×2）与展示截图已重拍。
+
+## 6. 已知限制（如实记录）
 
 - **粒子不进视觉基线**：canvas 动画不可确定性冻结；基线在特效关闭状态拍摄
   （结构布局），粒子正确性由展示截图 + canvas 像素断言 + VLM 复核承担；

@@ -21,7 +21,8 @@ export interface ParallaxConfig {
 }
 
 export interface ParallaxElements {
-  charRef: Ref<HTMLElement | null>
+  // docs/15 v1.1：charRef 改为可选 —— 首页背景图已含人物，不再叠独立立绘层
+  charRef?: Ref<HTMLElement | null>
   bgRef: Ref<HTMLElement | null>
   starsLayerRef: Ref<HTMLElement | null>
 }
@@ -74,7 +75,7 @@ export function useParallaxAnimation(
    */
   function setupPerformanceOptimizations() {
     const elementsToOptimize = [
-      elements.charRef.value,
+      elements.charRef?.value,
       elements.bgRef.value,
       elements.starsLayerRef.value,
     ]
@@ -100,7 +101,7 @@ export function useParallaxAnimation(
    */
   function cleanupPerformanceOptimizations() {
     const elementsToOptimize = [
-      elements.charRef.value,
+      elements.charRef?.value,
       elements.bgRef.value,
       elements.starsLayerRef.value,
     ]
@@ -126,7 +127,7 @@ export function useParallaxAnimation(
     // 使用 3D transform 触发硬件加速
     const transform3D = PARALLAX_CONFIG.USE_TRANSFORM_3D ? ' translateZ(0)' : ''
 
-    if (elements.charRef.value) {
+    if (elements.charRef?.value) {
       elements.charRef.value.style.transform = `translate(-50%, -50%) translateX(${charShift}px)${transform3D}`
     }
     if (elements.bgRef.value) {

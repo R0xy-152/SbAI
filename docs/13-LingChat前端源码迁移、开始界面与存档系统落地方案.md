@@ -804,9 +804,10 @@ Logo / title 区域
 ```
 
 > **落地状态（docs/15）：** MainMenu 的视觉层与动画层已按本节重建 ——
-> 背景层（全亮 120% 宽视差余量）/流星层/星星层/人物层（deepseek 立绘）/
-> 鼠标视差（useParallaxAnimation）/菜单 hover 回弹与入场 slide transition/
-> CSS 文字 Logo（自制，不迁移 LingChat 图片 Logo）全部就位；
+> 背景层（全亮 120% 宽视差余量）/流星层/星星层/鼠标视差（useParallaxAnimation）/
+> 菜单 hover 回弹与入场 slide transition/CSS 文字 Logo（自制，不迁移 LingChat
+> 图片 Logo）全部就位；**人物层不设独立立绘**（本项目 background_title.png
+> 背景图已含人物，docs/15 v1.1 修订）；
 > 按钮仅保留 开始游戏/继续游戏/读取存档/设置 四项，并保留 `.title-btn` 类名。
 > 实现见 `frontend-vue/src/views/TitleView.vue` 与 `frontend-vue/src/components/title/`。
 

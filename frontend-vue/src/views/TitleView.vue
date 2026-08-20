@@ -20,8 +20,6 @@ const saves = useSavesStore()
 const ui = useUiStore()
 const settings = useSettingsStore()
 
-const DEEPSEEK_CHAR = '/char/deepseek/pic/deepseek_main.png'
-
 const newGameBusy = ref(false)
 const newGameError = ref<string | null>(null)
 const continueBusy = ref(false)
@@ -71,9 +69,8 @@ async function refreshSaves() {
 
 onMounted(refreshSaves)
 
-// ── 视差层（docs/15 §4.2） ──
+// ── 视差层（docs/15 §4.2；v1.1 起无角色层，charRef 不传） ──
 const bgRef = ref<HTMLElement | null>(null)
-const charRef = ref<HTMLElement | null>(null)
 const starsLayerRef = ref<HTMLElement | null>(null)
 
 const prefersReducedMotion =
@@ -82,7 +79,6 @@ const prefersReducedMotion =
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const { handleMouseMove, handleMouseLeave } = useParallaxAnimation({
-  charRef,
   bgRef,
   starsLayerRef,
 })
@@ -113,16 +109,10 @@ const backendLabel = computed(() =>
       <StarAnimation :stars-enabled="settings.mainMenuStarsEnabled" :stars-fps="30" />
     </div>
 
-    <!-- 4. 角色立绘层（本项目自有素材，docs/15 §2）。src 用绑定避免 Vite 把
-         公共路径当静态资源导入（vitest 下会解析失败）。 -->
-    <img
-      ref="charRef"
-      class="title-character"
-      :src="DEEPSEEK_CHAR"
-      alt="DeepSeek"
-    />
-
-    <!-- 5. 菜单层（mousemove/mouseleave 驱动视差） -->
+    <!-- 4. 菜单层（mousemove/mouseleave 驱动视差）。
+         docs/15 v1.1 修订：首页不放角色立绘 —— 背景图（background_title.png）
+         本身已含人物，叠一层立绘会双人撞车。五层结构改为四层（背景/流星/
+         星星/菜单），视差作用于背景与星星层。 -->
     <StartPage @mousemove="onMouseMove" @mouseleave="onMouseLeave">
       <div class="flex flex-col gap-4">
         <Transition name="slide-left" appear>
@@ -183,18 +173,6 @@ const backendLabel = computed(() =>
   background-size: cover;
   background-position: center;
   z-index: 0;
-  will-change: transform;
-}
-
-.title-character {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  max-width: 100%;
-  max-height: 100%;
-  z-index: 3;
-  pointer-events: none;
   will-change: transform;
 }
 
