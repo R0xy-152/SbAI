@@ -43,6 +43,14 @@ docker compose ps          # 三个服务：frontend-vue / backend / postgres(he
 
 ## 4. 上线验证清单（全部通过才算部署完成）
 
+自动化脚本（推荐，覆盖 4.1–4.3 + 静态资源 + 页面）：
+
+```bash
+pwsh -File deploy/verify.ps1 -BaseUrl http://127.0.0.1:<FRONTEND_PORT>
+```
+
+手动等价清单：
+
 ```bash
 # 4.1 健康检查
 curl -s http://127.0.0.1:8000/api/health
