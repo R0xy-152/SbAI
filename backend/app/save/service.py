@@ -229,6 +229,19 @@ class SaveSnapshotService:
             return None
         return self.save_auto(orchestrator, player_id, session_id)
 
+    def auto_save_story(
+        self, orchestrator: GameOrchestrator, player_id: str, session_id: str
+    ) -> GameSave:
+        """快速上线故事模式自动存档：场景边界 / 选项提交即 checkpoint。
+
+        与 auto_save_pending 不同：故事模式没有 Narrative checkpoint 机，
+        「场景边界」就是唯一权威检查点（story_runtime.py 在 advance 时标记
+        scene_changed，选项提交恒为检查点），因此这里无条件覆写 AUTO slot。
+        普通回合绝不调用本方法（docs/13 §21.1 约束只适用于旧玩法）。"""
+        return self._save_slot(
+            orchestrator, player_id, session_id, AUTO, None, title=None
+        )
+
     # ── List ──────────────────────────────────────────────────────────────
 
     def list_saves(self, player_id: str) -> dict:

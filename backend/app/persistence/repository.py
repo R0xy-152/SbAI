@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +46,9 @@ class PersistedSession:
     # Per-character persistent mood (docs/04 §9, CharacterStateService), keyed
     # by character_id. Empty on snapshots written before this state existed.
     character_states: dict[str, CharacterMood] = field(default_factory=dict)
+    # 快速上线固定剧本游标（story_runtime.py，临时组件）：{"node_index": int}。
+    # None = 故事模式尚未开始（含旧快照），恢复后从头开始。
+    story_cursor: dict | None = None
 
 
 class SessionRepository(ABC):
@@ -95,8 +99,17 @@ class JsonSessionRepository(SessionRepository):
             encoding="utf-8",
         )
         # os.replace is atomic on the same filesystem (POSIX and Windows), so
-        # a crash mid-write leaves the previous snapshot intact.
-        os.replace(tmp, path)
+        # a crash mid-write leaves the previous snapshot intact. Windows 下杀毒
+        # 软件 / 索引器可能瞬时占用目标文件（快速连续写入时偶发），做小退避
+        # 重试；仍失败则原样抛出（坏写绝不能被静默吞掉）。
+        for attempt in range(5):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.1 * (attempt + 1))
 
 
 def _session_to_dict(session: PersistedSession) -> dict:
@@ -124,6 +137,7 @@ def _session_to_dict(session: PersistedSession) -> dict:
             owner: _mood_to_dict(mood)
             for owner, mood in session.character_states.items()
         },
+        "story_cursor": session.story_cursor,
     }
 
 
@@ -158,6 +172,9 @@ def _session_from_dict(data: dict) -> PersistedSession:
             owner: _mood_from_dict(mood)
             for owner, mood in data.get("character_states", {}).items()
         },
+        # Backward compatible: snapshots written before the story mode existed
+        # lack this key, so an absent value means "story not started".
+        story_cursor=data.get("story_cursor"),
     )
 
 

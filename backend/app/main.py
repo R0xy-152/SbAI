@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.chat import router as chat_router
 from app.api.game import router as game_router
 from app.api.saves import router as saves_router
+from app.api.story import router as story_router
 from app.characters.base import CharacterRuntime
 from app.characters.claude import ClaudeRuntime
 from app.characters.chatgpt import ChatGPTRuntime
@@ -37,6 +38,7 @@ from app.script.chapter1 import build_script_registry
 from app.script.fixture import build_script_nodes
 from app.script.runtime import ScriptRuntime
 from app.script.service import ScriptService
+from app.script.story_runtime import StoryRuntime
 from app.game.speaker_selector import SpeakerSelector
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -140,6 +142,9 @@ def create_app() -> FastAPI:
         # incident, GPT/豆包 arrivals, final reveal) as Script Sequences. The
         # runtime only proposes; the Narrative Runtime above stays authoritative.
         script_runtime=ScriptRuntime(build_script_registry()),
+        # 快速上线固定剧本（临时组件）：AI 停用期间 /api/story 三端点驱动
+        # 07 剧本（docs/story/07，评审稿）。与旧调查玩法并行，互不依赖。
+        story_runtime=StoryRuntime(),
         # Auto Save (docs/13 §21, Task 8): the orchestrator fires the
         # checkpoint side effect after narrative commits, using the player_id
         # the API layer forwards. Wired below once the save service exists.
@@ -167,6 +172,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(game_router)
     app.include_router(saves_router)
+    app.include_router(story_router)
 
     # Liveness probe consumed by the Vue frontend (docs/13 Task 1: Vue 可请求
     # FastAPI health endpoint). Does not touch any game runtime state.

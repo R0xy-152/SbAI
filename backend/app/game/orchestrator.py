@@ -53,6 +53,7 @@ from app.script.chapter1_content import CH1_N03_CLAUDE_INCIDENT_SEQUENCE, Script
 from app.script.runtime import ScriptIntent, ScriptPlan, ScriptRuntime
 from app.script.schema import ScriptError
 from app.script.service import ScriptService
+from app.script.story_runtime import StoryRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,9 @@ class GameOrchestrator:
         # the browser-localStorage namespace (docs/13 §15), supplied by the API
         # layer (the frontend owns it, not the orchestrator).
         save_service: SaveSnapshotService | None = None,
+        # 快速上线固定剧本（story_runtime.py，临时组件）：None 保持旧行为
+        #（既有直接构造测试不受影响），由 main.py 在运行应用中注入。
+        story_runtime: StoryRuntime | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -183,6 +187,7 @@ class GameOrchestrator:
         # Auto Save side effect (docs/13 §21, Task 8): None keeps the
         # pre-Task-8 behaviour for existing direct-construction tests.
         self._save_service = save_service
+        self._story_runtime = story_runtime
         self._player_by_session: dict[str, str] = {}
         # T2review P1-3：per-session 锁——Turn 的 Provider 读取、状态提交、
         # 消息写入与持久化必须串行化，不允许交错。
@@ -1190,6 +1195,8 @@ class GameOrchestrator:
             )
         if self._script_runtime is not None:
             self._script_runtime.restore(session.session_id, persisted.script_cursor)
+        if self._story_runtime is not None:
+            self._story_runtime.restore(session.session_id, persisted.story_cursor)
         self._character_state.restore(session.session_id, persisted.character_states)
         return session
 
@@ -1220,6 +1227,11 @@ class GameOrchestrator:
                 else None
             ),
             character_states=self._character_state.snapshot(session_id),
+            story_cursor=(
+                self._story_runtime.snapshot(session_id)
+                if self._story_runtime is not None
+                else None
+            ),
         )
 
     def import_snapshot(self, snapshot: dict) -> str:
@@ -1258,6 +1270,119 @@ class GameOrchestrator:
                 "messages": self.get_history(session_id),
             },
         }
+
+    # ---- 快速上线固定剧本（story_runtime.py，临时组件） -------------------
+
+    def _require_story_runtime(self) -> StoryRuntime:
+        if self._story_runtime is None:
+            raise ValueError("story mode is not wired")
+        return self._story_runtime
+
+    def story_current(self, session_id: str | None) -> dict:
+        """读取当前展示节点（不移动游标）。未知会话经 _resolve_session 造新
+        会话但不动游标，前端用 started 判断是否需要 advance。"""
+        session = self._resolve_session(session_id)
+        runtime = self._require_story_runtime()
+        started = runtime.started(session.session_id)
+        return {
+            "session_id": session.session_id,
+            "started": started,
+            "finished": runtime.finished(session.session_id),
+            "node": runtime.current(session.session_id) if started else None,
+        }
+
+    def story_advance(
+        self, session_id: str | None, *, player_id: str | None = None
+    ) -> dict:
+        """移动到下一节点并返回（首次 advance 即「开始游戏」）。
+
+        提交顺序与 handle_turn 同构：游标移动 → 台词进会话历史 → 持久化 →
+        自动存档（场景边界时）。台词历史写入使 History 面板对故事模式同样
+        可用。"""
+        session = self._resolve_session(session_id)
+        self._bind_player(session.session_id, player_id)
+        runtime = self._require_story_runtime()
+        node, scene_changed = runtime.advance(session.session_id)
+        self._record_story_node(session.session_id, node, chosen_label=None)
+        self._persist_story_turn(
+            session.session_id, player_id, autosave=scene_changed
+        )
+        return {
+            "session_id": session.session_id,
+            "started": True,
+            "finished": runtime.finished(session.session_id),
+            "node": node,
+            "scene_changed": scene_changed,
+        }
+
+    def story_choose(
+        self, session_id: str, option_id: str, *, player_id: str | None = None
+    ) -> dict:
+        """提交一个 A/B/C 选项：游标跳到该选项的第一句台词并返回。"""
+        session = self._resolve_session(session_id)
+        self._bind_player(session.session_id, player_id)
+        runtime = self._require_story_runtime()
+        current = runtime.current(session.session_id)
+        label = next(
+            (
+                option["label"]
+                for option in current.get("options", [])
+                if option["id"] == option_id
+            ),
+            None,
+        )
+        if label is None:
+            raise ValueError(f"unknown option {option_id!r}")
+        node = runtime.choose(session.session_id, option_id)
+        self._record_story_node(session.session_id, node, chosen_label=label)
+        self._persist_story_turn(session.session_id, player_id, autosave=True)
+        return {
+            "session_id": session.session_id,
+            "started": True,
+            "finished": runtime.finished(session.session_id),
+            "node": node,
+            "scene_changed": False,
+        }
+
+    def _record_story_node(
+        self, session_id: str, node: dict, chosen_label: str | None
+    ) -> None:
+        """把展示的台词/选项写进会话历史（History 面板数据源）。"""
+        if chosen_label is not None:
+            self._sessions.append_message(
+                session_id, {"role": "player", "content": chosen_label}
+            )
+        if node.get("kind") != "line":
+            return
+        speaker = node["speaker"]
+        self._sessions.append_message(
+            session_id,
+            {
+                "role": "player" if speaker == "player" else "character",
+                "character_id": None if speaker == "player" else speaker,
+                "content": node["text"],
+            },
+        )
+
+    def _persist_story_turn(
+        self, session_id: str, player_id: str | None, *, autosave: bool
+    ) -> None:
+        """故事回合收尾：先持久化会话，再（必要时）写 AUTO 自动存档。
+
+        与 auto_save_if_reached 同约定：存档是副作用，失败只记日志，绝不让
+        剧本回合本身失败。"""
+        if self._repository is not None:
+            self._repository.save(self._snapshot(session_id))
+        if autosave and self._save_service is not None:
+            bound = self._player_by_session.get(session_id)
+            if bound is None:
+                return
+            try:
+                self._save_service.auto_save_story(self, bound, session_id)
+            except Exception:  # pragma: no cover - defensive side effect
+                logger.warning(
+                    "story auto save failed for session %s", session_id, exc_info=True
+                )
 
     def _public_audience(self, session_id: str, character_id: str) -> set[str]:
         """Return the authoritative audience for one public player turn."""
