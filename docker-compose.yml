@@ -2,12 +2,21 @@
 # backend 用 PostgreSQL 存档（docs/13 §16 snapshot=JSONB）；会话持久化仍走 JSON
 # （docs/13 Task 6：最小改动，存档是 docs 要求的 PostgreSQL 接入点）。
 # 本机无 Docker 时可用 npm run dev + backend:8000 等价验证（docs/13 Task 1 路径）。
+#
+# 快速上线部署（docs/17 §4 / deploy/DEPLOY.md）：本文件同时用于服务器部署。
+# 环境变量（项目根 .env，模板见 .env.example）：
+#   FRONTEND_PORT   前端对外端口（默认 8080；服务器可设 80 或交给上层反代）
+#   GAL_PROVIDER    默认 auto（无 key 回落 mock）；快速上线不需要任何 AI key
+#   GAL_CORS_ORIGINS 额外允许的来源（同源部署无需设置）
+#   POSTGRES_PASSWORD postgres 密码（默认 gal，生产部署建议覆盖）
 services:
   frontend-vue:
     build:
       context: ./frontend-vue
     ports:
-      - "8080:80"
+      - "${FRONTEND_PORT:-8080}:80"
+    # 服务器部署：进程退出自动拉起（docker compose up -d 后随 Docker 自启）
+    restart: unless-stopped
     depends_on:
       - backend
 
@@ -20,11 +29,13 @@ services:
       # 有 DEEPSEEK_API_KEY 即走真实链路；部署时可用 GAL_PROVIDER 显式覆盖。
       GAL_PROVIDER: ${GAL_PROVIDER:-auto}
       GAL_SAVE_BACKEND: postgres
-      GAL_POSTGRES_DSN: postgresql://gal:gal@postgres:5432/gal
+      GAL_POSTGRES_DSN: postgresql://gal:${POSTGRES_PASSWORD:-gal}@postgres:5432/gal
+      GAL_CORS_ORIGINS: ${GAL_CORS_ORIGINS:-}
     # T2review P1-15：backend 只绑定宿主 loopback（前端 nginx 经 Compose 内网
     # 反代 /api），不发布到所有网络接口。
     ports:
       - "127.0.0.1:8000:8000"
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,9 +46,10 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: gal
-      POSTGRES_PASSWORD: gal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gal}
       POSTGRES_DB: gal
     # T2review P1-15：postgres 仅在 Compose 内网可见，不发布宿主端口。
+    restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -48,4 +60,3 @@ services:
 
 volumes:
   postgres_data:
-
