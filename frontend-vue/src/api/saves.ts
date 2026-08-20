@@ -51,15 +51,33 @@ import type { GameOption, PresentationStateView } from './game'
 
 const PLAYER_KEY = 'gal_player_id'
 
-/** 匿名 Player 身份（docs/13 §15）：首次打开生成 crypto.randomUUID() 存
- * localStorage，之后所有 Save API 带上该 player_id。不是登录凭据/安全边界。 */
+/** 匿名 Player 身份（docs/13 §15）：首次打开生成 UUID 存 localStorage，
+ * 之后所有 Save API 带上该 player_id。不是登录凭据/安全边界。
+ *
+ * 注意：crypto.randomUUID 只在安全上下文（HTTPS / localhost）可用；
+ * 公网 IP:80 直连（HTTP 非安全上下文）下会抛
+ * "crypto.randomUUID is not a function"（上线实测踩坑），因此保留手工
+ * 生成回退——player_id 本就只是匿名命名空间，不承担安全职责。 */
 export function getPlayerId(): string {
   let id = localStorage.getItem(PLAYER_KEY)
   if (!id) {
-    id = crypto.randomUUID()
+    id = generateUuid()
     localStorage.setItem(PLAYER_KEY, id)
   }
   return id
+}
+
+function generateUuid(): string {
+  const c = globalThis.crypto
+  if (typeof c !== 'undefined' && typeof c.randomUUID === 'function') {
+    return c.randomUUID()
+  }
+  // 非安全上下文回退（RFC4122 v4 形状，够用即可）
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
 }
 
 /** docs/13 §20.1：列出该 player 的存档（auto + manual[6]，空 slot 由前端渲染）。 */
