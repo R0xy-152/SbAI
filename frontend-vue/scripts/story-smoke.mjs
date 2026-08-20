@@ -45,6 +45,29 @@ await page.waitForFunction(
 await page.screenshot({ path: OUT + '/02-story-start.png' })
 
 const btn = page.locator('#sendButton')
+
+// 差分立绘接线验证（docs/17 §6.3）：推进至首个登台角色出现，
+// 输出其立绘 URL 并截图（SC01 第 4 行应为 deepseek_surprised.png）
+let portraitSeen = null
+for (let i = 0; i < 8 && !portraitSeen; i++) {
+  if ((await btn.count()) > 0 && (await btn.isEnabled())) {
+    await btn.click()
+  }
+  await page.waitForTimeout(180)
+  portraitSeen = await page
+    .locator('img[src*="/char/"]')
+    .first()
+    .getAttribute('src')
+    .catch(() => null)
+}
+if (portraitSeen) {
+  // 等立绘加载 + RoleSprite 300ms cross-fade 完成后再截图，避免抓到透明帧
+  await page.waitForTimeout(900)
+  console.log('avatar-src:', portraitSeen)
+  await page.screenshot({ path: OUT + '/05-portrait.png' })
+} else {
+  console.log('avatar-src: NONE（前 8 行无登台角色）')
+}
 let choiceCount = 0
 let ended = false
 for (let i = 0; i < 500; i++) {

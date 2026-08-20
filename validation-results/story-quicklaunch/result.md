@@ -55,8 +55,21 @@
 
 见 docs/17 §3（评审稿内容、无音效、立绘占位、叙述行过渡、SC02 自由聊天段未实现、AUTO 粒度）。
 
+## 补充3（差分立绘接线，2026-08-21）
+
+| # | 用例 | 结果 |
+|---|---|---|
+| 22 | 素材入库盘点：DeepSeek main+8 差分、Claude main+7（含 serious）、ChatGPT main+8；旧中文名 deepseek_开心 / claude_shengqi 统一为 happy / angry 并删除 | PASS |
+| 23 | asset-resolver 差分映射单测 6 例（差分命中 / 404 回落 main / neutral 不探测 / 在途去重 / 结果缓存 / 未知角色 legacy 回退） | PASS |
+| 24 | 前端全量回归：typecheck + test:unit（54 单测全绿，GameRoleAvatar 既有用例补 resolver mock）+ 生产构建 | PASS |
+| 25 | 本机 docker 栈（重建镜像）完整冒烟：首个登台立绘 URL = /char/deepseek/pic/deepseek_surprised.png；3 选项 + 结局 + 返回标题全通 | PASS |
+| 26 | 4xx 全量诊断（完整剧本走查）：仅 doubao_embarrassed.png 404（预期——豆包无立绘，回落占位图）；deepseek / claude 全部差分命中 | PASS |
+| 27 | 视觉核验（glm-4v-flash）：05-portrait.png 显示 DeepSeek「惊讶」差分立绘（眼睛睁大），完整无裁切、无破图黑屏 | PASS |
+
+实现：asset-resolver.ts 接入 emotion → {角色}_{emotion英文id}.png 差分映射（编程式 Image 探测 + 模块级缓存与在途去重，404/加载失败回落 main 单图，组件不感知资源细节）；豆包补图后无需改代码自动生效。docs/17 §3.2 / §6.2 / §6.3 同步更新。
+
 ## 下一步
 
-1. 本机 docker-compose 全量验证（frontend 8080 经 nginx 反代走通）；
-2. 等用户提供服务器信息后远程部署；
-3. 用户补充缺失立绘后替换占位。
+1. 部署到服务器（重建 backend / frontend 镜像并复核）；
+2. 豆包立绘（至少主立绘 + embarrassed）到位后替换占位图；
+3. 场景背景图（SC03 亮/暗版等，docs/17 §6.1）待用户补充。

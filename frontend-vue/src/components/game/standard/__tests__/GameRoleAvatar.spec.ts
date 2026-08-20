@@ -6,6 +6,12 @@ import { usePresentationStore } from '../../../../stores/presentation'
 import GameRoleAvatar from '../GameRoleAvatar.vue'
 import { FakeImage } from './fake-image'
 
+// 本 spec 验证 emotion → 动画类；资产解析（含差分探测 fetch）由
+// asset-resolver.spec.ts 单独覆盖，这里 mock 掉避免测试环境真实网络。
+vi.mock('../../../../adapters/asset-resolver', () => ({
+  resolveCharacterAsset: async () => '/char/deepseek/pic/deepseek_main.png',
+}))
+
 const baseRole = {
   roleId: 'deepseek',
   emotion: 'neutral',
