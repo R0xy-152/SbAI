@@ -56,6 +56,22 @@
           ></textarea>
         </div>
       </div>
+      <!-- galgame 基础功能控制条（需求）：AUTO / SKIP / SAVE / LOAD，位于
+           「控制下一句」▼ 按钮左侧。按钮组右边缘贴容器右边缘，▼ 经
+           translate-x-full 落在右边缘外侧，两者相邻。 -->
+      <div class="absolute right-0 bottom-0 flex items-center gap-1.5 pb-0.5">
+        <button
+          data-testid="ctrl-autoplay"
+          class="gal-ctrl-btn"
+          :class="{ 'gal-ctrl-btn--active': autoPlaying }"
+          @click="emit('autoplay-toggle')"
+        >
+          自动
+        </button>
+        <button data-testid="ctrl-skip" class="gal-ctrl-btn" @click="emit('skip')">快进</button>
+        <button data-testid="ctrl-save" class="gal-ctrl-btn" @click="emit('save')">保存</button>
+        <button data-testid="ctrl-load" class="gal-ctrl-btn" @click="emit('load')">读取</button>
+      </div>
       <!-- 发送按钮（内层右侧外部） -->
       <button
         id="sendButton"
@@ -134,7 +150,17 @@ const isSending = computed(() => gameStore.currentStatus === 'thinking')
 // textarea 动态样式
 const textareaMotionClass = computed(() => ({}))
 
-const emit = defineEmits(['player-continued', 'dialog-proceed'])
+const emit = defineEmits([
+  'player-continued',
+  'dialog-proceed',
+  'autoplay-toggle',
+  'skip',
+  'save',
+  'load',
+])
+
+// galgame 基础功能控制条（需求）：AUTO 激活态高亮由父级传入。
+defineProps<{ autoPlaying?: boolean }>()
 
 const placeholderText = computed(() => {
   switch (gameStore.currentStatus) {
@@ -227,6 +253,42 @@ defineExpose({
 .custom-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
+}
+
+/* galgame 基础功能控制按钮（需求）：无衬线字体栈（继承 gal-font-sans），
+   深蓝玻璃胶囊，与全站皮肤一致（docs/15 §8）。 */
+.gal-ctrl-btn {
+  padding: 0.2rem 0.65rem;
+  border: 1px solid rgba(211, 234, 255, 0.25);
+  border-radius: 9999px;
+  background: rgba(7, 12, 24, 0.62);
+  color: rgba(215, 239, 250, 0.85);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.gal-ctrl-btn:hover {
+  background: rgba(30, 48, 78, 0.9);
+  border-color: rgba(135, 214, 244, 0.6);
+  color: #eaf8ff;
+}
+
+.gal-ctrl-btn--active {
+  border-color: rgba(4, 188, 255, 0.65);
+  background: rgba(10, 44, 78, 0.85);
+  color: #aef;
+  box-shadow: 0 0 10px rgba(4, 188, 255, 0.3);
 }
 
 /* docs/16 P4：继续/发送按钮命中区扩大 —— 视觉按钮不动，用透明 ::after 向

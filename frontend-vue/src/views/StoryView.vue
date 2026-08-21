@@ -278,6 +278,87 @@ function onDialogProceed() {
   void doAdvance()
 }
 
+// ── galgame 基础功能（需求）：AUTO / SKIP / SAVE / LOAD ─────────────────────
+
+// AUTO 自动播放：台词打完自动推进下一句；遇到选择点/结局/面板时暂停。
+const autoPlaying = ref(false)
+let autoTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopAutoTimer() {
+  if (autoTimer) {
+    clearTimeout(autoTimer)
+    autoTimer = null
+  }
+}
+
+function scheduleAutoAdvance() {
+  if (!autoPlaying.value) return
+  if (
+    showChoice.value ||
+    showEnding.value ||
+    showChapterOpening.value ||
+    systemPanel.value ||
+    busy.value
+  ) {
+    // 需要玩家介入的节点 → 停止 AUTO（不自动替玩家选择）
+    autoPlaying.value = false
+    return
+  }
+  // 打字机仍在播放 → 稍后重试；打完则推进下一句
+  if (dialogRef.value?.isTyping) {
+    autoTimer = setTimeout(scheduleAutoAdvance, 200)
+    return
+  }
+  autoTimer = setTimeout(() => {
+    if (!autoPlaying.value) return
+    void doAdvance().finally(() => scheduleAutoAdvance())
+  }, 350)
+}
+
+function onToggleAutoPlay() {
+  autoPlaying.value = !autoPlaying.value
+  if (autoPlaying.value) {
+    scheduleAutoAdvance()
+  } else {
+    stopAutoTimer()
+  }
+}
+
+// SKIP 快进：连续推进到下一个选择点 / 结局 / 自由聊天入口。
+const skipping = ref(false)
+async function onSkip() {
+  if (skipping.value || busy.value) return
+  skipping.value = true
+  autoPlaying.value = false
+  stopAutoTimer()
+  try {
+    let guard = 0
+    while (guard++ < 600) {
+      if (showChoice.value || showEnding.value || finished.value) break
+      if (node.value?.kind === 'chat') break
+      if (busy.value || showChapterOpening.value || systemPanel.value) {
+        await new Promise((r) => setTimeout(r, 20))
+        continue
+      }
+      await doAdvance()
+    }
+  } finally {
+    skipping.value = false
+  }
+}
+
+function onOpenSave() {
+  autoPlaying.value = false
+  stopAutoTimer()
+  systemPanel.value = 'save'
+}
+
+function onOpenLoad() {
+  autoPlaying.value = false
+  stopAutoTimer()
+  systemPanel.value = 'load'
+}
+
 // ── 会话恢复 / 新游戏 ──────────────────────────────────────────────────────
 
 async function fetchCurrentAndApply() {
@@ -414,6 +495,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('keydown', onStoryKeyDown)
   invalidateView()
+  stopAutoTimer()
   if (effectTimer) {
     clearTimeout(effectTimer)
     effectTimer = null
@@ -462,7 +544,16 @@ function onContinueChat() {
 
     <!-- 对话框（底部） -->
     <div class="absolute inset-x-0 bottom-0 z-10 flex flex-col">
-      <GameDialog ref="dialogRef" class="mx-auto" @dialog-proceed="onDialogProceed" />
+      <GameDialog
+        ref="dialogRef"
+        class="mx-auto"
+        :auto-playing="autoPlaying"
+        @dialog-proceed="onDialogProceed"
+        @autoplay-toggle="onToggleAutoPlay"
+        @skip="onSkip"
+        @save="onOpenSave"
+        @load="onOpenLoad"
+      />
     </div>
 
     <!-- 顶部条：会话信息 + 系统菜单 + 返回标题 -->

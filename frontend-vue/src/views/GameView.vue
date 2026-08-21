@@ -119,6 +119,7 @@ interface QueuedLine {
 }
 const lineQueue = ref<QueuedLine[]>([])
 let lineIndex = 0
+const dialogRef = ref<InstanceType<typeof GameDialog> | null>(null)
 
 // 系统菜单 / 面板（docs/13 §13）。systemPanel 表示当前打开的面板：
 // null 无，'menu' 系统菜单，'save'/'load'/'history' 对应面板。
@@ -267,6 +268,79 @@ function onDialogProceed() {
   } else {
     setInputMode(true)
   }
+}
+
+// ── galgame 基础功能（需求）：AUTO / SKIP / SAVE / LOAD ─────────────────────
+// 自由聊天里 AUTO 推进 AI 台词队列（逐段）；SKIP 直接跳到选择点（有选项则弹
+// 选项窗口，否则进入输入）；SAVE / LOAD 复用系统面板。
+
+const autoPlaying = ref(false)
+let autoTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopAutoTimer() {
+  if (autoTimer) {
+    clearTimeout(autoTimer)
+    autoTimer = null
+  }
+}
+
+function scheduleAutoAdvance() {
+  if (!autoPlaying.value) return
+  if (systemPanel.value || showOptionWindow.value || llmBusy.value || busy.value) {
+    // 需要玩家介入 → 停止 AUTO
+    autoPlaying.value = false
+    return
+  }
+  if (lineIndex < lineQueue.value.length) {
+    if (dialogRef.value?.isTyping) {
+      autoTimer = setTimeout(scheduleAutoAdvance, 200)
+      return
+    }
+    autoTimer = setTimeout(() => {
+      if (!autoPlaying.value) return
+      onDialogProceed()
+      scheduleAutoAdvance()
+    }, 350)
+    return
+  }
+  // 队列播完 → 进入输入/选项，AUTO 结束
+  autoPlaying.value = false
+}
+
+function onToggleAutoPlay() {
+  autoPlaying.value = !autoPlaying.value
+  if (autoPlaying.value) {
+    scheduleAutoAdvance()
+  } else {
+    stopAutoTimer()
+  }
+}
+
+// SKIP：跳到下一个选择点 —— 有选项弹选项窗口，否则直接进入输入态。
+function onSkip() {
+  autoPlaying.value = false
+  stopAutoTimer()
+  lineQueue.value = []
+  lineIndex = 0
+  if (options.value.length > 0 && !llmBusy.value) {
+    suppressFirstOptionPop = false
+    showOptionWindow.value = true
+  } else {
+    suppressFirstOptionPop = false
+    setInputMode(true)
+  }
+}
+
+function onOpenSave() {
+  autoPlaying.value = false
+  stopAutoTimer()
+  systemPanel.value = 'save'
+}
+
+function onOpenLoad() {
+  autoPlaying.value = false
+  stopAutoTimer()
+  systemPanel.value = 'load'
 }
 
 // 选项功能（docs/14 T2/T3）：后端权威下发当前合法选项（D3），前端只回传
@@ -743,6 +817,7 @@ onMounted(async () => {
 onUnmounted(() => {
   // T2review P1-7：卸载即作废在途请求；会话持久化由后端完成
   invalidateView()
+  stopAutoTimer()
 })
 </script>
 
@@ -770,9 +845,15 @@ onUnmounted(() => {
         <div v-if="feedback" class="max-w-[560px] px-4 text-xs text-[#a9e8ff]/80">{{ feedback }}</div>
       </div>
       <GameDialog
+        ref="dialogRef"
         class="mx-auto"
+        :auto-playing="autoPlaying"
         @player-continued="onPlayerMessage"
         @dialog-proceed="onDialogProceed"
+        @autoplay-toggle="onToggleAutoPlay"
+        @skip="onSkip"
+        @save="onOpenSave"
+        @load="onOpenLoad"
       />
     </div>
 
