@@ -198,9 +198,11 @@ export const useUIStore = () => {
     },
     get typeWriterSpeed() {
       // T2review P2-3：文字速度来自设置 store（默认 1x），不再硬编码 50。
+      // 需求：文字速度基线调到 1.2 倍（默认倍率 textSpeed=1 不变，只调数值）。
+      // 基线 speed 50 → 60（= 50 × 1.2），TypeWriter 中 speed 越大打字越快。
       const settings = useRealSettingsStore()
       const speed = settings.textSpeed && settings.textSpeed > 0 ? settings.textSpeed : 1
-      return Math.max(10, Math.round(50 / speed))
+      return Math.max(10, Math.round(60 / speed))
     },
     get currentBackgroundTransition() {
       return 300
