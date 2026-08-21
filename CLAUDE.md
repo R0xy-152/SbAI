@@ -4,7 +4,7 @@
 
 **已完成**：TV-01（Gal UI Shell，PASS）、TV-02（Basic Presentation Action，PASS_WITH_LIMITATION）、TV-03（Backend Round Trip，PASS）、TV-04（DeepSeek Provider + 真实模型链路，PASS）、TV-05（Structured Character Response，PASS）、TV-06（Validate Before Present，PASS）、TV-07（Short-term Context，PASS）、TV-08（DeepSeek Blindness，PASS）、TV-09（Second Character Isolation，PASS）、TV-10（Narrative Signal，PASS）、TV-11（Deterministic Narrative Event，PASS）、TV-12（State-dependent Response，PASS）、TV-13（Important Memory，PASS）、TV-14（Session Restore，PASS）、TV-15（Failure Recovery，PASS）、TV-16（End-to-End Stability，Final Gate，PASS），TV-17（对话输出双模式 / Scripted Opening + ON_EVENT lines，后端 `backend/app/script/`，PASS）。**TV-01 ~ TV-17 技术验证计划已全部完成**。
 
-**当前阶段**：进入 **docs/13（LingChat 前端源码迁移、开始界面与存档系统落地方案）**，前端从旧静态 UI 迁移到 Vue 3，并实现 Title Screen / Save-Load / Auto Save。Task 0-9 均已完成并有验证记录（Task 0/1 PASS_WITH_LIMITATION，其余 PASS；记录见 `validation-results/docs13-task*/result.md`）。随后执行了 docs/17 快速上线固定剧本（停用 AI、07 固定剧本 StoryView 已部署服务器：结局后 DeepSeek 自由聊天 + 场景演出接线 + 旧玩法正式入口）。
+**当前阶段**：进入 **docs/13（LingChat 前端源码迁移、开始界面与存档系统落地方案）**，前端从旧静态 UI 迁移到 Vue 3，并实现 Title Screen / Save-Load / Auto Save。Task 0-9 均已完成并有验证记录（Task 0/1 PASS_WITH_LIMITATION，其余 PASS；记录见 `validation-results/docs13-task*/result.md`）。随后执行了 docs/17 快速上线固定剧本（停用 AI、07 固定剧本 StoryView 已部署服务器：结局后 DeepSeek 自由聊天 + 场景演出接线 + 旧玩法正式入口）。2026-08-21 用户需求：AI 对话玩法新开局删除前置剧情（不播「你醒了，别怕」开场白、不自动弹「选择行动」窗口，直接自由对话，会话由首个玩家消息创建），常驻背景图替换为用户提供的新图 `backgroud/background_ai.png`（故事模式背景不变；见 docs/17 §2.5.2）。
 
 ## 文档是真相源（Docs-first）
 

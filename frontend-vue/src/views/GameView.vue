@@ -1,12 +1,15 @@
 <script setup lang="ts">
 // 第一章 · 角色舞台（docs/13 Task 4）：接入现有 FastAPI Game Runtime。
-// New Session → Player Input → Response → Presentation Directive → Character
-// Presence → Emotion → Narrative Event。03:17 经「调查纸（EV01）」触发，
-// Claude 由后端 CH01_INCIDENT_0317 脚本登场，随后可对话。
+// Player Input → Response → Presentation Directive → Character Presence →
+// Emotion → Narrative Event。03:17 经「调查纸（EV01）」触发，Claude 由后端
+// CH01_INCIDENT_0317 脚本登场，随后可对话。
 // 所有展示变化来自 Backend presentation_actions / presentation_state，前端不
 // 从剧情条件推断角色在场（docs/13 §9.2）。
 // Task 7：游戏内系统菜单（§13 Save/Load/History/Return Title）+ Load 消费
 //（§20.3：game.pendingLoad 在挂载时恢复新 Session）。
+// 2026-08-21 用户需求：新开局不再播放前置开场白（SCRIPT_OPENING「你醒了，
+// 别怕」），也不自动弹出「选择行动」选项窗口 —— 直接进入自由对话；会话由
+// 首个玩家消息经 /api/chat 创建（后端 mint session 并在响应中返回 id）。
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '../stores/game'
@@ -18,7 +21,6 @@ import {
   setDialogueLine,
 } from '../adapters/presentation-adapter'
 import {
-  createOpening,
   fetchEvidence,
   fetchGameState,
   fetchHistory,
@@ -34,7 +36,7 @@ import {
   submitDeduction,
   submitPrivateInterviewChallenge,
 } from '../api/game'
-import type { ChatResponse, GameOption, OpeningResponse, PresentationAction } from '../api/game'
+import type { ChatResponse, GameOption, PresentationAction } from '../api/game'
 import type { LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
@@ -59,7 +61,8 @@ const settings = useSettingsStore()
 const router = useRouter()
 
 const SESSION_KEY = 'gal_session_id'
-const BG = '/backgroud/background1.png'
+// AI 对话玩法常驻背景（2026-08-21 用户提供新图，原 background1.png 仅故事模式用）
+const BG = '/backgroud/background_ai.png'
 
 // docs/15 §7：首次加载演出仅「New Game」路径显示，且同一页面会话只播一次。
 let loadingShownThisSession = false
@@ -84,8 +87,8 @@ const currentResponse = ref<ChatResponse | null>(null)
 // docs/15 §7：New Game 的 opening 响应在加载演出结束前先缓冲，避免打字机在
 // 遮罩后提前播放（LingChat 用 eventQueue 暂停，本项目改为缓冲应用）。
 const showLoading = ref(false)
-const openingReady = ref(false)
-const bufferedOpening = ref<OpeningResponse | null>(null)
+// 新开局首个回合结束不自动弹选项窗口（见 onDialogProceed；仅新会话置真）
+let suppressFirstOptionPop = false
 
 // docs/16 P5：黑幕眼睑式睁眼转场 —— 每次进入游戏画面播一次（新游戏排在猫爪
 // 演出之后，读档/会话恢复直接播）；pointer-events:none 不挡点击。
@@ -154,7 +157,7 @@ async function reconcileStage() {
   try {
     const state = await fetchGameState(sessionId.value)
     if (epoch !== viewEpoch) return
-    applyPresentationStateView(presentation.state, state.presentation_state)
+    applyPresentationStateView(presentation.state, state.presentation_state, BG)
     options.value = state.options ?? []
     // 粘性路由自动复位（D5）：路由对象离场 → 对应 chat_routing 选项消失
     if (routedCharacter.value) {
@@ -186,7 +189,7 @@ function playNextLine(): boolean {
 
 // 玩家发送
 async function onPlayerMessage(text?: unknown) {
-  if (!sessionId.value || typeof text !== 'string' || !text.trim() || busy.value) return
+  if (typeof text !== 'string' || !text.trim() || busy.value) return
   // D2 一次性推理模式：下一条消息提交推理端点而非对话（判定仍走后端）
   if (pendingDeduction.value) {
     await submitPlayerDeduction(text.trim())
@@ -202,6 +205,9 @@ async function onPlayerMessage(text?: unknown) {
   try {
     const data = await sendChat(sessionId.value, text.trim(), routedCharacter.value ?? undefined)
     if (epoch !== viewEpoch) return
+    // 新会话：首个玩家消息即创建会话，后端在响应中带回 session_id
+    sessionId.value = data.session_id
+    localStorage.setItem(SESSION_KEY, data.session_id)
     currentResponse.value = data
     // 结构化指令 → 舞台（CHARACTER_SHOW / EMOTION / GLITCH 等）
     applyChatResponse(presentation.state, data)
@@ -240,6 +246,13 @@ function onDialogProceed() {
   lineIndex = 0
   // docs/16 P7/P8：台词播完点继续，若有可用选项 → 弹选项窗口（否则解锁输入）
   if (options.value.length > 0) {
+    // 2026-08-21 用户需求：新开局不再自动弹「选择行动」窗口（前置剧情已删），
+    // 首个回合结束后直接进入自由输入；旧调查玩法仍经左上角「行动」按钮可见
+    if (suppressFirstOptionPop) {
+      suppressFirstOptionPop = false
+      setInputMode(true)
+      return
+    }
     showOptionWindow.value = true
   } else {
     setInputMode(true)
@@ -328,7 +341,7 @@ async function performInvestigate(option: GameOption): Promise<string | null> {
         hotspotId,
       )
       if (last.state?.presentation_state) {
-        applyPresentationStateView(presentation.state, last.state.presentation_state)
+        applyPresentationStateView(presentation.state, last.state.presentation_state, BG)
       }
     }
     if (epoch !== viewEpoch) return null
@@ -598,58 +611,6 @@ function closePanel() {
   setInputMode(true)
 }
 
-async function startOpening() {
-  const epoch = viewEpoch
-  try {
-    const opening = await createOpening(sessionId.value)
-    if (epoch !== viewEpoch) return
-    if (showLoading.value) {
-      // 加载演出中：缓冲 opening，等演出结束再应用（docs/15 §7）
-      bufferedOpening.value = opening
-      openingReady.value = true
-      return
-    }
-    applyOpeningResponse(opening)
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-    setInputMode(true)
-    // 出错也要让加载演出按最长时限揭幕，错误在演出后可见
-    if (showLoading.value) openingReady.value = true
-  }
-}
-
-function applyOpeningResponse(opening: OpeningResponse) {
-  invalidateView()  // 新会话 = 新画面代次，作废旧代次的在途响应
-  sessionId.value = opening.session_id
-  localStorage.setItem(SESSION_KEY, opening.session_id)
-  if (opening.dialogue) {
-      // docs/16 P6：opening 台词同样按换行切段进统一队列逐段播放
-      lineQueue.value = splitTextSegments(opening.dialogue).map((t) => ({
-        speaker: opening.character_id,
-        text: t,
-        emotion: opening.emotion,
-      }))
-      lineIndex = 0
-      playNextLine()
-      // 初始场景背景（binding_room → background1）；后续由 reconcileStage 对账
-      presentation.state.scene.backgroundId = BG
-      // opening 角色（DeepSeek）已在场
-      presentation.state.presentCharacterIds = ['deepseek']
-      presentation.state.characters['deepseek'] = {
-        ...presentation.state.characters['deepseek'],
-        visible: true,
-        emotion: opening.emotion || 'neutral',
-      }
-      // opening 是开场演出：播放中不可输入（dialogue.mode 已由 setSpeakerLine
-      // 置为 'ai'，status 'streaming' 即 responding；勿再调用 setInputMode(false)，
-      // 其会把 status 覆盖为 thinking 使打字机永远不启动），玩家点击推进后解锁
-    } else {
-      setInputMode(true)
-    }
-    // 初始选项（调查纸等）由后端权威 options 决定（docs/14 T2，D3）
-    void reconcileStage()
-}
-
 // 游戏内 Load（docs/13 §20.3）：Backend 创建新 Active Session，返回
 // GameViewState；此处就地恢复（applyLoadedSession），不离开 GameView。
 const loadBusy = ref(false)
@@ -677,7 +638,7 @@ function applyLoadedSession(result: LoadResult) {
   localStorage.setItem(SESSION_KEY, result.session_id)
   const view = result.state?.presentation_state
   if (view) {
-    applyPresentationStateView(presentation.state, view)
+    applyPresentationStateView(presentation.state, view, BG)
   }
   options.value = result.state?.options ?? []
   // 新 Active Session：本地粘性路由 / 推理 / 面板状态不复用
@@ -703,11 +664,6 @@ function applyLoadedSession(result: LoadResult) {
 function onLoadingComplete() {
   showLoading.value = false
   loadingShownThisSession = true
-  const opening = bufferedOpening.value
-  bufferedOpening.value = null
-  if (opening) {
-    applyOpeningResponse(opening)
-  }
   // docs/16 P5：猫爪揭幕结束后播睁眼转场
   armEyeOpen()
 }
@@ -757,8 +713,12 @@ onMounted(async () => {
       sessionId.value = null
     }
   }
-  // 2. 新会话 → Opening
-  await startOpening()
+  // 2. 新会话 → 直接自由对话（前置剧情已删除：不播开场白、不弹「选择行动」
+  //    窗口；会话由首个玩家消息经 /api/chat 创建，响应带回 session_id 后写回
+  //    localStorage —— 见 onPlayerMessage）
+  presentation.state.scene.backgroundId = BG
+  setInputMode(true)
+  suppressFirstOptionPop = true
   // docs/16 P5：无加载演出（设置关闭）的新游戏路径直接播睁眼
   if (!showLoading.value) armEyeOpen()
 })
@@ -890,8 +850,8 @@ onUnmounted(() => {
       @close="onClueClose"
     />
 
-    <!-- 首次加载演出（docs/15 §7：New Game 专用；ready = opening 数据就绪） -->
-    <LoadingTransition v-if="showLoading" :ready="openingReady" @complete="onLoadingComplete" />
+    <!-- 首次加载演出（docs/15 §7：New Game 专用；无 opening 数据，ready 恒真） -->
+    <LoadingTransition v-if="showLoading" :ready="true" @complete="onLoadingComplete" />
 
     <!-- 睁眼转场（docs/16 P5：每次进入游戏画面播一次，纯视觉、不挡点击） -->
     <EyeOpenTransition v-if="showEyeOpen" @complete="onEyeOpenComplete" />

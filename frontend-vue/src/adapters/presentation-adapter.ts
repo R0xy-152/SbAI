@@ -127,11 +127,12 @@ export function applyPresentationActions(
 export function applyPresentationStateView(
   state: PresentationState,
   view: PresentationStateView,
+  backgroundId: string = '/backgroud/background1.png',
 ): void {
   if (view.scene) {
-    // 当前仓库只有一张背景图（background1.png）；scene 是后端权威事实，但
-    // 背景素材按绑定房间处理，避免 ROOM_A 等 scene 映射到不存在的图。
-    state.scene.backgroundId = '/backgroud/background1.png'
+    // scene 是后端权威事实，但仓库素材有限：默认按绑定房间图（故事模式），
+    // AI 对话玩法经参数传入其常驻背景（background_ai.png）。
+    state.scene.backgroundId = backgroundId
   }
   // docs/15 §6.1：场景粒子氛围层由后端权威下发（前端不推断）
   if (view.background_effect !== undefined) {

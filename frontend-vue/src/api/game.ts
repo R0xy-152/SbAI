@@ -103,12 +103,12 @@ export async function createOpening(sessionId: string | null): Promise<OpeningRe
  * Gate，替代已删除的切换器）。附带 player_id 供后端 checkpoint 自动存档
  *（Task 8：Claude Appeared）。 */
 export async function sendChat(
-  sessionId: string,
+  sessionId: string | null,
   message: string,
   characterId?: string,
 ): Promise<ChatResponse> {
   const { data } = await http.post<ChatResponse>('/chat', {
-    session_id: sessionId,
+    session_id: sessionId ?? null,
     message,
     character_id: characterId ?? null,
     player_id: getPlayerId(),
