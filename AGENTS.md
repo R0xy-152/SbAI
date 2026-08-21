@@ -24,7 +24,7 @@
 
 ## 3. 硬规则（不可协商）
 
-- 执行细节不明确时**必须向用户提问并追问**，不自做主张；用户偏好中文、少回合。
+- 执行细节不明确时**必须向用户提问并追问**，不自做主张；用户偏好中文。
 - 修改范围尽量小：不顺手重构无关代码，不提前扩展不需要的功能。
 - 剧情内容 / 角色配置 / Scene 与 Runtime 代码分离。
 - Frontend 只负责表现：不决定剧情/Fact/状态，只消费 Backend 确定性结果。
@@ -79,4 +79,4 @@ UI 冒烟：`frontend-vue/scripts/story-smoke.mjs`、`ai-entry-smoke.mjs`（Play
 ## 8. 代码约定
 
 - Commit 用 Conventional Commits，scope 如 `feat(tv-..)`、`feat(docs13-task..)`、`feat(game)`、`docs(deploy)`。
-- 完成任务输出至少说明：完成了什么 / 改了哪些文件 / 如何验证 / 结果（PASS 等级）/ 已知限制与阻塞。
+- 完成任务输出至少用中文说明：完成了什么 / 改了哪些文件 / 如何验证 / 结果（PASS 等级）/ 已知限制与阻塞。
