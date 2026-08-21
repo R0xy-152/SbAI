@@ -205,6 +205,7 @@ function continueDialog(isPlayerTrigger: boolean): boolean {
 
 defineExpose({
   continueDialog,
+  triggerAdvance: sendOrContinue,
   isTyping,
 })
 </script>

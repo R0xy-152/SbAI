@@ -44,6 +44,7 @@ import SystemMenu from '../components/system/SystemMenu.vue'
 import HistoryPanel from '../components/system/HistoryPanel.vue'
 import LoadingTransition from '../components/effects/LoadingTransition.vue'
 import EyeOpenTransition from '../components/effects/EyeOpenTransition.vue'
+import { shouldIgnoreStoryAdvance } from '../utils/story-input'
 
 const presentation = usePresentationStore()
 const game = useGameStore()
@@ -76,6 +77,46 @@ let chapterOpeningShown = false
 
 const choiceOptions = ref<StoryOptionView[]>([])
 const systemPanel = ref<'menu' | 'save' | 'load' | 'history' | null>(null)
+const dialogRef = ref<InstanceType<typeof GameDialog> | null>(null)
+let lastWheelAdvanceAt = 0
+
+function storyAdvanceBlocked(): boolean {
+  return Boolean(
+    busy.value ||
+      systemPanel.value ||
+      showChoice.value ||
+      showEnding.value ||
+      showChapterOpening.value ||
+      showLoading.value ||
+      showEyeOpen.value,
+  )
+}
+
+function triggerStoryAdvance() {
+  if (storyAdvanceBlocked()) return
+  dialogRef.value?.triggerAdvance()
+}
+
+function onStageClick(event: MouseEvent) {
+  if (shouldIgnoreStoryAdvance(event.target)) return
+  triggerStoryAdvance()
+}
+
+function onStageWheel(event: WheelEvent) {
+  if (event.deltaY <= 0 || shouldIgnoreStoryAdvance(event.target) || storyAdvanceBlocked()) return
+  event.preventDefault()
+  const now = performance.now()
+  if (now - lastWheelAdvanceAt < 160) return
+  lastWheelAdvanceAt = now
+  triggerStoryAdvance()
+}
+
+function onStoryKeyDown(event: KeyboardEvent) {
+  if (event.code !== 'Space' || event.repeat || shouldIgnoreStoryAdvance(event.target)) return
+  if (storyAdvanceBlocked()) return
+  event.preventDefault()
+  triggerStoryAdvance()
+}
 
 // ── 场景演出接线（docs/17）───────────────────────────────────────────────
 const sceneView = ref<StorySceneView | null>(null)
@@ -325,6 +366,7 @@ function applyLoadedSession(result: LoadResult) {
 // ── 挂载 ───────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
+  window.addEventListener('keydown', onStoryKeyDown)
   presentation.state.scene.backgroundId = BG
   // 0. 优先消费 Load 结果（docs/13 §20.3：Title/Load 页暂存的新 Active Session）
   if (game.pendingLoad) {
@@ -360,6 +402,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', onStoryKeyDown)
   invalidateView()
   if (effectTimer) {
     clearTimeout(effectTimer)
@@ -378,6 +421,8 @@ function onContinueChat() {
   <div
     class="relative h-full w-full overflow-hidden bg-black"
     :class="{ 'screen-shake': presentation.state.effects.includes('SCREEN_SHAKE') }"
+    @click="onStageClick"
+    @wheel="onStageWheel"
   >
     <!-- 背景 -->
     <GameBackground />
@@ -407,7 +452,7 @@ function onContinueChat() {
 
     <!-- 对话框（底部） -->
     <div class="absolute inset-x-0 bottom-0 z-10 flex flex-col">
-      <GameDialog class="mx-auto" @dialog-proceed="onDialogProceed" />
+      <GameDialog ref="dialogRef" class="mx-auto" @dialog-proceed="onDialogProceed" />
     </div>
 
     <!-- 顶部条：会话信息 + 系统菜单 + 返回标题 -->
