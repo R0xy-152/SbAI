@@ -51,6 +51,25 @@ class UserRecord:
         return max(0, self.quota_total - self.quota_used)
 
 
+@dataclass(frozen=True)
+class AccountUsage:
+    """每个账号的用量统计（auth.cli usage 输出）。"""
+
+    user_id: str
+    display_name: str
+    status: str
+    quota_used: int
+    quota_total: int
+    last_login_at: datetime | None
+    login_count: int
+    active_sessions: int
+    game_sessions: int
+
+    @property
+    def quota_remaining(self) -> int:
+        return max(0, self.quota_total - self.quota_used)
+
+
 class AuthRepository(ABC):
     @abstractmethod
     def create_user(self, user: UserRecord) -> None: ...
@@ -90,6 +109,9 @@ class AuthRepository(ABC):
 
     @abstractmethod
     def rotate_invite(self, user_id: str, digest: str) -> UserRecord | None: ...
+
+    @abstractmethod
+    def usage_stats(self) -> list[AccountUsage]: ...
 
     @abstractmethod
     def bind_game_session(self, user_id: str, session_id: str) -> bool: ...
@@ -219,6 +241,35 @@ class MemoryAuthRepository(AuthRepository):
         with self._lock:
             return self._owners.get(session_id) == user_id
 
+    def usage_stats(self) -> list[AccountUsage]:
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            stats = []
+            for user in sorted(self._users.values(), key=lambda item: item.created_at):
+                sessions = [
+                    session for session in self._sessions.values()
+                    if session[0] == user.id
+                ]
+                active_sessions = sum(
+                    1 for (_, expires_at, revoked_at) in sessions
+                    if revoked_at is None and expires_at > now
+                )
+                game_sessions = sum(
+                    1 for owner in self._owners.values() if owner == user.id
+                )
+                stats.append(AccountUsage(
+                    user_id=user.id,
+                    display_name=user.display_name,
+                    status=user.status,
+                    quota_used=user.quota_used,
+                    quota_total=user.quota_total,
+                    last_login_at=user.last_login_at,
+                    login_count=len(sessions),
+                    active_sessions=active_sessions,
+                    game_sessions=game_sessions,
+                ))
+            return stats
+
 
 class PostgresAuthRepository(AuthRepository):
     def __init__(self, dsn: str) -> None:
@@ -339,6 +390,33 @@ class PostgresAuthRepository(AuthRepository):
                 (digest, user_id),
             ).fetchone()
         return self._user(row)
+
+    def usage_stats(self) -> list[AccountUsage]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT u.id, u.display_name, u.status, u.quota_used, u.quota_total,
+                       u.last_login_at,
+                       count(s.token_digest) AS login_count,
+                       count(s.token_digest) FILTER (
+                           WHERE s.revoked_at IS NULL AND s.expires_at > NOW()
+                       ) AS active_sessions,
+                       count(DISTINCT g.session_id) AS game_sessions
+                FROM users u
+                LEFT JOIN auth_sessions s ON s.user_id = u.id
+                LEFT JOIN game_session_owners g ON g.user_id = u.id
+                GROUP BY u.id
+                ORDER BY u.created_at
+                """
+            ).fetchall()
+        return [
+            AccountUsage(
+                user_id=row[0], display_name=row[1], status=row[2],
+                quota_used=row[3], quota_total=row[4], last_login_at=row[5],
+                login_count=row[6], active_sessions=row[7], game_sessions=row[8],
+            )
+            for row in rows
+        ]
 
     def bind_game_session(self, user_id: str, session_id: str) -> bool:
         with self._conn() as conn:

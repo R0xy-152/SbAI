@@ -116,3 +116,44 @@ def test_quota_last_slot_is_atomic():
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: repository.reserve_quota("u"), range(2)))
     assert sorted(results, key=lambda value: value is None) == [0, None]
+
+
+def test_usage_stats_counts_logins_sessions_and_quota(monkeypatch):
+    app = _secured_app(monkeypatch)
+    service = app.state.auth_service
+    user, invite = _account(app, "监控账号", quota=5)
+    service.reserve_quota(user.id)
+    assert service.repository.reserve_quota(user.id) == 3  # 5-2
+
+    with TestClient(app) as client:
+        client.post("/api/auth/login", json={"invite_code": invite})
+        client.post("/api/auth/login", json={"invite_code": invite})
+        session_id = client.post("/api/chat", json={"message": "你好"}).json()["session_id"]
+        client.get("/api/chat/history", params={"session_id": session_id})
+
+    stats = {item.user_id: item for item in service.repository.usage_stats()}
+    usage = stats[user.id]
+    assert usage.display_name == "监控账号"
+    assert usage.quota_used == 3
+    assert usage.quota_total == 5
+    assert usage.login_count == 2
+    assert usage.active_sessions == 2
+    assert usage.game_sessions >= 1
+    assert usage.last_login_at is not None
+
+
+def test_usage_cli_output(monkeypatch, capsys):
+    import app.auth.cli as cli_module
+    from app.auth import AuthService as RealService
+
+    repository = MemoryAuthRepository()
+    service = RealService(repository, "test-secret")
+    user, _ = service.create_user("展示账号 01", 100)
+    service.reserve_quota(user.id)
+    monkeypatch.setattr(cli_module, "_service", lambda: service)
+    cli_module.main(["usage"])
+    out = capsys.readouterr().out
+    assert "展示账号 01" in out
+    assert "1/100" in out
+    assert "logins=0" in out and "active=0" in out
+    assert "last_login=-" in out

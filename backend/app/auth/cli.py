@@ -30,6 +30,7 @@ def _parser() -> argparse.ArgumentParser:
     create.add_argument("--quota", type=int, default=100)
 
     sub.add_parser("list", help="list accounts without invite digests")
+    sub.add_parser("usage", help="show per-account usage (quota, logins, active sessions)")
 
     add = sub.add_parser("add-quota", help="increase permanent quota")
     add.add_argument("user_id")
@@ -67,6 +68,20 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"{user.id}\t{user.status}\t{user.quota_used}/{user.quota_total}"
                 f"\t{user.display_name}"
+            )
+        return 0
+
+    if args.command == "usage":
+        for usage in repository.usage_stats():
+            last_login = (
+                usage.last_login_at.strftime("%Y-%m-%d %H:%M:%S")
+                if usage.last_login_at else "-"
+            )
+            print(
+                f"{usage.display_name}\t{usage.status}\t"
+                f"{usage.quota_used}/{usage.quota_total}\t"
+                f"logins={usage.login_count}\tactive={usage.active_sessions}\t"
+                f"game_sessions={usage.game_sessions}\tlast_login={last_login}"
             )
         return 0
 
