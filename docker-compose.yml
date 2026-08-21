@@ -33,10 +33,16 @@ services:
       GAL_SAVE_BACKEND: postgres
       GAL_POSTGRES_DSN: postgresql://gal:${POSTGRES_PASSWORD:-gal}@postgres:5432/gal
       GAL_CORS_ORIGINS: ${GAL_CORS_ORIGINS:-}
+      # docs/18 邀请码账号：生产默认强制认证并复用 PostgreSQL。
+      GAL_AUTH_BACKEND: postgres
+      GAL_AUTH_REQUIRED: ${GAL_AUTH_REQUIRED:-true}
+      GAL_AUTH_SECRET: ${GAL_AUTH_SECRET:?GAL_AUTH_SECRET must be set}
+      # 当前 HTTP 小规模展示为 false；正式 HTTPS 必须改 true。
+      GAL_AUTH_COOKIE_SECURE: ${GAL_AUTH_COOKIE_SECURE:-false}
     # T2review P1-15：backend 只绑定宿主 loopback（前端 nginx 经 Compose 内网
     # 反代 /api），不发布到所有网络接口。
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     restart: unless-stopped
     depends_on:
       postgres:

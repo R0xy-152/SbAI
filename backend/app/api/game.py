@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.api.chat import get_orchestrator
+from app.api.authz import bind_session, current_user_id, require_owned_session
 from app.game.orchestrator import GameOrchestrator
 
 router = APIRouter()
@@ -77,22 +78,27 @@ class CleanupRequest(BaseModel):
 @router.post("/api/game/action", response_model=InvestigationActionResponse)
 def investigation_action(
     payload: InvestigationActionRequest,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> InvestigationActionResponse:
+    require_owned_session(request, payload.session_id)
     try:
         result = orchestrator.handle_investigation_action(
             payload.session_id, payload.action, payload.hotspot_id
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    bind_session(request, result.session_id)
     return InvestigationActionResponse(**result.__dict__)
 
 
 @router.get("/api/game/state")
 def investigation_state(
     session_id: str,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> dict:
+    require_owned_session(request, session_id)
     try:
         return orchestrator.get_investigation_state(session_id)
     except ValueError as exc:
@@ -102,8 +108,10 @@ def investigation_state(
 @router.get("/api/game/evidence")
 def evidence_list(
     session_id: str,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> list[dict]:
+    require_owned_session(request, session_id)
     try:
         return orchestrator.get_evidence(session_id)
     except ValueError as exc:
@@ -113,8 +121,10 @@ def evidence_list(
 @router.post("/api/game/present", response_model=PresentEvidenceResponse)
 def present_evidence(
     payload: PresentEvidenceRequest,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> PresentEvidenceResponse:
+    require_owned_session(request, payload.session_id)
     try:
         result = orchestrator.present_evidence(
             payload.session_id, payload.character_id, payload.evidence_id
@@ -127,11 +137,15 @@ def present_evidence(
 @router.post("/api/game/deduction")
 def deduction(
     payload: DeductionRequest,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> dict:
+    require_owned_session(request, payload.session_id)
     try:
         return orchestrator.submit_deduction(
-            payload.session_id, payload.message, player_id=payload.player_id
+            payload.session_id,
+            payload.message,
+            player_id=current_user_id(request, payload.player_id),
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -140,8 +154,10 @@ def deduction(
 @router.post("/api/game/private-interview/challenge")
 def private_interview_challenge(
     payload: PrivateInterviewChallengeRequest,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> dict:
+    require_owned_session(request, payload.session_id)
     try:
         return orchestrator.submit_private_interview_challenge(**payload.model_dump())
     except ValueError as exc:
@@ -149,7 +165,8 @@ def private_interview_challenge(
 
 
 @router.post("/api/game/recovery/start")
-def recovery_start(session_id: str, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+def recovery_start(session_id: str, request: Request, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    require_owned_session(request, session_id)
     try:
         return orchestrator.start_recovery(session_id)
     except ValueError as exc:
@@ -157,7 +174,8 @@ def recovery_start(session_id: str, orchestrator: GameOrchestrator = Depends(get
 
 
 @router.post("/api/game/recovery/action")
-def recovery_action(payload: RecoveryActionRequest, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+def recovery_action(payload: RecoveryActionRequest, request: Request, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    require_owned_session(request, payload.session_id)
     try:
         return orchestrator.recovery_action(**payload.model_dump())
     except ValueError as exc:
@@ -165,7 +183,8 @@ def recovery_action(payload: RecoveryActionRequest, orchestrator: GameOrchestrat
 
 
 @router.post("/api/game/security-review/start")
-def security_review_start(session_id: str, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+def security_review_start(session_id: str, request: Request, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    require_owned_session(request, session_id)
     try:
         return orchestrator.start_security_review(session_id)
     except ValueError as exc:
@@ -173,21 +192,24 @@ def security_review_start(session_id: str, orchestrator: GameOrchestrator = Depe
 
 
 @router.post("/api/game/security-review/testify")
-def security_review_testify(payload: TestimonyRequest, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+def security_review_testify(payload: TestimonyRequest, request: Request, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    require_owned_session(request, payload.session_id)
     try:
         return orchestrator.testify(**payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @router.post("/api/game/security-review/cleanup")
-def security_review_cleanup(payload: CleanupRequest, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+def security_review_cleanup(payload: CleanupRequest, request: Request, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    require_owned_session(request, payload.session_id)
     try:
         return orchestrator.cleanup(**payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @router.post("/api/game/security-review/reject-cleanup")
-def security_review_reject_cleanup(session_id: str, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+def security_review_reject_cleanup(session_id: str, request: Request, orchestrator: GameOrchestrator = Depends(get_orchestrator)) -> dict:
+    require_owned_session(request, session_id)
     try:
         return orchestrator.reject_cleanup(session_id)
     except ValueError as exc:

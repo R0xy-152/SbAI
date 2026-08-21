@@ -9,16 +9,20 @@ Then open http://localhost:8000/frontend-deprecated/index.html in a browser.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
 from app.api.game import router as game_router
 from app.api.saves import router as saves_router
 from app.api.story import router as story_router
+from app.auth import AuthService, MemoryAuthRepository, PostgresAuthRepository, UserRecord
 from app.characters.base import CharacterRuntime
 from app.characters.claude import ClaudeRuntime
 from app.characters.chatgpt import ChatGPTRuntime
@@ -91,6 +95,7 @@ def create_app() -> FastAPI:
         allow_origins=cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
+        allow_credentials=True,
     )
 
     sessions = SessionStore()
@@ -154,21 +159,72 @@ def create_app() -> FastAPI:
     # default JSON file repository is the TV-14-style local fixture so the app
     # runs without a database (docs/06 §10: fixture ≠ production).
     save_backend = os.environ.get("GAL_SAVE_BACKEND", "json")
+    postgres_dsn = os.environ.get(
+        "GAL_POSTGRES_DSN",
+        "postgresql://gal:gal@localhost:5432/gal",
+    )
     if save_backend == "postgres":
-        save_repository = PostgresSaveRepository(
-            os.environ.get(
-                "GAL_POSTGRES_DSN",
-                "postgresql://gal:gal@localhost:5432/gal",
-            )
-        )
+        save_repository = PostgresSaveRepository(postgres_dsn)
     else:
         save_repository = JsonSaveRepository(REPO_ROOT / "backend" / "data" / "saves")
     app.state.save_service = SaveSnapshotService(save_repository)
+
+    # docs/18: production reuses PostgreSQL for accounts, login sessions,
+    # ownership and quota. JSON/local mode keeps an in-memory repository so
+    # unit tests and keyless development do not need another service.
+    auth_backend = os.environ.get(
+        "GAL_AUTH_BACKEND", "postgres" if save_backend == "postgres" else "memory"
+    )
+    auth_repository = (
+        PostgresAuthRepository(postgres_dsn)
+        if auth_backend == "postgres"
+        else MemoryAuthRepository()
+    )
+    auth_secret = os.environ.get("GAL_AUTH_SECRET")
+    if not auth_secret:
+        if auth_backend == "postgres":
+            raise RuntimeError("GAL_AUTH_SECRET is required with PostgreSQL authentication")
+        auth_secret = "local-development-only-change-me"
+    app.state.auth_service = AuthService(auth_repository, auth_secret)
+    app.state.auth_disabled = os.environ.get("GAL_AUTH_REQUIRED", "true").lower() in {
+        "0", "false", "no"
+    }
+    app.state.auth_cookie_name = "gal_auth"
+    app.state.auth_cookie_secure = os.environ.get(
+        "GAL_AUTH_COOKIE_SECURE", "false"
+    ).lower() in {"1", "true", "yes"}
+    app.state.auth_cookie_max_age = 30 * 24 * 60 * 60
+
+    @app.middleware("http")
+    async def authenticate_request(request: Request, call_next):
+        path = request.url.path
+        public = path in {"/api/auth/login", "/api/health"} or request.method == "OPTIONS"
+        protected = path.startswith("/api/") or path.startswith("/frontend-deprecated")
+        if not protected or public:
+            return await call_next(request)
+        if app.state.auth_disabled:
+            request.state.user = UserRecord(
+                id="test-user",
+                display_name="Test User",
+                invite_code_digest="",
+                status="ACTIVE",
+                quota_total=1_000_000,
+                quota_used=0,
+                created_at=datetime.now(timezone.utc),
+            )
+            return await call_next(request)
+        token = request.cookies.get(app.state.auth_cookie_name)
+        user = app.state.auth_service.authenticate(token)
+        if user is None:
+            return JSONResponse(status_code=401, content={"detail": "authentication required"})
+        request.state.user = user
+        return await call_next(request)
     # docs/13 §21 / Task 8: bind the Auto Save side effect to the orchestrator
     # now that the save service exists (constructed after the orchestrator).
     # The orchestrator stores it as `_save_service` (constructor param name);
     # assigning the public name would create a phantom attribute it never reads.
     app.state.orchestrator._save_service = app.state.save_service
+    app.include_router(auth_router)
     app.include_router(chat_router)
     app.include_router(game_router)
     app.include_router(saves_router)

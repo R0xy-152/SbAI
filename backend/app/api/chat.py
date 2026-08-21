@@ -12,6 +12,8 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.api.authz import bind_session, current_user_id, require_owned_session
+from app.auth import QuotaExhausted
 from app.game.orchestrator import CharacterUnavailable, GameOrchestrator
 from app.providers.base import ProviderError
 
@@ -49,6 +51,7 @@ class ChatResponse(BaseModel):
     presentation_actions: list[dict] = []
     claim_refs: list[str] = []
     script_sequence: list[dict] = []
+    quota_remaining: int
 
 
 class OpeningRequest(BaseModel):
@@ -76,31 +79,61 @@ def get_orchestrator(request: Request) -> GameOrchestrator:
 @router.post("/api/chat", response_model=ChatResponse)
 def chat(
     payload: ChatRequest,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> ChatResponse:
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="message must not be empty")
 
+    require_owned_session(request, payload.session_id)
+    user_id = current_user_id(request, payload.player_id)
+    reserved = False
+    if not request.app.state.auth_disabled:
+        try:
+            quota_remaining = request.app.state.auth_service.reserve_quota(user_id)
+            reserved = True
+        except QuotaExhausted as exc:
+            raise HTTPException(status_code=429, detail="AI dialogue quota exhausted") from exc
+    else:
+        quota_remaining = request.state.user.quota_remaining
+
     try:
         result = orchestrator.handle_turn(
             payload.session_id,
             message,
             character_id=payload.character_id,
-            player_id=payload.player_id,
+            player_id=user_id,
         )
     except ProviderError as exc:
         # docs/04 §55: a provider failure is a recoverable error, not a reason
         # to fabricate a reply. The player can retry.
         # 真机接入复盘：503 的根因必须落到日志，否则上游错误不可诊断。
         logger.warning("provider unavailable: %s", exc)
+        if reserved:
+            request.app.state.auth_service.refund_quota(user_id)
         raise HTTPException(status_code=503, detail="character provider unavailable") from exc
     except CharacterUnavailable as exc:
         # Presence Gate (docs/03 §13.6): the character is not interactable yet.
         # 403 (not 400) — the request is well-formed but not currently permitted.
+        if reserved:
+            request.app.state.auth_service.refund_quota(user_id)
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
+        if reserved:
+            request.app.state.auth_service.refund_quota(user_id)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception:
+        if reserved:
+            request.app.state.auth_service.refund_quota(user_id)
+        raise
+
+    try:
+        bind_session(request, result.session_id)
+    except Exception:
+        if reserved:
+            request.app.state.auth_service.refund_quota(user_id)
+        raise
 
     return ChatResponse(
         session_id=result.session_id,
@@ -115,17 +148,24 @@ def chat(
         presentation_actions=[a.model_dump() for a in result.presentation_actions],
         claim_refs=result.response.claim_refs,
         script_sequence=[line.__dict__ for line in result.script_sequence],
+        quota_remaining=quota_remaining,
     )
 
 
 @router.post("/api/chat/opening", response_model=ChatResponse)
 def opening(
     payload: OpeningRequest,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> ChatResponse:
     """The session's active opening line (docs/01 §4), spoken without player
     input. Idempotent: an already-opened session returns an empty dialogue."""
-    result = orchestrator.open_turn(payload.session_id, player_id=payload.player_id)
+    require_owned_session(request, payload.session_id)
+    result = orchestrator.open_turn(
+        payload.session_id,
+        player_id=current_user_id(request, payload.player_id),
+    )
+    bind_session(request, result.session_id)
     return ChatResponse(
         session_id=result.session_id,
         character_id=result.response.character_id,
@@ -137,17 +177,20 @@ def opening(
         presentation_actions=[a.model_dump() for a in result.presentation_actions],
         claim_refs=result.response.claim_refs,
         script_sequence=[line.__dict__ for line in result.script_sequence],
+        quota_remaining=request.state.user.quota_remaining,
     )
 
 
 @router.get("/api/chat/history", response_model=HistoryResponse)
 def history(
     session_id: str,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> HistoryResponse:
     """The current session's dialogue, for the Frontend History view
     (docs/01 §18: 说话角色 / 对话文本 / 顺序). An unknown id is a 404, never
     a fresh session."""
+    require_owned_session(request, session_id)
     try:
         messages = orchestrator.get_history(session_id)
     except ValueError as exc:

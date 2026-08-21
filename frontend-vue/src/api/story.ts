@@ -1,5 +1,4 @@
 import { http } from './http'
-import { getPlayerId } from './saves'
 
 // 快速上线固定剧本 API（临时）：AI 停用期间前端只用这三个端点推进
 // docs/story/07 剧本。后端权威游标（node_index）随会话/存档快照持久化。
@@ -65,7 +64,6 @@ export async function fetchStoryCurrent(sessionId: string | null): Promise<Story
 export async function storyAdvance(sessionId: string | null): Promise<StoryView> {
   const { data } = await http.post<StoryView>('/story/advance', {
     session_id: sessionId,
-    player_id: getPlayerId(),
   })
   return data
 }
@@ -75,7 +73,6 @@ export async function storyChoose(sessionId: string, optionId: string): Promise<
   const { data } = await http.post<StoryView>('/story/choose', {
     session_id: sessionId,
     option_id: optionId,
-    player_id: getPlayerId(),
   })
   return data
 }

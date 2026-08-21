@@ -1,6 +1,7 @@
 <!--
   Adapted from LingChat (AGPL-3.0): src/components/views/menu/base/StartList.vue
-  Modification（docs/15 §4.6）：原样适配；>2:1 宽高比主菜单切两列。
+  Modification（docs/15 §4.6）：>2.2:1 才切两列，避免普通 16:9
+  显示器扣除浏览器工具栏后被误判为超宽屏。
 -->
 <template>
   <nav
@@ -31,12 +32,11 @@ let mqListener: (() => void) | null = null
 
 function update() {
   const matched = mq ? mq.matches : false
-  // matchMedia 的 min-aspect-ratio: 2/1 在恰好 2.0 时返回 true，需求是严格 > 2
-  isUltraWide.value = matched && window.innerWidth / window.innerHeight > 2
+  isUltraWide.value = matched && window.innerWidth / window.innerHeight > 2.2
 }
 
 if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-  mq = window.matchMedia('(min-aspect-ratio: 2/1)')
+  mq = window.matchMedia('(min-aspect-ratio: 11/5)')
   update()
   mqListener = () => update()
   mq.addEventListener('change', mqListener)

@@ -52,12 +52,14 @@ import SubActionPanel from '../components/game/standard/SubActionPanel.vue'
 import LoadingTransition from '../components/effects/LoadingTransition.vue'
 import EyeOpenTransition from '../components/effects/EyeOpenTransition.vue'
 import { useSettingsStore } from '../stores/settings'
+import { useAuthStore } from '../stores/auth'
 import { splitTextSegments } from '../utils/text-segments'
 
 const presentation = usePresentationStore()
 const game = useGameStore()
 const saves = useSavesStore()
 const settings = useSettingsStore()
+const auth = useAuthStore()
 const router = useRouter()
 
 const SESSION_KEY = 'gal_session_id'
@@ -204,6 +206,7 @@ async function onPlayerMessage(text?: unknown) {
   setInputMode(false)
   try {
     const data = await sendChat(sessionId.value, text.trim(), routedCharacter.value ?? undefined)
+    auth.setQuota(data.quota_remaining)
     if (epoch !== viewEpoch) return
     // 新会话：首个玩家消息即创建会话，后端在响应中带回 session_id
     sessionId.value = data.session_id
@@ -539,6 +542,7 @@ async function submitPlayerDeduction(message: string) {
         presentation_actions: actions,
         claim_refs: [],
         script_sequence: [],
+        quota_remaining: auth.user?.quota_remaining ?? 0,
       })
     }
     const seq = Array.isArray(result.script_sequence)

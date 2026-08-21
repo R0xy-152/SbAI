@@ -11,7 +11,7 @@ import {
 
 // 存档列表（docs/13 §12.4 / §20.1）。Task 7 接入后端 Save API：refresh 拉取
 // {auto, manual:[6]}（空 slot 前端明确渲染），saveManual/deleteManual 操作后
-// 本地重映射，避免每次全量 fetch。player_id 由 api/saves.getPlayerId() 统一提供
+// 本地重映射，避免每次全量 fetch；账号归属由后端登录 Cookie 决定。
 //（docs/13 §15：匿名浏览器命名空间）。
 export const useSavesStore = defineStore('saves', () => {
   const auto = ref<GameSaveInfo | null>(null)

@@ -1,21 +1,38 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import TitleView from '../../views/TitleView.vue'
+import ChapterSelectView from '../../views/ChapterSelectView.vue'
 import GameView from '../../views/GameView.vue'
 import StoryView from '../../views/StoryView.vue'
 import LoadView from '../../views/LoadView.vue'
 import SettingsView from '../../views/SettingsView.vue'
+import LoginView from '../../views/LoginView.vue'
+import { useAuthStore } from '../../stores/auth'
 
 // docs/13 §6：Title / Game / Load / Settings 四个 View。
 // Title 完成行为在 Task 5，存档页在 Task 7。
-// 快速上线：/story 为现役入口（07 固定剧本，AI 停用）；/game 保留旧调查
-// 玩法但不再有 UI 入口（用户确认「入口隐藏」），代码不动、可随时恢复。
+// docs/15 §4.4.1：开始游戏先进入 /chapters；当前仅「序章」解锁并进入
+// /game。/story 保留给既有故事存档恢复，不再作为新开局入口。
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
+    { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     { path: '/', name: 'title', component: TitleView },
+    { path: '/chapters', name: 'chapters', component: ChapterSelectView },
     { path: '/game', name: 'game', component: GameView },
     { path: '/story', name: 'story', component: StoryView },
     { path: '/load', name: 'load', component: LoadView },
     { path: '/settings', name: 'settings', component: SettingsView },
   ],
+})
+
+router.beforeEach(async (to) => {
+  const auth = useAuthStore()
+  await auth.restore()
+  if (to.meta.public) {
+    return to.name === 'login' && auth.authenticated ? { name: 'title' } : true
+  }
+  if (!auth.authenticated) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  return true
 })

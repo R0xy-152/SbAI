@@ -20,7 +20,7 @@
 4. 不迁移 LingChat 的 Tauri / Rust / AI Runtime / DB / Script Authority。
 5. 开始界面 MVP：开始游戏 / 继续游戏 / 读取存档 / 设置。
 6. 存档：1 个自动存档 + 6 个手动存档位。
-7. 无账号系统；浏览器生成匿名 player_id，存档保存在 PostgreSQL。
+7. 本方案实施时使用匿名 player_id；自 2026-08-21 起由后续 `docs/18-轻量邀请码账号与AI额度落地方案.md` 覆盖为邀请码账号，存档归属改由 Backend 认证身份决定。
 8. 整个项目代码仓库按 AGPL-3.0 开源，并保留 LingChat 归属说明。
 9. LingChat 图片 / 音乐 / 字体 / 角色 Prompt / 剧情文本不因代码 AGPL 自动视为可复用素材。
 10. Backend 仍是唯一 Game Truth Authority；Vue 只是 Presentation Layer。
@@ -1051,9 +1051,9 @@ Frontend 不提交“我认为当前 Evidence 是什么”作为权威存档内�
 
 ---
 
-# 15. 匿名 Player 身份
+# 15. 匿名 Player 身份（历史方案，已被 docs/18 覆盖）
 
-本阶段不实现账号系统。
+本节记录 docs/13 实施时的匿名方案。当前线上阶段以 `docs/18-轻量邀请码账号与AI额度落地方案.md` 为准：不再信任浏览器提交的 `player_id`，账号、存档与额度均绑定后端认证用户。
 
 第一次打开游戏时：
 

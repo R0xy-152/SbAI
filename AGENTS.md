@@ -9,7 +9,7 @@
 
 - TV-01~TV-17 技术验证全部完成（记录见 `validation-results/TV-*/result.md`）；docs/13 前端迁移+存档 Task 0-9 全部完成（`validation-results/docs13-task*/result.md`）。
 - docs/17 快速上线已部署：固定剧本故事模式（/story，AI 停用）+ 结局后 DeepSeek 自由聊天（/game 复用）+ 场景演出接线 + 旧调查玩法正式入口（「行动」按钮）。
-- 2026-08-21：AI 对话玩法新开局无前置剧情（不播开场白、不自动弹「选择行动」）；其常驻背景为 `backgroud/background_ai.png`（故事模式背景不变）。
+- 2026-08-21：「序章」（原 AI 对话玩法）新开局无前置剧情（不播开场白、不自动弹「选择行动」）；其常驻背景为 `backgroud/background_ai.png`（故事模式背景不变）。标题「开始游戏」先进入章节选择，当前仅序章解锁。
 - **当前边界：不写剧情**——只在现有框架下测试、修补、完善；任何新内容先与用户确认。
 
 ## 2. 文档真相源（Docs-first）
@@ -37,7 +37,7 @@
 ## 4. 架构现状速览
 
 - Browser → `frontend-vue/`（Vue3+Vite+TS+Pinia+Tailwind，现役）→ FastAPI（`backend/`，权威游戏状态）→ PostgreSQL（存档；会话 JSON 在 `backend/data/sessions/`）。`frontend/`（旧原生 UI）已冻结，只修 P0，仍由后端托管 `/frontend/index.html`。
-- 视图：TitleView（标题/存档路由）→ StoryView（/story 固定剧本）或 GameView（/game AI 自由聊天 + 旧调查玩法）。
+- 视图：TitleView（标题/存档路由）→ ChapterSelectView（/chapters，当前仅序章）→ GameView（/game AI 自由聊天 + 旧调查玩法）；StoryView（/story 固定剧本）为既有故事存档恢复保留。
 - 端点：`POST /api/chat|chat/opening`、`GET /api/chat/history`、`/api/game/action|state|evidence|present|deduction|private-interview|recovery|security-review`、`/api/saves*`、`GET /api/story/current`、`POST /api/story/advance|choose`。
 - AI：仅 DeepSeek 角色扮演（用户决策）；`GAL_PROVIDER`（mock|deepseek|auto）+ `DEEPSEEK_API_KEY` 控制，缺 key 回落 mock。
 

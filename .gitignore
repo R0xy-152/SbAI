@@ -16,3 +16,6 @@ frontend-vue/dist/
 
 # Claude Code worktrees (isolated checkouts) — never committed
 .claude/worktrees/
+
+# Deployment transfer bundle (repo snapshot for server sync) - never commit
+gal-new.bundle

@@ -1,5 +1,5 @@
-// AI 对话玩法新开局冒烟测试（2026-08-21 用户需求验证）：
-// 标题 → 「AI 对话玩法」→ /game：
+// 序章（原 AI 对话玩法）新开局冒烟测试（2026-08-21 用户需求验证）：
+// 标题 → 「开始游戏」→ 章节选择 → 「序章」→ /game：
 //   1) 不调用 /api/chat/opening、不出现「你醒了」开场白；
 //   2) 不自动弹出「选择行动」选项窗口（首个回合结束点继续也不弹）；
 //   3) 常驻背景图为 /backgroud/background_ai.png；
@@ -42,7 +42,10 @@ await page.evaluate(() => {
 await page.reload()
 await page.screenshot({ path: OUT + '/01-title.png' })
 
-await page.getByRole('button', { name: 'AI 对话玩法' }).click()
+await page.getByRole('button', { name: '开始游戏' }).click()
+await page.waitForURL('**/chapters', { timeout: 15000 })
+await page.screenshot({ path: OUT + '/02-chapter-select.png' })
+await page.getByRole('button', { name: '序章' }).click()
 await page.waitForURL('**/game', { timeout: 15000 })
 // 等背景图加载（ImageAcrossFade new Image 加载 + cross-fade）
 await page.waitForTimeout(2500)
@@ -66,7 +69,7 @@ result.bgStyle = await page.evaluate(() => {
 })
 result.bgRequests = bgRequests.slice()
 
-await page.screenshot({ path: OUT + '/02-game-entry.png' })
+await page.screenshot({ path: OUT + '/03-game-entry.png' })
 
 // 4. 首个玩家消息创建会话
 await page.locator('textarea#inputMessage').fill('你好呀')
@@ -104,7 +107,7 @@ result.inputEnabledAfterContinue = await page.evaluate(() => {
   const t = document.querySelector('textarea#inputMessage')
   return t ? !t.hasAttribute('readonly') : null
 })
-await page.screenshot({ path: OUT + '/03-after-first-reply.png' })
+await page.screenshot({ path: OUT + '/04-after-first-reply.png' })
 
 // 6. 「行动」按钮仍存在（旧调查玩法可见入口，既有决策）
 const actionBtn = page.locator('header button', { hasText: '行动' })
@@ -113,7 +116,7 @@ if (result.actionButtonCount > 0) {
   await actionBtn.click()
   await page.waitForTimeout(600)
   result.optionWindowManualOpen = await page.locator('[data-testid="option-window"]').count()
-  await page.screenshot({ path: OUT + '/04-option-window-manual.png' })
+  await page.screenshot({ path: OUT + '/05-option-window-manual.png' })
   await page.locator('[data-testid="option-window-dismiss"]').click().catch(() => {})
 }
 

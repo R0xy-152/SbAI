@@ -145,3 +145,32 @@ docker compose exec -T postgres psql -U gal gal < saves-backup-XXXX.sql
 - 防火墙只放行 80/443（或所选的 FRONTEND_PORT）；
 - 生产环境必须修改 POSTGRES_PASSWORD（.env）；
 - 仓库内绝不放任何 API key / .env。
+# 邀请码账号首次切换（docs/18）
+
+首次启用账号功能前，先在 `/srv/gal/.env` 配置随机 `GAL_AUTH_SECRET` 与
+`GAL_AUTH_COOKIE_SECURE=false`（当前 HTTP 展示）。该密钥后续不可随意更换，
+否则所有既有邀请码摘要都会失效。
+
+切换步骤（明确会删除旧匿名存档与会话）：
+
+```bash
+cd /srv/gal
+docker compose exec -T postgres pg_dump -U gal -d gal > /srv/gal-before-accounts.sql
+docker compose exec -T postgres psql -U gal -d gal -c "DELETE FROM game_saves;"
+find /srv/gal/backend/data/sessions -maxdepth 1 -type f -name '*.json' -delete
+docker compose up -d --build backend frontend-vue
+docker compose exec backend python -m app.auth.cli create --name "展示账号 01" --quota 100
+```
+
+常用管理命令：
+
+```bash
+docker compose exec backend python -m app.auth.cli list
+docker compose exec backend python -m app.auth.cli add-quota USER_ID 100
+docker compose exec backend python -m app.auth.cli disable USER_ID
+docker compose exec backend python -m app.auth.cli rotate-code USER_ID
+docker compose exec backend python -m app.auth.cli revoke-sessions USER_ID
+```
+
+切换正式 HTTPS 后，将 `.env` 的 `GAL_AUTH_COOKIE_SECURE` 改为 `true`，再执行
+`docker compose up -d backend`。

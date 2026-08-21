@@ -13,7 +13,7 @@ import { saveTargetRoute } from '../api/saves'
 
 // docs/15 §4：基于 LingChat MainMenu 视觉层与动画层重建 TitleView ——
 // 全亮背景（无遮罩）+ 流星/星星粒子 + 角色立绘 + 鼠标视差 + 电影感菜单。
-// 行为语义保持不变（docs/13 §12）：New Game 新建会话；Continue 加载最近存档
+// docs/15 §4.4.1：New Game 打开章节选择；Continue 加载最近存档
 //（无存档禁用）；Load/Settings 走路由。按钮保留 .title-btn（E2E 兼容）。
 const router = useRouter()
 const game = useGameStore()
@@ -31,11 +31,9 @@ async function onNewGame() {
   newGameBusy.value = true
   newGameError.value = null
   try {
-    // 显式新建会话：清掉旧 session 标识，交给 StoryView 走 07 固定剧本
-    //（快速上线：AI 停用；docs/13 §12.2 的 Opening 流程保留在旧 GameView）。
-    localStorage.removeItem('gal_session_id')
-    game.sessionId = null
-    await router.push('/story')
+    // docs/15 §4.4.1：开始游戏只打开章节选择；真正创建新会话由
+    // 已解锁章节入口负责，避免玩家返回标题时意外丢失当前会话。
+    await router.push('/chapters')
   } catch (e) {
     newGameError.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -60,22 +58,6 @@ async function onContinue() {
     continueError.value = e instanceof Error ? e.message : String(e)
   } finally {
     continueBusy.value = false
-  }
-}
-
-// 旧 AI 对话玩法：新开一局（清掉故事会话标识，GameView 走新会话 Opening）
-async function onClassicGame() {
-  if (newGameBusy.value) return
-  newGameBusy.value = true
-  newGameError.value = null
-  try {
-    localStorage.removeItem('gal_session_id')
-    game.sessionId = null
-    await router.push('/game')
-  } catch (e) {
-    newGameError.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    newGameBusy.value = false
   }
 }
 
@@ -118,8 +100,8 @@ const backendLabel = computed(() =>
 
 <template>
   <div class="relative h-full w-full overflow-hidden bg-[#04070f] text-[#f4f8ff]">
-    <!-- 1. 背景层（docs/15 §4.1 + docs/16 P3：整图完整显示不裁切，左右用同图
-         模糊放大填充，120% 宽给视差留余量） -->
+    <!-- 1. 背景层（docs/15 §4.1 + docs/16 P3：普通屏 3:2 近景，宽屏切
+         21:9 扩展图；极端比例才用模糊层兜底） -->
     <div ref="bgRef" class="title-bg-layer">
       <div class="title-bg-fill"></div>
       <div class="title-bg-sharp"></div>
@@ -140,7 +122,7 @@ const backendLabel = computed(() =>
     <StartPage @mousemove="onMouseMove" @mouseleave="onMouseLeave">
       <div class="flex flex-col gap-4">
         <Transition name="slide-left" appear>
-          <StartList responsive>
+          <StartList>
             <StartLine>
               <StartItem :disabled="newGameBusy" @click="onNewGame">{{ newGameBusy ? '创建中…' : '开始游戏' }}</StartItem>
             </StartLine>
@@ -158,10 +140,6 @@ const backendLabel = computed(() =>
             </StartLine>
             <StartLine>
               <StartItem :disabled="newGameBusy" @click="router.push('/settings')">设置</StartItem>
-            </StartLine>
-            <StartLine>
-              <!-- 旧 AI 对话 + 调查玩法（docs/17：入口恢复为正式可见） -->
-              <StartItem :disabled="newGameBusy" @click="onClassicGame">AI 对话玩法</StartItem>
             </StartLine>
           </StartList>
         </Transition>
@@ -192,35 +170,50 @@ const backendLabel = computed(() =>
 
 <style scoped>
 .title-bg-layer {
+  --title-background: url('/backgroud/background_title.png');
   position: absolute;
   top: 0;
-  left: -10%;
-  width: 120%;
+  left: -12px;
+  width: calc(100% + 24px);
   height: 100%;
   z-index: 0;
   will-change: transform;
   overflow: hidden;
 }
 
-/* docs/16 P3：模糊填充层 —— 同图 cover + blur 覆盖整层，视差位移不露底 */
+/* docs/16 P3：模糊层只为极端比例与视差边缘兜底。 */
 .title-bg-fill {
   position: absolute;
   inset: 0;
-  background-image: url('/backgroud/background_title.png');
+  background-image: var(--title-background);
   background-size: cover;
   background-position: center;
   filter: blur(24px) brightness(0.72) saturate(1.05);
   transform: scale(1.08);
 }
 
-/* docs/16 P3：清晰层 —— 高度铺满、宽度按比例居中，整图完整显示不裁切 */
+/* 普通比例以 cover 铺满；3:2 图在 16:9 / 16:10 只裁上下背景。 */
 .title-bg-sharp {
   position: absolute;
   inset: 0;
-  background-image: url('/backgroud/background_title.png');
-  background-size: auto 100%;
-  background-position: center;
+  background-image: var(--title-background);
+  background-size: cover;
+  background-position: center 48%;
   background-repeat: no-repeat;
+}
+
+/* 浏览器内容区接近 2:1 时使用真正的 21:9 扩展图，避免旧 3:2 图过度裁切。 */
+@media (min-aspect-ratio: 19 / 10) {
+  .title-bg-layer {
+    --title-background: url('/backgroud/background_title_21x9.png');
+  }
+}
+
+/* 32:9 等极端超宽屏不强行 cover 裁掉大量上下内容，允许两侧柔和延展。 */
+@media (min-aspect-ratio: 49 / 20) {
+  .title-bg-sharp {
+    background-size: auto 100%;
+  }
 }
 
 /* 菜单入场（docs/15 §4.4） */

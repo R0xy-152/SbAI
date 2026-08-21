@@ -1,5 +1,4 @@
 import { http } from './http'
-import { getPlayerId } from './saves'
 
 export interface OpeningResponse {
   session_id: string
@@ -12,6 +11,7 @@ export interface OpeningResponse {
   presentation_actions: unknown[]
   claim_refs: unknown[]
   script_sequence: unknown[]
+  quota_remaining: number
 }
 
 export interface PresentationAction {
@@ -44,6 +44,7 @@ export interface ChatResponse {
     emotion?: string | null
     animation?: string | null
   }>
+  quota_remaining: number
 }
 
 /** 后端权威角色在场/表现状态（docs/12 §39 Task 1，GET /api/game/state 的
@@ -86,12 +87,10 @@ export async function checkBackendHealth(): Promise<boolean> {
   return data.status === 'ok'
 }
 
-/** 新开/恢复 Opening（docs/13 Task 5 New Game 会正式接入）。附带匿名
- * player_id（docs/13 §15），供后端 Opening Complete 自动存档（Task 8）。 */
+/** 新开/恢复 Opening；账号身份由 HttpOnly Cookie 提供。 */
 export async function createOpening(sessionId: string | null): Promise<OpeningResponse> {
   const { data } = await http.post<OpeningResponse>('/chat/opening', {
     session_id: sessionId,
-    player_id: getPlayerId(),
   })
   return data
 }
@@ -100,8 +99,7 @@ export async function createOpening(sessionId: string | null): Promise<OpeningRe
  * Response / Presentation Directive）。默认不传 character_id：玩家发言是公共
  * 对话（后端 heard_by = 全体在场角色），回应者由后端 SpeakerSelector 权威决定。
  * characterId 仅在 chat_routing 选项激活时透传（docs/14 D5：走既有 Presence
- * Gate，替代已删除的切换器）。附带 player_id 供后端 checkpoint 自动存档
- *（Task 8：Claude Appeared）。 */
+ * Gate，替代已删除的切换器）。 */
 export async function sendChat(
   sessionId: string | null,
   message: string,
@@ -111,7 +109,6 @@ export async function sendChat(
     session_id: sessionId ?? null,
     message,
     character_id: characterId ?? null,
-    player_id: getPlayerId(),
   })
   return data
 }
@@ -295,7 +292,7 @@ export async function securityReviewRejectCleanup(
 }
 
 /** 推理提交（docs/13 Task 8：INF01 / INF03 checkpoint 由后端在 Narrative
- * commit 后自动存档；前端只附带 player_id）。docs/14 T3 起由「质疑…」
+ * commit 后自动存档）。docs/14 T3 起由「质疑…」
  * 提示选项 + 主输入框一次性推理模式调用。 */
 export async function submitDeduction(
   sessionId: string,
@@ -304,7 +301,6 @@ export async function submitDeduction(
   const { data } = await http.post('/game/deduction', {
     session_id: sessionId,
     message,
-    player_id: getPlayerId(),
   })
   return data
 }

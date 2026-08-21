@@ -4,8 +4,10 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import TitleView from '../TitleView.vue'
 
+const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }))
+
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: pushMock }),
 }))
 
 vi.mock('../../api/saves', () => ({
@@ -32,6 +34,25 @@ describe('TitleView（Continue 无存档禁用）', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     listSavesMock.mockReset()
+    pushMock.mockReset()
+  })
+
+  it('一级菜单固定为四项单列，并由开始游戏进入章节选择', async () => {
+    listSavesMock.mockResolvedValue({ auto: null, manual: EMPTY })
+    const wrapper = mount(TitleView)
+    await flushPromises()
+
+    const buttons = wrapper.findAll('button.title-btn')
+    expect(buttons.map((button) => button.text())).toEqual([
+      '开始游戏',
+      '继续游戏',
+      '读取存档',
+      '设置',
+    ])
+    expect(wrapper.find('nav').classes()).not.toContain('grid-cols-2')
+
+    await buttons[0].trigger('click')
+    expect(pushMock).toHaveBeenCalledWith('/chapters')
   })
 
   it('无任何存档：Continue 按钮禁用', async () => {

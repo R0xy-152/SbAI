@@ -13,6 +13,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.api.authz import bind_session, current_user_id, require_owned_session
 from app.game.orchestrator import GameOrchestrator
 
 router = APIRouter()
@@ -56,42 +57,52 @@ def get_orchestrator(request: Request) -> GameOrchestrator:
 
 @router.get("/api/story/current", response_model=StoryView)
 def story_current(
+    request: Request,
     session_id: str | None = None,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> StoryView:
     """当前展示节点。不移动游标；未知会话由 orchestrator 铸造新会话（游标
     未开始，前端随后用 advance 起步）。"""
+    require_owned_session(request, session_id)
     try:
         view = orchestrator.story_current(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    bind_session(request, view["session_id"])
     return StoryView(**view)
 
 
 @router.post("/api/story/advance", response_model=StoryView)
 def story_advance(
     payload: StoryAdvanceRequest,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> StoryView:
     """「继续」：移动到下一节点。首次调用即开始故事。"""
+    require_owned_session(request, payload.session_id)
     try:
         view = orchestrator.story_advance(
-            payload.session_id, player_id=payload.player_id
+            payload.session_id, player_id=current_user_id(request, payload.player_id)
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    bind_session(request, view["session_id"])
     return StoryView(**view)
 
 
 @router.post("/api/story/choose", response_model=StoryView)
 def story_choose(
     payload: StoryChooseRequest,
+    request: Request,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> StoryView:
     """提交一个 A/B/C 选项，返回该选项的第一句台词。"""
+    require_owned_session(request, payload.session_id)
     try:
         view = orchestrator.story_choose(
-            payload.session_id, payload.option_id, player_id=payload.player_id
+            payload.session_id,
+            payload.option_id,
+            player_id=current_user_id(request, payload.player_id),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
