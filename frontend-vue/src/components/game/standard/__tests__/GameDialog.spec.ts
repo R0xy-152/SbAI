@@ -69,4 +69,29 @@ describe('GameDialog（输入状态与长文本打字机）', () => {
     expect(inputValue(wrapper)).toBe(long)
     wrapper.unmount()
   })
+
+  it('打字中推进会立即补全本句，120ms 后仅切换一次', async () => {
+    vi.useFakeTimers()
+    const store = usePresentationStore()
+    const line = '这是一句尚未打完就收到推进命令的台词。'
+    const wrapper = mount(GameDialog)
+    store.state.status = 'streaming'
+    store.state.dialogue.mode = 'ai'
+    store.state.dialogue.text = line
+    await nextTick()
+
+    const dialog = wrapper.vm as unknown as { triggerAdvance: () => void }
+    dialog.triggerAdvance()
+    dialog.triggerAdvance()
+    await nextTick()
+
+    expect(inputValue(wrapper)).toBe(line)
+    expect(wrapper.emitted('dialog-proceed')).toBeUndefined()
+
+    vi.advanceTimersByTime(119)
+    expect(wrapper.emitted('dialog-proceed')).toBeUndefined()
+    vi.advanceTimersByTime(1)
+    expect(wrapper.emitted('dialog-proceed')).toHaveLength(1)
+    wrapper.unmount()
+  })
 })

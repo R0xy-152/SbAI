@@ -51,7 +51,7 @@
             :class="textareaMotionClass"
             :placeholder="placeholderText"
             v-model="inputMessage"
-            @keydown.enter.exact.prevent="sendOrContinue"
+            @keydown.enter.exact.prevent="triggerAdvance"
             :readonly="!isInputEnabled"
           ></textarea>
         </div>
@@ -61,7 +61,7 @@
         id="sendButton"
         class="send-hit-area absolute right-0 bottom-0 translate-x-full cursor-pointer rounded-[5px] border-none bg-transparent px-2 py-2 font-[inherit] text-sm font-bold text-[#04bcff] transition-all duration-300 text-shadow-[inherit] hover:bg-transparent hover:text-[rgba(136,255,251,0.827)] disabled:cursor-not-allowed disabled:bg-[#333] disabled:opacity-70"
         :disabled="isSending"
-        @click="sendOrContinue"
+        @click="triggerAdvance"
       >
         ▼
       </button>
@@ -106,6 +106,7 @@ const updateContainerWidth = () => {
 }
 
 const currentDisplayedText = ref('')
+let quickAdvanceTimer: ReturnType<typeof setTimeout> | null = null
 
 // 立即把当前台词写入显示元素（不经过打字动画；供挂载恢复使用）
 function renderLineInstant(line: string) {
@@ -175,13 +176,24 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (quickAdvanceTimer) clearTimeout(quickAdvanceTimer)
   window.removeEventListener('resize', updateContainerWidth)
 })
 
-function sendOrContinue() {
+function triggerAdvance() {
   if (gameStore.currentStatus === 'input') {
     send()
   } else if (gameStore.currentStatus === 'responding') {
+    if (quickAdvanceTimer) return
+    if (isTextTyping.value) {
+      finishTextTyping()
+      renderLineInstant(uiStore.showCharacterLine)
+      quickAdvanceTimer = setTimeout(() => {
+        quickAdvanceTimer = null
+        if (gameStore.currentStatus === 'responding') continueDialog(true)
+      }, 120)
+      return
+    }
     continueDialog(true)
   }
 }
@@ -205,7 +217,7 @@ function continueDialog(isPlayerTrigger: boolean): boolean {
 
 defineExpose({
   continueDialog,
-  triggerAdvance: sendOrContinue,
+  triggerAdvance,
   isTyping,
 })
 </script>
