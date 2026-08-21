@@ -54,6 +54,7 @@ import EyeOpenTransition from '../components/effects/EyeOpenTransition.vue'
 import { useSettingsStore } from '../stores/settings'
 import { useAuthStore } from '../stores/auth'
 import { splitTextSegments } from '../utils/text-segments'
+import { shouldIgnoreStoryAdvance } from '../utils/story-input'
 
 const presentation = usePresentationStore()
 const game = useGameStore()
@@ -759,6 +760,48 @@ function onLoadingComplete() {
   armEyeOpen()
 }
 
+// ── 点击任意位置 / 滚轮下滑 → 「继续对话」（需求）──────────────────────────
+// 「继续对话」= 推进 AI 台词队列（与 ▼ 按钮同义），仅在回应态（有台词正在/
+// 待播放）可用；输入态（玩家尚未输入文本）不可用 —— 点击/滚轮不触发发送。
+function canContinueDialogue(): boolean {
+  return (
+    presentation.state.status === 'streaming' &&
+    !systemPanel.value &&
+    !showOptionWindow.value &&
+    !activePanel.value &&
+    !activeClue.value &&
+    !showEyeOpen.value
+  )
+}
+
+function triggerContinueDialogue() {
+  if (!canContinueDialogue()) return
+  dialogRef.value?.triggerAdvance()
+}
+
+function onStageClick(event: MouseEvent) {
+  if (shouldIgnoreStoryAdvance(event.target)) return
+  triggerContinueDialogue()
+}
+
+let lastWheelAdvanceAt = 0
+function onStageWheel(event: WheelEvent) {
+  if (shouldIgnoreStoryAdvance(event.target)) return
+  if (event.deltaY < 0) {
+    // 滚轮上滑 → 历史面板（与故事模式一致）
+    event.preventDefault()
+    if (!systemPanel.value && !busy.value) systemPanel.value = 'history'
+    return
+  }
+  if (event.deltaY === 0) return
+  if (!canContinueDialogue()) return
+  event.preventDefault()
+  const now = performance.now()
+  if (now - lastWheelAdvanceAt < 160) return
+  lastWheelAdvanceAt = now
+  triggerContinueDialogue()
+}
+
 onMounted(async () => {
   // 0. 优先消费 Load 结果（docs/13 §20.3：LoadView/TitleView 暂存的 new
   // Active Session + GameViewState）
@@ -825,6 +868,8 @@ onUnmounted(() => {
   <div
     class="relative h-full w-full overflow-hidden bg-black"
     :class="{ 'screen-shake': presentation.state.effects.includes('SCREEN_SHAKE') }"
+    @click="onStageClick"
+    @wheel="onStageWheel"
   >
     <!-- 背景 -->
     <GameBackground />
