@@ -98,7 +98,7 @@ SCENE_TITLES = {
     "PROLOGUE-CHATGPT": "绘图工作区",
     "PROLOGUE-CLAUDE": "程序开发区",
     "PROLOGUE-REUNION": "三人集合",
-    "PROLOGUE-AFTERTALK": "后日谈自由交流",
+    "PROLOGUE-AFTERTALK": "序章自由交流",
 }
 
 
@@ -172,10 +172,10 @@ def load_prologue_content(path: Path | None = None) -> dict[str, list[dict]]:
         ),
         "claude": _between(text, "# ===== Claude篇 =====", "# 探班循环"),
         "reunion": _between(
-            text, "# 三人集合（三篇均完成后）", "# 后日谈自由交流模式开启"
+            text, "# 三人集合（三篇均完成后）", "# 序章自由交流模式开启"
         ),
         "aftertalk": _between(
-            text, "# 后日谈自由交流模式开启", "## 最终选项"
+            text, "# 序章自由交流模式开启", "## 最终选项"
         ),
     }
     return {

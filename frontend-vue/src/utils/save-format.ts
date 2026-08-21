@@ -12,7 +12,7 @@ const PHASE_NAMES: Record<string, string> = {
   visit_choice: '探班选择',
   branch: '角色探班',
   reunion: '三人集合',
-  aftertalk: '后日谈',
+  aftertalk: '序章',
   chat_choice: '交流选择',
   finished: '自由交流',
 }

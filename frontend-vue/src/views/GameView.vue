@@ -292,7 +292,7 @@ const panelMessage = ref<string | null>(null)
 const routeLabel = computed(() => {
   if (!routedCharacter.value) return null
   return prologueChatLocked.value
-    ? `正在与 ${roleNameOf(routedCharacter.value)} 进行后日谈自由交流`
+    ? `正在与 ${roleNameOf(routedCharacter.value)} 进行序章自由交流`
     : `正在与 ${roleNameOf(routedCharacter.value)} 对话：再点同一选项回到公共对话`
 })
 

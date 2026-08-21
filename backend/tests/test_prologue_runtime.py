@@ -1,4 +1,4 @@
-"""docs/19 prologue: unordered visits, persistence and aftertalk routing."""
+"""docs/19 prologue: unordered visits, persistence and free-chat routing."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from app.script.prologue_content import (
     PROLOGUE_CHARACTERS,
     PROLOGUE_CONTENT,
     SCENE_PRESENTATION,
+    SCENE_TITLES,
 )
 from app.script.prologue_runtime import PrologueRuntime
 from app.script.story_runtime import StoryRuntime
@@ -54,6 +55,12 @@ def test_docs_first_content_is_compiled_and_main_maps_to_neutral():
         for line in lines
     )
     assert PROLOGUE_CONTENT["intro"][0]["text"] == "今天难得有空。"
+    assert all(
+        "后日谈" not in line["text"]
+        for lines in PROLOGUE_CONTENT.values()
+        for line in lines
+    )
+    assert SCENE_TITLES["PROLOGUE-AFTERTALK"] == "序章自由交流"
 
     reunion = PrologueRuntime().scene_info("PROLOGUE-REUNION")
     characters = reunion["presentation"]["characters"]
