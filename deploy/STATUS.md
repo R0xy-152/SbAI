@@ -7,7 +7,7 @@
 
 - 服务器：阿里云 ECS 114.55.133.96（2核2GiB Ubuntu；Docker 三服务 frontend-vue nginx / backend / postgres，均 restart: unless-stopped；Caddy 反代 80/443；swap 2G）
 - 玩家入口：`http://114.55.133.96/`；`https://114.55.133.96.nip.io/`（本地网络对 nip.io SNI 有 GFW 干扰，HTTP 正常；服务器自测 HTTPS 200）
-- 已部署 commit：25633e6（账号配额+章节选择 2538f55 → 无序序章流程 d211442 → .dockerignore 构建修复 360efa5 → auth.cli usage 4bb5a79 → e2e 序章适配 4565fc5 → 文字速度基线 1.2x 5edf23a → 删睁眼选项 4e2ea77 → 序章背景修复 5dc3534 → AUTO/SKIP/SAVE/LOAD 控制条 25633e6）
+- 已部署 commit：287c5cd（账号配额+章节选择 2538f55 → 无序序章流程 d211442 → .dockerignore 构建修复 360efa5 → auth.cli usage 4bb5a79 → e2e 序章适配 4565fc5 → 文字速度基线 1.2x 5edf23a → 删睁眼选项 4e2ea77 → 序章背景修复 5dc3534 → AUTO/SKIP/SAVE/LOAD 控制条 25633e6 → 透明 chatgpt_happy 0ce6833 → 三人集合立绘原尺寸 2225458 → 自由对话点击/滚轮继续 287c5cd）
 - 玩法：标题「开始游戏」→ 章节选择（当前仅序章解锁）→ /story?story_id=prologue 无序探班（AI 停用）→ 汇合后选角色 → /game 对应角色后日谈（DeepSeek 真实自由聊天）；旧调查玩法经左上角「行动」按钮
 - 新增 galgame 基础功能：聊天框右下角 ▼ 左侧「自动/快进/保存/读取」控制条（AUTO 自动推进、SKIP 跳到选择点、SAVE/LOAD 打开系统面板）；文字速度基线 1.2x（设置默认倍率不变）；设置移除「睁眼转场」开关（转场仍默认开启）
 - 账号功能（docs/18）：已启用（GAL_AUTH_REQUIRED=true，仅服务器 .env 含 GAL_AUTH_SECRET）；展示账号 01（quota 100）/ 02（quota 100）/ 03（quota 200），邀请码明文不落库；存量匿名存档已清空，新玩家需邀请码登录
@@ -28,3 +28,4 @@
 - 2026-08-21（二次部署）：账号配额+章节选择、无序序章流程上线；账号功能首次切换（删 18 条匿名存档）；修复 .dockerignore 导致 backend 构建失败的 bug（docs/story/Prologue.md 放行）
 - 2026-08-21（三次部署）：新增展示账号 02（quota 100）、03（quota 200）；auth.cli 新增 usage 子命令（按账号监控用量）
 - 2026-08-21（四次部署）：e2e 适配序章新流程；文字速度基线 1.2x；设置移除睁眼转场开关；修复序章瞬间闪现 background1.png；新增 AUTO/SKIP/SAVE/LOAD 控制条
+- 2026-08-22（五次部署）：替换 chatgpt_happy 为透明背景版本；三人集合立绘恢复原尺寸同基线（取消 scale/offset_y）；自由对话新增点击任意位置/滚轮下滑「继续对话」（回应态可用），滚轮上滑打开历史
