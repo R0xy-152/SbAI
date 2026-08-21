@@ -1,6 +1,7 @@
 # AI 对话玩法：删除前置剧情 + 常驻背景图替换
 
-- **状态**：PASS（本机验证）
+- **状态**：PASS（本机验证 + 公网复核）
+- **部署**：服务器 git 同步 65a8380 → docker compose build backend frontend-vue → up -d；容器健康（backend/frontend-vue Up，postgres healthy）
 - **日期**：2026-08-21
 - **环境**：Windows 本机；backend 运行于 venv uvicorn :8000（GAL_PROVIDER=mock、GAL_SAVE_BACKEND=json）；前端 vite dev :5173；Playwright chromium 1366×768
 - **任务来源**：用户直接需求（不在 docs/13 / docs/17 原计划内）：1) 删除 AI 对话玩法的前置剧情（「你醒了，别怕」开场白 + 「选择行动」选项步骤）；2) 用户提供新背景图，重命名放入项目并替换 AI 玩法常驻背景。
@@ -40,6 +41,11 @@
 - evidence/03-after-first-reply.png 首个回合结束：无自动弹窗、背景不变、「行动」按钮可见
 - evidence/04-option-window-manual.png 手动打开「选择行动」（旧玩法入口完好）
 - evidence/story-regression/ 故事模式回归截图
+- evidence-public3/ 公网复核（http://114.55.133.96/）：与上述断言一致（openingCalls=[]、optionWindow=0、背景 background_ai.png 200、首条消息建会话、mock 回复、行动按钮可用）
+
+## 公网复核结果
+
+与用例 1-8 断言逐项一致（GAL_BASE_URL=http://114.55.133.96/）：POST /api/chat/opening 未发出；无「你醒了」文本；进入即输入可用；全程无自动弹「选择行动」；/backgroud/background_ai.png 200（2103237 bytes）；首个玩家消息创建会话（30b7b578…）；「行动」按钮手动打开选项窗口正常。注：nip.io HTTPS 从本地网络握手被重置（GFW SNI 干扰，服务器自测 200 正常），公网冒烟改用 HTTP 执行。
 
 ## 已知限制
 
