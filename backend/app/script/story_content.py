@@ -20,7 +20,9 @@
 # 所有引用在 StoryRuntime 载入时校验，校验失败抛 ValueError（fail closed）。
 
 STORY_ID = "CH01_STORY_07_V2"
+STORY_CHAPTER_LABEL = "第一章"
 STORY_TITLE = "《03:17 Incident》"
+STORY_OPENING_BACKGROUND = "/backgroud/background1.png"
 
 # 场景演出配置（纯表现配置，非剧情内容）：scene_id → 表现指令。
 # 只用既有素材与前端已注册的命名动作；effects 由 ScreenEffects 组件渲染

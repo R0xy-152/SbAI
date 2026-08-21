@@ -68,6 +68,11 @@ def test_docs_first_content_is_compiled_and_main_maps_to_neutral():
         scene["background"] == "/backgroud/background_prologue.png"
         for scene in SCENE_PRESENTATION.values()
     )
+    assert PrologueRuntime.chapter_opening() == {
+        "chapter_label": "序章",
+        "title": "制作现场突击检查！AI娘们的秘密日常",
+        "background": "/backgroud/background_prologue.png",
+    }
 
 
 @pytest.mark.parametrize("order", list(permutations(PROLOGUE_CHARACTERS)))

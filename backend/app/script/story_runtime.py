@@ -25,7 +25,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.characters.base import ALLOWED_EMOTIONS
-from app.script.story_content import SCENE_PRESENTATION, SCENES
+from app.script.story_content import (
+    SCENE_PRESENTATION,
+    SCENES,
+    STORY_CHAPTER_LABEL,
+    STORY_OPENING_BACKGROUND,
+    STORY_TITLE,
+)
 
 # 场景演出允许的命名效果（与前端 ScreenEffects 渲染白名单一致；
 # presentation/actions.py 的 SCREEN_GLITCH / SCREEN_SHAKE 同源命名）。
@@ -286,6 +292,15 @@ class StoryRuntime:
             "scene_id": scene_id,
             "title": self._scene_titles[scene_id],
             "presentation": SCENE_PRESENTATION.get(scene_id) or {},
+        }
+
+    @staticmethod
+    def chapter_opening() -> dict:
+        """Backend-authoritative chapter card shown once per route entry."""
+        return {
+            "chapter_label": STORY_CHAPTER_LABEL,
+            "title": STORY_TITLE.removeprefix("《").removesuffix("》"),
+            "background": STORY_OPENING_BACKGROUND,
         }
 
     # ---- 持久化 -----------------------------------------------------------

@@ -58,6 +58,13 @@ export interface StorySceneView {
   }
 }
 
+export interface StoryChapterOpening {
+  chapter_label: string
+  title: string
+  /** 永远是章节首场景背景，不随当前恢复场景改变。 */
+  background: string
+}
+
 export interface StoryView {
   session_id: string
   started: boolean
@@ -66,6 +73,7 @@ export interface StoryView {
   /** 当前节点所属场景（end 节点为 null） */
   scene: StorySceneView | null
   scene_changed: boolean
+  chapter_opening: StoryChapterOpening
 }
 
 /** 当前展示节点（刷新/读档恢复；不移动游标）。 */

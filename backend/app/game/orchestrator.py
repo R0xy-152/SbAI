@@ -1379,6 +1379,7 @@ class GameOrchestrator:
             "finished": runtime.finished(session.session_id),
             "node": node,
             "scene": runtime.scene_info(node.get("scene_id") if node else None),
+            "chapter_opening": runtime.chapter_opening(),
         }
 
     def story_advance(
@@ -1408,6 +1409,7 @@ class GameOrchestrator:
             "node": node,
             "scene": runtime.scene_info(node.get("scene_id")),
             "scene_changed": scene_changed,
+            "chapter_opening": runtime.chapter_opening(),
         }
 
     def story_choose(
@@ -1444,6 +1446,7 @@ class GameOrchestrator:
             "node": node,
             "scene": runtime.scene_info(node.get("scene_id")),
             "scene_changed": previous_scene_id != node.get("scene_id"),
+            "chapter_opening": runtime.chapter_opening(),
         }
 
     def _record_story_node(

@@ -75,6 +75,11 @@ def test_scene_info_known_scene():
     assert info["scene_id"] == "CH01-SC05"
     assert info["title"] == "03:17 Incident"
     assert info["presentation"] == SCENE_PRESENTATION["CH01-SC05"]
+    assert runtime.chapter_opening() == {
+        "chapter_label": "第一章",
+        "title": "03:17 Incident",
+        "background": "/backgroud/background1.png",
+    }
 
 
 def test_scene_info_unknown_and_none():
@@ -91,6 +96,7 @@ def test_story_advance_carries_scene(tmp_path):
     assert scene["scene_id"] == "CH01-SC01"
     assert scene["title"] == "Awakening"
     assert scene["presentation"] == {}
+    assert view["chapter_opening"] == StoryRuntime.chapter_opening()
 
 
 def test_story_progress(tmp_path):

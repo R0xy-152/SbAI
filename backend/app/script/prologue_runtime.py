@@ -5,9 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from app.script.prologue_content import (
+    PROLOGUE_CHAPTER_LABEL,
     PROLOGUE_CHARACTERS,
     PROLOGUE_CONTENT,
     PROLOGUE_ID,
+    PROLOGUE_OPENING_BACKGROUND,
+    PROLOGUE_TITLE,
     SCENE_PRESENTATION,
     SCENE_TITLES,
     PrologueContentError,
@@ -194,6 +197,15 @@ class PrologueRuntime:
             "scene_id": scene_id,
             "title": SCENE_TITLES[scene_id],
             "presentation": SCENE_PRESENTATION[scene_id],
+        }
+
+    @staticmethod
+    def chapter_opening() -> dict:
+        """Backend-authoritative chapter card shown once per route entry."""
+        return {
+            "chapter_label": PROLOGUE_CHAPTER_LABEL,
+            "title": PROLOGUE_TITLE,
+            "background": PROLOGUE_OPENING_BACKGROUND,
         }
 
     def snapshot(self, session_id: str) -> dict | None:

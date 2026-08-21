@@ -52,6 +52,8 @@ class StoryView(BaseModel):
     # 当前节点所属场景的标题与演出指令（纯表现数据；end 节点为 None）
     scene: dict | None = None
     scene_changed: bool = False
+    # 每次进入章节播放器时展示；背景固定指向章节首场景，不随恢复点变化。
+    chapter_opening: dict
 
 
 def get_orchestrator(request: Request) -> GameOrchestrator:

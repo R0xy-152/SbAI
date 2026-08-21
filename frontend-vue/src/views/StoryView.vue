@@ -22,7 +22,13 @@ import {
   storyAdvance,
   storyChoose,
 } from '../api/story'
-import type { StoryLineNode, StoryOptionView, StorySceneView, StoryView } from '../api/story'
+import type {
+  StoryChapterOpening,
+  StoryLineNode,
+  StoryOptionView,
+  StorySceneView,
+  StoryView,
+} from '../api/story'
 import { saveTargetRoute, type LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
@@ -31,6 +37,7 @@ import StoryChoiceWindow from '../components/game/standard/StoryChoiceWindow.vue
 import StoryEnding from '../components/game/standard/StoryEnding.vue'
 import ScreenEffects from '../components/game/standard/ScreenEffects.vue'
 import SceneTitleCard from '../components/game/standard/SceneTitleCard.vue'
+import ChapterOpening from '../components/game/standard/ChapterOpening.vue'
 import SavePanel from '../components/save/SavePanel.vue'
 import LoadPanel from '../components/save/LoadPanel.vue'
 import SystemMenu from '../components/system/SystemMenu.vue'
@@ -63,6 +70,9 @@ const node = ref<StoryView['node']>(null)
 const finished = ref(false)
 const showChoice = ref(false)
 const showEnding = ref(false)
+const chapterOpening = ref<StoryChapterOpening | null>(null)
+const showChapterOpening = ref(false)
+let chapterOpeningShown = false
 
 const choiceOptions = ref<StoryOptionView[]>([])
 const systemPanel = ref<'menu' | 'save' | 'load' | 'history' | null>(null)
@@ -157,6 +167,11 @@ function applyView(data: StoryView) {
   finished.value = data.finished
   node.value = data.node
   applyScene(data.scene, data.scene_changed)
+  if (!chapterOpeningShown && data.chapter_opening) {
+    chapterOpeningShown = true
+    chapterOpening.value = data.chapter_opening
+    showChapterOpening.value = true
+  }
   if (!data.node) return
   if (data.node.kind === 'line') {
     showLine(data.node)
@@ -171,7 +186,7 @@ function applyView(data: StoryView) {
 }
 
 async function doAdvance() {
-  if (busy.value || showChoice.value || showEnding.value) return
+  if (busy.value || showChoice.value || showEnding.value || showChapterOpening.value) return
   busy.value = true
   error.value = null
   const epoch = viewEpoch
@@ -208,7 +223,7 @@ async function onChoose(optionId: string) {
 
 // 台词播完点「继续」→ 取下一节点
 function onDialogProceed() {
-  if (showChoice.value || showEnding.value) return
+  if (showChoice.value || showEnding.value || showChapterOpening.value) return
   void doAdvance()
 }
 
@@ -379,6 +394,15 @@ function onContinueChat() {
       :key="titleCardKey"
       :title="sceneView?.title ?? ''"
       @complete="showTitleCard = false"
+    />
+
+    <!-- 每次进入章节播放一次；文字与首场景背景均由后端权威下发。 -->
+    <ChapterOpening
+      v-if="showChapterOpening && chapterOpening"
+      :chapter-label="chapterOpening.chapter_label"
+      :title="chapterOpening.title"
+      :background="chapterOpening.background"
+      @complete="showChapterOpening = false"
     />
 
     <!-- 对话框（底部） -->

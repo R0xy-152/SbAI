@@ -15,6 +15,9 @@ from pathlib import Path
 from app.characters.base import ALLOWED_EMOTIONS
 
 PROLOGUE_ID = "prologue"
+PROLOGUE_CHAPTER_LABEL = "序章"
+PROLOGUE_TITLE = "制作现场突击检查！AI娘们的秘密日常"
+PROLOGUE_OPENING_BACKGROUND = "/backgroud/background_prologue.png"
 PROLOGUE_CHARACTERS = ("deepseek", "chatgpt", "claude")
 
 _SPEAKERS = {
