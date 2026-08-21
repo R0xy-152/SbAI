@@ -5,7 +5,7 @@
       :style="containerStyle"
       @animationend="handleAnimationEnd"
     >
-      <!-- 角色立绘（img 双叠 cross-fade；docs/13 §9.1：img 撑开容器宽，
+      <!-- 角色立绘（单 img 预加载后切换；docs/13 §9.1：img 撑开容器宽，
            left:autoLeft% + translateX(-50%) 实现自动站位） -->
       <RoleSprite
         ref="imageFadeRef"
