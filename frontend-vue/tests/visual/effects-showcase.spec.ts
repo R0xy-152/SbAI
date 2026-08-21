@@ -1,6 +1,9 @@
 // docs/15 §9.3：特效全开的展示截图（人工 + 视觉模型复核证据）。
 // 不调用 freezeAnimations、不做 toHaveScreenshot 断言 —— canvas 动画不可确定性
 // 冻结，截图只作为 validation-results 复核证据，不进视觉基线目录。
+// 2026-08-21（docs/19 序章上线）：本组经「开始游戏 → /game」旧流程进入游戏内
+// 星空粒子场景；新流程为章节选择 → 序章固定剧本（无调查玩法 StarField 场景）。
+// 暂整体跳过，待序章场景特效证据重拍后恢复。
 import { test, expect, type Page, type TestInfo } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
@@ -32,7 +35,7 @@ async function save(page: Page, testInfo: TestInfo, name: string): Promise<void>
   await page.screenshot({ path: file })
 }
 
-test('特效展示：首页（流星星空+立绘+菜单）与加载演出', async ({ page }, testInfo) => {
+test.skip('特效展示：首页（流星星空+立绘+菜单）与加载演出', async ({ page }, testInfo) => {
   // 默认设置 = 特效全开（localStorage 无注入）
   await page.goto('/')
   await page.waitForTimeout(900) // 让星星/流星/立绘绘制
@@ -54,7 +57,7 @@ test('特效展示：首页（流星星空+立绘+菜单）与加载演出', asy
   await save(page, testInfo, 'GAME_LOADING_TRANSITION.png')
 })
 
-test('特效展示：游戏内星空粒子（binding_room → StarField）', async ({ page }, testInfo) => {
+test.skip('特效展示：游戏内星空粒子（binding_room → StarField）', async ({ page }, testInfo) => {
   await page.goto('/')
   const start = page.locator('.title-btn', { hasText: '开始游戏' })
   await start.waitFor()

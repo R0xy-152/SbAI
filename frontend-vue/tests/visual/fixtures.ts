@@ -140,16 +140,80 @@ export async function openOptionWindowIfAny(page: Page): Promise<void> {
   }
 }
 
-/** Title → 开始游戏 → opening 完整打出 → 推进解锁输入。 */
+/** Title → 开始游戏 → 章节选择 → 序章 → /story 播放器（docs/19 新流程）。
+ *  序章为固定剧本：无输入框，点「继续」（#sendButton）逐行推进；
+ *  选项经 [data-testid="story-choice-window"] 点选。首次进入有章节卡
+ *  （data-testid="chapter-opening"）自动消失（~3.8s / reduce-motion 1.5s）。
+ *  返回后即可点「继续」推进第一句台词。 */
 export async function startNewGame(page: Page): Promise<void> {
   await page.goto('/')
   const start = page.locator('.title-btn', { hasText: '开始游戏' })
   await start.waitFor()
   await start.click()
-  await page.waitForURL('**/game')
-  await waitTypedStable(page)
-  await page.locator('#sendButton').click()
-  await waitInputUnlocked(page)
+  await page.waitForURL('**/chapters')
+  const prologue = page.locator('.chapter-card', { hasText: '序章' })
+  await prologue.waitFor()
+  await prologue.click()
+  await page.waitForURL('**/story?story_id=prologue')
+  // 章节开场卡自动消失（docs/19 序章标题卡），等它离开舞台
+  const opening = page.locator('[data-testid="chapter-opening"]')
+  if (await opening.isVisible().catch(() => false)) {
+    await opening.waitFor({ state: 'hidden', timeout: 15_000 })
+  }
+}
+
+/** 故事模式推进：等对话区出现可点「继续」（#sendButton），点击推进一行。
+ *  故事模式无输入框（AI 停用），#inputMessage 为只读台词区。 */
+export async function storyAdvanceLine(page: Page, timeout = 15_000): Promise<void> {
+  const proceed = page.locator('#sendButton')
+  await proceed.waitFor({ state: 'visible', timeout })
+  await proceed.click()
+}
+
+/** 等待并点选故事选项（story-choice-window 内按 label 精确匹配）。 */
+export async function chooseStoryOption(page: Page, label: string, timeout = 15_000): Promise<void> {
+  const win = page.locator('[data-testid="story-choice-window"]')
+  await win.waitFor({ state: 'visible', timeout })
+  const opt = win.getByRole('button', { name: label, exact: true })
+  await opt.waitFor({ state: 'visible', timeout })
+  await opt.click()
+}
+
+/** 等待对话区当前台词完整显示指定文本（#inputMessage 为只读台词区，
+ *  故事模式逐行替换，无打字机长回声；直接比对输入框值）。 */
+export async function waitStoryLine(page: Page, exactText: string, timeout = 20_000): Promise<void> {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    const v = await page.locator('#inputMessage').inputValue().catch(() => '')
+    if (v === exactText) return
+    // 点击「继续」推进直到目标行出现
+    const proceed = page.locator('#sendButton')
+    if (await proceed.isVisible().catch(() => false) && !(await proceed.isDisabled().catch(() => true))) {
+      await proceed.click()
+    }
+    await page.waitForTimeout(120)
+  }
+  throw new Error('waitStoryLine timeout: ' + exactText)
+}
+
+/** 循环推进台词直到故事选项窗口出现（返回其可见选项文本列表）。 */
+export async function advanceToStoryChoice(
+  page: Page,
+  timeout = 120_000,
+): Promise<string[]> {
+  const deadline = Date.now() + timeout
+  while (Date.now() < deadline) {
+    const win = page.locator('[data-testid="story-choice-window"]')
+    if (await win.isVisible().catch(() => false)) {
+      return win.locator('button').allTextContents()
+    }
+    const proceed = page.locator('#sendButton')
+    if (await proceed.isVisible().catch(() => false) && !(await proceed.isDisabled().catch(() => true))) {
+      await proceed.click()
+    }
+    await page.waitForTimeout(120)
+  }
+  throw new Error('advanceToStoryChoice timeout')
 }
 
 /** 输入一句话并回车（需输入已解锁）。 */
