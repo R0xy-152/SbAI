@@ -18,6 +18,11 @@ describe('GameDialog（输入状态与长文本打字机）', () => {
     vi.useRealTimers()
   })
 
+  it('标题栏不显示角色副标题', () => {
+    const wrapper = mount(GameDialog)
+    expect(wrapper.find('#character-sub').exists()).toBe(false)
+  })
+
   it('thinking：动画省略号覆盖层、textarea 只读、发送按钮禁用', () => {
     const store = usePresentationStore()
     store.state.status = 'thinking'
