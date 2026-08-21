@@ -20,6 +20,7 @@ describe('HistoryPanel', () => {
 
     expect(wrapper.find('.history-mask').exists()).toBe(true)
     expect(wrapper.find('.history-panel').exists()).toBe(true)
+    expect(wrapper.find('.history-panel').classes()).toContain('gal-font-sans')
     expect(wrapper.find('.history-scroll').classes()).toContain('overflow-y-auto')
     expect(wrapper.text()).toContain('DeepSeek')
     expect(wrapper.text()).toContain('你好。')

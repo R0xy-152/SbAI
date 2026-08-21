@@ -13,6 +13,9 @@
   --gal-text: #f4f8ff;
   --gal-sub: #d7effa;
   --gal-glow: rgba(135, 214, 244, 0.55);
+  --gal-font-sans:
+    "PingFang SC", "HarmonyOS Sans SC", "Source Han Sans SC", "Noto Sans SC",
+    "Microsoft YaHei", sans-serif;
 }
 
 html,
@@ -25,14 +28,12 @@ body,
 body {
   background: var(--gal-bg);
   color: var(--gal-text);
-  font-family:
-    "PingFang SC",
-    "HarmonyOS Sans SC",
-    "Source Han Sans SC",
-    "Noto Sans SC",
-    "Microsoft YaHei",
-    sans-serif;
+  font-family: var(--gal-font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+.gal-font-sans {
+  font-family: var(--gal-font-sans);
 }
 
 /* ── 通用页壳：Title / Load / Settings 共享背景皮肤（docs/15 §8） ── */

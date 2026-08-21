@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="visible"
-    class="chapter-opening fixed inset-0 z-[20000] overflow-hidden"
+    class="chapter-opening gal-font-sans fixed inset-0 z-[20000] overflow-hidden"
     role="status"
     aria-live="polite"
     data-testid="chapter-opening"
@@ -162,7 +162,6 @@ onUnmounted(() => {
   margin: 1.2rem 1rem 0;
   max-width: 90%;
   text-align: center;
-  font-family: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', serif;
   font-size: clamp(2rem, 4vw, 4rem);
   font-weight: 600;
   line-height: 1.16;

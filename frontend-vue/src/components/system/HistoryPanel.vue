@@ -68,7 +68,7 @@ watch(
 
 <template>
   <div class="gal-modal-mask history-mask" data-no-story-advance @click.self="emit('close')">
-    <div class="gal-panel history-panel h-[min(78vh,720px)] w-[min(92vw,760px)] p-5">
+    <div class="gal-panel gal-font-sans history-panel h-[min(78vh,720px)] w-[min(92vw,760px)] p-5">
       <header class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-bold tracking-[0.15em] text-[#dff7ff] drop-shadow">对话历史</h2>
         <button

@@ -1,6 +1,6 @@
 <template>
   <div
-    class="relative z-2 flex w-full justify-center p-3.75 transition-all duration-200 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] before:pointer-events-none before:absolute before:-top-10 before:right-0 before:left-0 before:h-10 before:bg-linear-to-b before:from-transparent before:via-[rgba(0,14,39,0.3)] before:to-[rgba(0,14,39,0.6)] before:content-['']"
+    class="gal-font-sans relative z-2 flex w-full justify-center p-3.75 transition-all duration-200 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] before:pointer-events-none before:absolute before:-top-10 before:right-0 before:left-0 before:h-10 before:bg-linear-to-b before:from-transparent before:via-[rgba(0,14,39,0.3)] before:to-[rgba(0,14,39,0.6)] before:content-['']"
     :class="{
       [`z-[-1]! overflow-hidden opacity-0 duration-500! ease-linear before:opacity-0 before:duration-1000!`]: isHidden,
       'max-h-[40vh]': !uiStore.isNarrowScreen,

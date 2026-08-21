@@ -22,6 +22,7 @@ describe('ChapterOpening', () => {
     })
 
     expect(wrapper.get('[data-testid="chapter-opening"]').text()).toContain('序章')
+    expect(wrapper.get('[data-testid="chapter-opening"]').classes()).toContain('gal-font-sans')
     expect(wrapper.text()).toContain('制作现场突击检查！AI娘们的秘密日常')
     expect(wrapper.find('.chapter-opening-bg').attributes('style')).toContain(
       '/backgroud/background_prologue.png',

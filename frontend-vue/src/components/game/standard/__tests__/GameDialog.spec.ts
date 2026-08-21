@@ -20,6 +20,7 @@ describe('GameDialog（输入状态与长文本打字机）', () => {
 
   it('标题栏不显示角色副标题', () => {
     const wrapper = mount(GameDialog)
+    expect(wrapper.classes()).toContain('gal-font-sans')
     expect(wrapper.find('#character-sub').exists()).toBe(false)
   })
 
