@@ -1,5 +1,7 @@
 # 08-First-Chapter-Dialogue-Full.md
 
+> 文档状态：评审中
+
 # Chapter 1
 
 # 《03:17 Incident》

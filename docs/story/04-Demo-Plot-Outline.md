@@ -1,7 +1,7 @@
 ```markdown
 # 04-Demo-Plot-Outline.md
 
-> 文档状态：Active
+> 文档状态：评审中
 >
 > 文档职责：
 >

@@ -1,6 +1,6 @@
 # 07-First-Chapter-Script.md
 
-> 文档状态：Rewrite v2  
+> 文档状态：评审中
 > 修订重点：第一章开幕节奏、Claude登场信息密度、DeepSeek角色一致性  
 > 本稿用于替换旧 `07-First-Chapter-Script(1).md` 的剧本骨架。
 >

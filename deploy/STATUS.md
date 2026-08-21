@@ -12,10 +12,10 @@
 - DEEPSEEK_API_KEY：已配置，仅存服务器 `/srv/gal/.env`（不入库）；缺 key 时回落 mock
 - 备案指引（控制台走查）：`deploy/ALIYUN.md` §④
 
+- [ ] 服务器 root 临时密码：Gal@2026abc，当前正在频繁修改上线的时期，暂时不管密码更改问题但确保不泄露
 ## 待办
 
 - [ ] sbai.xin ICP 备案（个人、免费、7-20 天）：**通过前不要添加 DNS A 记录**；通过后加 A 记录（@ 和 www）→ 通知 AI 改 Caddyfile 加域名 + HTTPS（2 分钟）
-- [ ] 服务器 root 临时密码尽快改掉（当前为部署期临时密码，值只在私聊里）
 - [ ] DeepSeek key 曾在聊天中出现过：如需可在开放平台重新生成 → 替换 `/srv/gal/.env` → `docker compose up -d backend`
 - [ ] 缺美术：豆包立绘（main + 尴尬）、场景背景（docs/17 §6.1）；差分立绘 resolver 按 `{角色}_{表情英文id}.png` 探测，补图自动生效
 
