@@ -62,27 +62,9 @@ SCENE_PRESENTATION: dict[str, dict] = {
     "PROLOGUE-REUNION": {
         "background": "/backgroud/background_prologue.png",
         "characters": [
-            {
-                "character_id": "deepseek",
-                "emotion": "neutral",
-                "slot": "LEFT",
-                "scale": 0.68,
-                "offset_y": 350,
-            },
-            {
-                "character_id": "chatgpt",
-                "emotion": "neutral",
-                "slot": "CENTER",
-                "scale": 0.68,
-                "offset_y": 350,
-            },
-            {
-                "character_id": "claude",
-                "emotion": "neutral",
-                "slot": "RIGHT",
-                "scale": 1.085,
-                "offset_y": 150,
-            },
+            {"character_id": "deepseek", "emotion": "neutral", "slot": "LEFT"},
+            {"character_id": "chatgpt", "emotion": "neutral", "slot": "CENTER"},
+            {"character_id": "claude", "emotion": "neutral", "slot": "RIGHT"},
         ],
     },
     "PROLOGUE-AFTERTALK": {

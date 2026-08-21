@@ -67,10 +67,10 @@ def test_docs_first_content_is_compiled_and_main_maps_to_neutral():
     assert [character["character_id"] for character in characters] == list(
         PROLOGUE_CHARACTERS
     )
-    assert all(character["scale"] < 1 for character in characters[:2])
-    assert characters[2]["scale"] > 1
-    assert characters[2]["scale"] > characters[0]["scale"]
-    assert all(character["offset_y"] > 0 for character in characters)
+    # 与前期单人探班一致：三人集合不再缩小/下沉立绘（scale/offset_y 缺省 = 原尺寸同基线）
+    assert all("scale" not in character for character in characters)
+    assert all("offset_y" not in character for character in characters)
+    assert [character["slot"] for character in characters] == ["LEFT", "CENTER", "RIGHT"]
     assert all(
         scene["background"] == "/backgroud/background_prologue.png"
         for scene in SCENE_PRESENTATION.values()
