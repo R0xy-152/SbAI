@@ -55,7 +55,11 @@ const route = useRoute()
 const storyId = computed(() => (route.query.story_id === 'prologue' ? 'prologue' : undefined))
 
 const SESSION_KEY = 'gal_session_id'
-const BG = '/backgroud/background1.png'
+// docs/19 §4：序章专用常驻背景 background_prologue.png；未带 story_id（第一章
+// 恢复）才回落到 background1.png。避免进入序章瞬间闪现无关素材。
+const BG = computed(() =>
+  storyId.value === 'prologue' ? '/backgroud/background_prologue.png' : '/backgroud/background1.png',
+)
 
 // 与 GameView 同约定：viewEpoch 作废切换会话后的在途响应
 let viewEpoch = 0
@@ -133,7 +137,7 @@ let effectTimer: ReturnType<typeof setTimeout> | null = null
 // 光照随场景常驻；入场效果（glitch/shake）脉冲播放；标题卡在场景切换时淡入淡出。
 function applyScene(scene: StorySceneView | null, changed: boolean) {
   sceneView.value = scene
-  presentation.state.scene.backgroundId = scene?.presentation?.background ?? BG
+  presentation.state.scene.backgroundId = scene?.presentation?.background ?? BG.value
   presentation.state.scene.lighting = scene?.presentation?.lighting ?? undefined
   const authoritativeCharacters = scene?.presentation?.characters
   if (authoritativeCharacters) {
@@ -373,7 +377,7 @@ function applyLoadedSession(result: LoadResult) {
 
 onMounted(async () => {
   window.addEventListener('keydown', onStoryKeyDown)
-  presentation.state.scene.backgroundId = BG
+  presentation.state.scene.backgroundId = BG.value
   // 0. 优先消费 Load 结果（docs/13 §20.3：Title/Load 页暂存的新 Active Session）
   if (game.pendingLoad) {
     applyLoadedSession(game.pendingLoad)
