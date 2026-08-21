@@ -1,13 +1,14 @@
 <script setup lang="ts">
-// 快速上线 · 固定剧本播放器（临时视图）。
+// 固定剧本播放器：既有第一章存档与 docs/19 序章共用表现层；剧情选择、
+// 剩余角色过滤和汇合条件全部由 Backend Runtime 权威决定。
 // docs/story/07-First-Chapter-Script-v2-DeepSeek-Rewrite.md 的临时落地：
 // AI 回复停用 —— 无输入框；点「继续」逐行推进（后端 /api/story/advance），
 // 选项点弹 A/B/C 窗口（/api/story/choose），SC14 后显示「第一章 完」结局。
 // 旧调查玩法（GameView，/game 路由）代码原样保留，只是不再有 UI 入口
 //（用户确认「入口隐藏」）。存档/读档/历史/系统菜单复用既有组件；
 // 后端场景边界自动写 AUTO 存档。
-import { onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { useSavesStore } from '../stores/saves'
 import { usePresentationStore } from '../stores/presentation'
@@ -22,7 +23,7 @@ import {
   storyChoose,
 } from '../api/story'
 import type { StoryLineNode, StoryOptionView, StorySceneView, StoryView } from '../api/story'
-import type { LoadResult } from '../api/saves'
+import { saveTargetRoute, type LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
 import GameDialog from '../components/game/standard/GameDialog.vue'
@@ -42,6 +43,8 @@ const game = useGameStore()
 const saves = useSavesStore()
 const settings = useSettingsStore()
 const router = useRouter()
+const route = useRoute()
+const storyId = computed(() => (route.query.story_id === 'prologue' ? 'prologue' : undefined))
 
 const SESSION_KEY = 'gal_session_id'
 const BG = '/backgroud/background1.png'
@@ -73,7 +76,33 @@ let effectTimer: ReturnType<typeof setTimeout> | null = null
 // 光照随场景常驻；入场效果（glitch/shake）脉冲播放；标题卡在场景切换时淡入淡出。
 function applyScene(scene: StorySceneView | null, changed: boolean) {
   sceneView.value = scene
+  presentation.state.scene.backgroundId = scene?.presentation?.background ?? BG
   presentation.state.scene.lighting = scene?.presentation?.lighting ?? undefined
+  const authoritativeCharacters = scene?.presentation?.characters
+  if (authoritativeCharacters) {
+    for (const characterId of [...presentation.state.presentCharacterIds]) {
+      applyPresentationAction(presentation.state, {
+        type: 'CHARACTER_HIDE',
+        character_id: characterId,
+      })
+    }
+    for (const character of authoritativeCharacters) {
+      applyPresentationAction(presentation.state, {
+        type: 'CHARACTER_SHOW',
+        character_id: character.character_id,
+        emotion: character.emotion,
+        slot: character.slot,
+      })
+      if (character.scale != null) {
+        applyPresentationAction(presentation.state, {
+          type: 'CHARACTER_EMOTION',
+          character_id: character.character_id,
+          scale: character.scale,
+          offset_y: character.offset_y,
+        })
+      }
+    }
+  }
   if (changed) {
     const fx = scene?.presentation?.effects ?? []
     if (effectTimer) {
@@ -136,6 +165,8 @@ function applyView(data: StoryView) {
     showChoice.value = true
   } else if (data.node.kind === 'end') {
     showEnding.value = true
+  } else if (data.node.kind === 'chat') {
+    void router.push({ path: '/game', query: { character: data.node.character_id } })
   }
 }
 
@@ -145,7 +176,7 @@ async function doAdvance() {
   error.value = null
   const epoch = viewEpoch
   try {
-    const data = await storyAdvance(sessionId.value)
+    const data = await storyAdvance(sessionId.value, storyId.value)
     if (epoch !== viewEpoch) return
     sessionId.value = data.session_id
     localStorage.setItem(SESSION_KEY, data.session_id)
@@ -164,7 +195,7 @@ async function onChoose(optionId: string) {
   showChoice.value = false
   const epoch = viewEpoch
   try {
-    const data = await storyChoose(sessionId.value, optionId)
+    const data = await storyChoose(sessionId.value, optionId, storyId.value)
     if (epoch !== viewEpoch) return
     applyView(data)
   } catch (e) {
@@ -184,7 +215,7 @@ function onDialogProceed() {
 // ── 会话恢复 / 新游戏 ──────────────────────────────────────────────────────
 
 async function fetchCurrentAndApply() {
-  const data = await fetchStoryCurrent(sessionId.value)
+  const data = await fetchStoryCurrent(sessionId.value, storyId.value)
   sessionId.value = data.session_id
   localStorage.setItem(SESSION_KEY, data.session_id)
   if (!data.started) {
@@ -203,7 +234,7 @@ const bufferedFirst = ref<StoryView | null>(null)
 async function startStory() {
   const epoch = viewEpoch
   try {
-    const data = await storyAdvance(sessionId.value)
+    const data = await storyAdvance(sessionId.value, storyId.value)
     if (epoch !== viewEpoch) return
     sessionId.value = data.session_id
     localStorage.setItem(SESSION_KEY, data.session_id)
@@ -265,6 +296,13 @@ function applyLoadedSession(result: LoadResult) {
   localStorage.setItem(SESSION_KEY, result.session_id)
   showChoice.value = false
   showEnding.value = false
+  const target = saveTargetRoute(result.story_cursor, result.story_finished)
+  const currentTarget = storyId.value === 'prologue' ? '/story?story_id=prologue' : '/story'
+  if (target !== currentTarget) {
+    game.pendingLoad = result
+    void router.push(target)
+    return
+  }
   game.pendingLoad = null
   void fetchCurrentAndApply()
 }

@@ -30,12 +30,11 @@ async function openChapter(chapter: ChapterEntry) {
   opening.value = true
   error.value = null
   try {
-    // 「序章」即原 AI 对话玩法。新开局清除旧会话与待读档状态，
-    // GameView 会在第一条玩家消息时创建会话。
+    // docs/19：「序章」进入固定剧本；结尾选择角色后再进入 AI 自由聊天。
     localStorage.removeItem('gal_session_id')
     game.sessionId = null
     game.pendingLoad = null
-    await router.push('/game')
+    await router.push('/story?story_id=prologue')
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {

@@ -21,6 +21,7 @@ router = APIRouter()
 
 class StoryAdvanceRequest(BaseModel):
     session_id: str | None = None
+    story_id: str | None = Field(default=None, max_length=64)
     # docs/13 §15：匿名浏览器命名空间，供场景边界 AUTO 自动存档绑定。
     player_id: str | None = Field(default=None, max_length=64)
 
@@ -28,6 +29,7 @@ class StoryAdvanceRequest(BaseModel):
 class StoryChooseRequest(BaseModel):
     session_id: str
     option_id: str = Field(min_length=1, max_length=64)
+    story_id: str | None = Field(default=None, max_length=64)
     player_id: str | None = Field(default=None, max_length=64)
 
 
@@ -39,6 +41,7 @@ class StoryNodeView(BaseModel):
     choice_id: str | None = None
     scene_id: str | None = None
     options: list[dict] = []
+    character_id: str | None = None
 
 
 class StoryView(BaseModel):
@@ -59,13 +62,14 @@ def get_orchestrator(request: Request) -> GameOrchestrator:
 def story_current(
     request: Request,
     session_id: str | None = None,
+    story_id: str | None = None,
     orchestrator: GameOrchestrator = Depends(get_orchestrator),
 ) -> StoryView:
     """当前展示节点。不移动游标；未知会话由 orchestrator 铸造新会话（游标
     未开始，前端随后用 advance 起步）。"""
     require_owned_session(request, session_id)
     try:
-        view = orchestrator.story_current(session_id)
+        view = orchestrator.story_current(session_id, story_id=story_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     bind_session(request, view["session_id"])
@@ -82,7 +86,9 @@ def story_advance(
     require_owned_session(request, payload.session_id)
     try:
         view = orchestrator.story_advance(
-            payload.session_id, player_id=current_user_id(request, payload.player_id)
+            payload.session_id,
+            player_id=current_user_id(request, payload.player_id),
+            story_id=payload.story_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -103,6 +109,7 @@ def story_choose(
             payload.session_id,
             payload.option_id,
             player_id=current_user_id(request, payload.player_id),
+            story_id=payload.story_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

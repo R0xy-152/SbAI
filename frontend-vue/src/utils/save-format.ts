@@ -8,6 +8,13 @@ const PHASE_NAMES: Record<string, string> = {
   investigation: '调查',
   recovery_required: '恢复',
   bad_end: 'BE',
+  intro: '开场',
+  visit_choice: '探班选择',
+  branch: '角色探班',
+  reunion: '三人集合',
+  aftertalk: '后日谈',
+  chat_choice: '交流选择',
+  finished: '自由交流',
 }
 
 export function phaseName(phase: string | null | undefined): string {
@@ -17,7 +24,12 @@ export function phaseName(phase: string | null | undefined): string {
 
 /** 章节 / 阶段 展示行，如「第一章 · 调查」。 */
 export function chapterPhaseLabel(save: GameSaveInfo): string {
-  const chapter = save.chapter_id === 'ch1' ? '第一章' : save.chapter_id ?? ''
+  const chapter =
+    save.chapter_id === 'ch1'
+      ? '第一章'
+      : save.chapter_id === 'prologue'
+        ? '序章'
+        : save.chapter_id ?? ''
   const phase = phaseName(save.phase)
   return [chapter, phase].filter(Boolean).join(' · ')
 }

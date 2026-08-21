@@ -1,7 +1,8 @@
 import { http } from './http'
 
-// 快速上线固定剧本 API（临时）：AI 停用期间前端只用这三个端点推进
-// docs/story/07 剧本。后端权威游标（node_index）随会话/存档快照持久化。
+// 固定剧本 API：未传 story_id 时恢复既有 docs/story/07 第一章；
+// story_id=prologue 时推进 docs/story/Prologue.md 的无序探班流程（docs/19）。
+// 两者的后端权威游标均随会话/存档快照持久化。
 
 export interface StoryLineNode {
   kind: 'line'
@@ -28,7 +29,13 @@ export interface StoryEndNode {
   scene_id: string | null
 }
 
-export type StoryNode = StoryLineNode | StoryChoiceNode | StoryEndNode
+export interface StoryChatNode {
+  kind: 'chat'
+  character_id: string
+  scene_id: string | null
+}
+
+export type StoryNode = StoryLineNode | StoryChoiceNode | StoryEndNode | StoryChatNode
 
 /** 场景演出指令（纯表现，后端权威；docs/17 演出接线） */
 export interface StorySceneView {
@@ -39,6 +46,15 @@ export interface StorySceneView {
     effects?: string[]
     /** GameBackground 光照滤镜（如 SC03 暗版 brightness 0.45） */
     lighting?: { background?: { brightness?: number } }
+    /** 场景背景与权威在场角色（docs/19 序章）。 */
+    background?: string
+    characters?: Array<{
+      character_id: string
+      emotion: string
+      slot?: string | null
+      scale?: number
+      offset_y?: number
+    }>
   }
 }
 
@@ -53,26 +69,38 @@ export interface StoryView {
 }
 
 /** 当前展示节点（刷新/读档恢复；不移动游标）。 */
-export async function fetchStoryCurrent(sessionId: string | null): Promise<StoryView> {
+export async function fetchStoryCurrent(
+  sessionId: string | null,
+  storyId?: string,
+): Promise<StoryView> {
   const { data } = await http.get<StoryView>('/story/current', {
-    params: sessionId ? { session_id: sessionId } : {},
+    params: {
+      ...(sessionId ? { session_id: sessionId } : {}),
+      ...(storyId ? { story_id: storyId } : {}),
+    },
   })
   return data
 }
 
 /** 「继续」：移动到下一节点（首次调用即开始故事）。 */
-export async function storyAdvance(sessionId: string | null): Promise<StoryView> {
+export async function storyAdvance(sessionId: string | null, storyId?: string): Promise<StoryView> {
   const { data } = await http.post<StoryView>('/story/advance', {
     session_id: sessionId,
+    story_id: storyId ?? null,
   })
   return data
 }
 
 /** 提交一个 A/B/C 选项，返回该选项的第一句台词。 */
-export async function storyChoose(sessionId: string, optionId: string): Promise<StoryView> {
+export async function storyChoose(
+  sessionId: string,
+  optionId: string,
+  storyId?: string,
+): Promise<StoryView> {
   const { data } = await http.post<StoryView>('/story/choose', {
     session_id: sessionId,
     option_id: optionId,
+    story_id: storyId ?? null,
   })
   return data
 }

@@ -188,6 +188,8 @@ class SaveSnapshotService:
         existing = self._repository.get_slot(player_id, slot_type, slot_index)
         now = _now()
         snapshot = self.capture(orchestrator, session_id)
+        story_cursor = snapshot.get("story_cursor") or {}
+        is_prologue = story_cursor.get("story_id") == "prologue"
         save = GameSave(
             # Overwriting a slot keeps its id and created_at (stable identity
             # across overwrites, docs/13 §16.1); updated_at always moves.
@@ -199,8 +201,12 @@ class SaveSnapshotService:
             source_session_id=session_id,
             schema_version=SCHEMA_VERSION,
             snapshot=snapshot,
-            chapter_id=CHAPTER_ID,
-            phase=snapshot.get("narrative", {}).get("chapter1", {}).get("phase"),
+            chapter_id="prologue" if is_prologue else CHAPTER_ID,
+            phase=(
+                story_cursor.get("phase")
+                if is_prologue
+                else snapshot.get("narrative", {}).get("chapter1", {}).get("phase")
+            ),
             created_at=existing.created_at if existing is not None else now,
             updated_at=now,
         )

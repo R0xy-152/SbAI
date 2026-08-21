@@ -13,6 +13,8 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt psycopg[binary]
 
 COPY backend/ /app/
+# docs-first 序章内容真相源（backend/app/script/prologue_content.py 运行时读取）。
+COPY docs/story/Prologue.md /docs/story/Prologue.md
 
 # Game static assets for the repo-root StaticFiles mount (app/main.py):
 # dev 下 REPO_ROOT = 仓库根；容器内 REPO_ROOT = 容器根 /，

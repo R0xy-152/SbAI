@@ -6,6 +6,16 @@ import { http } from './http'
 
 export type SaveSlotType = 'AUTO' | 'MANUAL'
 
+export interface StoryCursor {
+  node_index?: number
+  story_id?: string
+  phase?: string
+  line_index?: number
+  visited_character_ids?: string[]
+  active_character_id?: string | null
+  chat_character_id?: string | null
+}
+
 export interface GameSaveInfo {
   id: string
   player_id: string
@@ -29,7 +39,7 @@ export interface SaveListResponse {
 export interface LoadResult {
   session_id: string
   /** 故事游标快照；null = 该存档从未进入故事模式（旧玩法存档）。 */
-  story_cursor: { node_index: number } | null
+  story_cursor: StoryCursor | null
   /** 故事是否已走到结局（结局后为自由聊天态，应进 /game）。 */
   story_finished: boolean
   state: {
@@ -54,13 +64,15 @@ export interface LoadResult {
 import type { GameOption, PresentationStateView } from './game'
 
 /** 存档目标路由：故事未完结 → /story（继续剧本）；已完结 / 旧玩法 → /game（自由聊天）。 */
-export type SaveTargetRoute = '/story' | '/game'
+export type SaveTargetRoute = '/story' | '/story?story_id=prologue' | '/game'
 
 export function saveTargetRoute(
-  storyCursor: { node_index: number } | null,
+  storyCursor: StoryCursor | null,
   storyFinished: boolean,
 ): SaveTargetRoute {
-  if (storyCursor && !storyFinished) return '/story'
+  if (storyCursor && !storyFinished) {
+    return storyCursor.story_id === 'prologue' ? '/story?story_id=prologue' : '/story'
+  }
   return '/game'
 }
 

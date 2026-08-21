@@ -43,6 +43,7 @@ from app.script.fixture import build_script_nodes
 from app.script.runtime import ScriptRuntime
 from app.script.service import ScriptService
 from app.script.story_runtime import StoryRuntime
+from app.script.prologue_runtime import PrologueRuntime
 from app.game.speaker_selector import SpeakerSelector
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -150,6 +151,9 @@ def create_app() -> FastAPI:
         # 快速上线固定剧本（临时组件）：AI 停用期间 /api/story 三端点驱动
         # 07 剧本（docs/story/07，评审稿）。与旧调查玩法并行，互不依赖。
         story_runtime=StoryRuntime(),
+        # docs/19：序章与既有第一章故事 Runtime 并行；story_id=prologue
+        # 才会进入无序探班流程，旧 story_cursor 继续由 StoryRuntime 恢复。
+        prologue_runtime=PrologueRuntime(),
         # Auto Save (docs/13 §21, Task 8): the orchestrator fires the
         # checkpoint side effect after narrative commits, using the player_id
         # the API layer forwards. Wired below once the save service exists.

@@ -36,7 +36,7 @@ describe('ChapterSelectView', () => {
     }
   })
 
-  it('进入序章时清理旧会话并进入原 AI 对话玩法', async () => {
+  it('进入序章时清理旧会话并进入固定剧本', async () => {
     localStorage.setItem('gal_session_id', 'old-session')
     const game = useGameStore()
     game.sessionId = 'old-session'
@@ -46,7 +46,7 @@ describe('ChapterSelectView', () => {
 
     expect(localStorage.getItem('gal_session_id')).toBeNull()
     expect(game.sessionId).toBeNull()
-    expect(pushMock).toHaveBeenCalledWith('/game')
+    expect(pushMock).toHaveBeenCalledWith('/story?story_id=prologue')
   })
 
   it('返回按钮回到标题页', async () => {

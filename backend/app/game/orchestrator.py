@@ -54,6 +54,8 @@ from app.script.runtime import ScriptIntent, ScriptPlan, ScriptRuntime
 from app.script.schema import ScriptError
 from app.script.service import ScriptService
 from app.script.story_runtime import StoryRuntime
+from app.script.prologue_content import PROLOGUE_CHARACTERS, PROLOGUE_ID
+from app.script.prologue_runtime import PrologueRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +149,9 @@ class GameOrchestrator:
         # 快速上线固定剧本（story_runtime.py，临时组件）：None 保持旧行为
         #（既有直接构造测试不受影响），由 main.py 在运行应用中注入。
         story_runtime: StoryRuntime | None = None,
+        # docs/19：新的序章固定剧本；与 legacy story runtime 分开，保证既有
+        # 第一章 story_cursor={node_index} 存档仍按原内容恢复。
+        prologue_runtime: PrologueRuntime | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -188,6 +193,7 @@ class GameOrchestrator:
         # pre-Task-8 behaviour for existing direct-construction tests.
         self._save_service = save_service
         self._story_runtime = story_runtime
+        self._prologue_runtime = prologue_runtime
         self._player_by_session: dict[str, str] = {}
         # T2review P1-3：per-session 锁——Turn 的 Provider 读取、状态提交、
         # 消息写入与持久化必须串行化，不允许交错。
@@ -225,6 +231,9 @@ class GameOrchestrator:
         # session is minted, never trusting a stale client id.
         session = self._resolve_session(session_id)
         self._bind_player(session.session_id, player_id)
+        postlude_character = self._prologue_chat_character(session.session_id)
+        if postlude_character is not None and character_id is None:
+            character_id = postlude_character
         if character_id is None and self._speaker_selector is not None:
             state = self._state.state_for(session.session_id)
             available = set(state.chapter1.available_characters) or {self._characters.default_character}
@@ -253,7 +262,9 @@ class GameOrchestrator:
         # the scene falls back to the default.
         narrative_state = self._state.get(session.session_id)
         scene = self._scenes.resolve(
-            narrative_state.current_scene if narrative_state is not None else DEFAULT_SCENE
+            "prologue_aftertalk"
+            if postlude_character is not None
+            else (narrative_state.current_scene if narrative_state is not None else DEFAULT_SCENE)
         )
         context = CONTEXT_BUILDERS[character_id](scene, narrative_state)
         inquiry = self._inquiry(session.session_id, message, character_id)
@@ -830,6 +841,37 @@ class GameOrchestrator:
     def _investigation_state_view(
         self, state: NarrativeState, session_id: str | None = None
     ) -> dict:
+        postlude_character = (
+            self._prologue_chat_character(session_id) if session_id is not None else None
+        )
+        if postlude_character is not None:
+            return {
+                "scene_id": "prologue_aftertalk",
+                "available_hotspots": [],
+                "hotspots": {},
+                "acquired_evidence": [],
+                "claims": [],
+                "resolved_contradictions": [],
+                "private_interview_rights": [],
+                "private_interview_challenges": {},
+                "available_characters": [postlude_character],
+                "options": [],
+                "evidence_presentation": {"unlocked": False, "character_ids": []},
+                "chat_character_id": postlude_character,
+                "presentation_state": {
+                    "scene": "prologue_aftertalk",
+                    "background_effect": None,
+                    "characters": [
+                        {
+                            "character_id": postlude_character,
+                            "visible": True,
+                            "emotion": self._character_emotion(session_id, postlude_character),
+                            "slot": "CENTER",
+                        }
+                    ],
+                    "input_mode": "investigation",
+                },
+            }
         chapter = state.chapter1
         presentation_unlocked = "FIRST_IMPOSSIBLE_EVENT_RESOLVED" in state.revealed_facts
         # T2review P1-10：在场角色 = available_characters；唯一例外是 opening
@@ -1158,6 +1200,13 @@ class GameOrchestrator:
         state yet (fresh or not restored) has no flags, so a gated character is
         rejected until the flag is committed by a Narrative Event.
         """
+        postlude_character = self._prologue_chat_character(session_id)
+        if postlude_character is not None:
+            if character_id != postlude_character:
+                raise CharacterUnavailable(
+                    f"only {postlude_character} is available in prologue aftertalk"
+                )
+            return
         state = self._state.get(session_id)
         if state is not None and state.chapter1.phase == "bad_end":
             if character_id != "chatgpt":
@@ -1173,6 +1222,12 @@ class GameOrchestrator:
             raise CharacterUnavailable(
                 f"character {character_id} is not available yet"
             )
+
+    def _prologue_chat_character(self, session_id: str | None) -> str | None:
+        if session_id is None or self._prologue_runtime is None:
+            return None
+        character_id = self._prologue_runtime.chat_character(session_id)
+        return character_id if character_id in PROLOGUE_CHARACTERS else None
 
     def _restore_session(self, persisted: PersistedSession) -> GameSession:
         """Bring a persisted snapshot back into this process (docs/02 §21).
@@ -1196,7 +1251,12 @@ class GameOrchestrator:
         if self._script_runtime is not None:
             self._script_runtime.restore(session.session_id, persisted.script_cursor)
         if self._story_runtime is not None:
-            self._story_runtime.restore(session.session_id, persisted.story_cursor)
+            legacy_cursor = persisted.story_cursor
+            if isinstance(legacy_cursor, dict) and legacy_cursor.get("story_id"):
+                legacy_cursor = None
+            self._story_runtime.restore(session.session_id, legacy_cursor)
+        if self._prologue_runtime is not None:
+            self._prologue_runtime.restore(session.session_id, persisted.story_cursor)
         self._character_state.restore(session.session_id, persisted.character_states)
         return session
 
@@ -1227,11 +1287,7 @@ class GameOrchestrator:
                 else None
             ),
             character_states=self._character_state.snapshot(session_id),
-            story_cursor=(
-                self._story_runtime.snapshot(session_id)
-                if self._story_runtime is not None
-                else None
-            ),
+            story_cursor=self._active_story_snapshot(session_id),
         )
 
     def import_snapshot(self, snapshot: dict) -> str:
@@ -1273,28 +1329,48 @@ class GameOrchestrator:
 
     # ---- 快速上线固定剧本（story_runtime.py，临时组件） -------------------
 
-    def _require_story_runtime(self) -> StoryRuntime:
+    def _story_runtime_for(self, story_id: str | None = None):
+        if story_id == PROLOGUE_ID:
+            if self._prologue_runtime is None:
+                raise ValueError("prologue story mode is not wired")
+            return self._prologue_runtime
+        if story_id not in {None, "legacy"}:
+            raise ValueError(f"unknown story_id {story_id!r}")
         if self._story_runtime is None:
             raise ValueError("story mode is not wired")
         return self._story_runtime
+
+    def _active_story_snapshot(self, session_id: str) -> dict | None:
+        if self._prologue_runtime is not None:
+            cursor = self._prologue_runtime.snapshot(session_id)
+            if cursor is not None:
+                return cursor
+        if self._story_runtime is not None:
+            return self._story_runtime.snapshot(session_id)
+        return None
 
     def story_progress(self, session_id: str) -> dict:
         """故事进度摘要（存档路由用）：游标快照 + 是否已走到结局。
         仅读操作；story_cursor 为 None 表示该会话从未开始故事模式。
         未接线 story runtime 的部署（旧玩法测试环境）优雅降级为全 None。"""
-        runtime = self._story_runtime
-        if runtime is None:
+        cursor = self._active_story_snapshot(session_id)
+        if cursor is None:
             return {"story_cursor": None, "story_finished": False}
+        runtime = (
+            self._prologue_runtime
+            if cursor.get("story_id") == PROLOGUE_ID
+            else self._story_runtime
+        )
         return {
-            "story_cursor": runtime.snapshot(session_id),
-            "story_finished": runtime.finished(session_id),
+            "story_cursor": cursor,
+            "story_finished": bool(runtime and runtime.finished(session_id)),
         }
 
-    def story_current(self, session_id: str | None) -> dict:
+    def story_current(self, session_id: str | None, *, story_id: str | None = None) -> dict:
         """读取当前展示节点（不移动游标）。未知会话经 _resolve_session 造新
         会话但不动游标，前端用 started 判断是否需要 advance。"""
         session = self._resolve_session(session_id)
-        runtime = self._require_story_runtime()
+        runtime = self._story_runtime_for(story_id)
         started = runtime.started(session.session_id)
         node = runtime.current(session.session_id) if started else None
         return {
@@ -1306,7 +1382,11 @@ class GameOrchestrator:
         }
 
     def story_advance(
-        self, session_id: str | None, *, player_id: str | None = None
+        self,
+        session_id: str | None,
+        *,
+        player_id: str | None = None,
+        story_id: str | None = None,
     ) -> dict:
         """移动到下一节点并返回（首次 advance 即「开始游戏」）。
 
@@ -1315,7 +1395,7 @@ class GameOrchestrator:
         可用。"""
         session = self._resolve_session(session_id)
         self._bind_player(session.session_id, player_id)
-        runtime = self._require_story_runtime()
+        runtime = self._story_runtime_for(story_id)
         node, scene_changed = runtime.advance(session.session_id)
         self._record_story_node(session.session_id, node, chosen_label=None)
         self._persist_story_turn(
@@ -1331,13 +1411,19 @@ class GameOrchestrator:
         }
 
     def story_choose(
-        self, session_id: str, option_id: str, *, player_id: str | None = None
+        self,
+        session_id: str,
+        option_id: str,
+        *,
+        player_id: str | None = None,
+        story_id: str | None = None,
     ) -> dict:
         """提交一个 A/B/C 选项：游标跳到该选项的第一句台词并返回。"""
         session = self._resolve_session(session_id)
         self._bind_player(session.session_id, player_id)
-        runtime = self._require_story_runtime()
+        runtime = self._story_runtime_for(story_id)
         current = runtime.current(session.session_id)
+        previous_scene_id = current.get("scene_id")
         label = next(
             (
                 option["label"]
@@ -1357,7 +1443,7 @@ class GameOrchestrator:
             "finished": runtime.finished(session.session_id),
             "node": node,
             "scene": runtime.scene_info(node.get("scene_id")),
-            "scene_changed": False,
+            "scene_changed": previous_scene_id != node.get("scene_id"),
         }
 
     def _record_story_node(

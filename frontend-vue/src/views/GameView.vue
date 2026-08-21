@@ -11,7 +11,7 @@
 // 别怕」），也不自动弹出「选择行动」选项窗口 —— 直接进入自由对话；会话由
 // 首个玩家消息经 /api/chat 创建（后端 mint session 并在响应中返回 id）。
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useGameStore } from '../stores/game'
 import { useSavesStore } from '../stores/saves'
 import { usePresentationStore } from '../stores/presentation'
@@ -61,6 +61,7 @@ const saves = useSavesStore()
 const settings = useSettingsStore()
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const SESSION_KEY = 'gal_session_id'
 // AI 对话玩法常驻背景（2026-08-21 用户提供新图，原 background1.png 仅故事模式用）
@@ -161,6 +162,12 @@ async function reconcileStage() {
     if (epoch !== viewEpoch) return
     applyPresentationStateView(presentation.state, state.presentation_state, BG)
     options.value = state.options ?? []
+    if (state.chat_character_id) {
+      routedCharacter.value = state.chat_character_id
+      prologueChatLocked.value = true
+      return
+    }
+    prologueChatLocked.value = false
     // 粘性路由自动复位（D5）：路由对象离场 → 对应 chat_routing 选项消失
     if (routedCharacter.value) {
       const stillRoutable = options.value.some(
@@ -270,7 +277,10 @@ function onDialogProceed() {
 const options = ref<GameOption[]>([])
 const optionBusy = ref(false)
 const feedback = ref<string | null>(null)
-const routedCharacter = ref<string | null>(null)
+const routedCharacter = ref<string | null>(
+  typeof route.query.character === 'string' ? route.query.character : null,
+)
+const prologueChatLocked = ref(false)
 
 // D2 一次性推理模式：非空时下一条主输入框消息提交到 /api/game/deduction
 const pendingDeduction = ref<GameOption | null>(null)
@@ -281,7 +291,9 @@ const panelMessage = ref<string | null>(null)
 
 const routeLabel = computed(() => {
   if (!routedCharacter.value) return null
-  return `正在与 ${roleNameOf(routedCharacter.value)} 对话：再点同一选项回到公共对话`
+  return prologueChatLocked.value
+    ? `正在与 ${roleNameOf(routedCharacter.value)} 进行后日谈自由交流`
+    : `正在与 ${roleNameOf(routedCharacter.value)} 对话：再点同一选项回到公共对话`
 })
 
 // docs/16 P7/P8：选项窗口 + 线索窗口。窗口取代 docs/14 D6 气泡条；AI 台词播完
@@ -646,7 +658,8 @@ function applyLoadedSession(result: LoadResult) {
   }
   options.value = result.state?.options ?? []
   // 新 Active Session：本地粘性路由 / 推理 / 面板状态不复用
-  routedCharacter.value = null
+  routedCharacter.value = result.story_cursor?.chat_character_id ?? null
+  prologueChatLocked.value = Boolean(routedCharacter.value)
   pendingDeduction.value = null
   activePanel.value = null
   // 恢复最后一句角色台词（画面回到对话流，docs/13 §19.2 restore order 末端）

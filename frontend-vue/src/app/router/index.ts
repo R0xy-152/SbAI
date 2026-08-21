@@ -10,8 +10,8 @@ import { useAuthStore } from '../../stores/auth'
 
 // docs/13 §6：Title / Game / Load / Settings 四个 View。
 // Title 完成行为在 Task 5，存档页在 Task 7。
-// docs/15 §4.4.1：开始游戏先进入 /chapters；当前仅「序章」解锁并进入
-// /game。/story 保留给既有故事存档恢复，不再作为新开局入口。
+// docs/19：开始游戏先进入 /chapters；「序章」以 story_id=prologue 复用
+// /story 播放器。未带 story_id 的 /story 继续恢复既有第一章故事存档。
 export const router = createRouter({
   history: createWebHistory(),
   routes: [

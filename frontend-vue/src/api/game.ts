@@ -156,6 +156,8 @@ export async function fetchGameState(sessionId: string): Promise<{
   }>
   hotspots: Record<string, string>
   options: GameOption[]
+  /** 序章结尾后锁定的自由聊天对象；其余玩法省略。 */
+  chat_character_id?: string | null
 }> {
   const { data } = await http.get('/game/state', { params: { session_id: sessionId } })
   return data
