@@ -103,7 +103,13 @@ function onStageClick(event: MouseEvent) {
 }
 
 function onStageWheel(event: WheelEvent) {
-  if (event.deltaY <= 0 || shouldIgnoreStoryAdvance(event.target) || storyAdvanceBlocked()) return
+  if (shouldIgnoreStoryAdvance(event.target) || storyAdvanceBlocked()) return
+  if (event.deltaY < 0) {
+    event.preventDefault()
+    systemPanel.value = 'history'
+    return
+  }
+  if (event.deltaY === 0) return
   event.preventDefault()
   const now = performance.now()
   if (now - lastWheelAdvanceAt < 160) return
@@ -485,7 +491,7 @@ function onContinueChat() {
 
     <!-- 面板打开时的场景模糊层 -->
     <div
-      v-if="systemPanel"
+      v-if="systemPanel && systemPanel !== 'history'"
       class="pointer-events-none fixed inset-0 z-[25] bg-black/20 backdrop-blur-[6px]"
     ></div>
 

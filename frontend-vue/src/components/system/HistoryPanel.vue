@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
 import { fetchHistory } from '../../api/game'
 
 // 游戏内「历史」面板（docs/13 §13.3）：展示当前 Session 合法的已显示对话
@@ -20,6 +20,7 @@ interface HistoryLine {
 const lines = ref<HistoryLine[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+const scrollRef = ref<HTMLElement | null>(null)
 
 const ROLE_NAMES: Record<string, string> = {
   player: '你',
@@ -46,6 +47,8 @@ async function loadHistory() {
   try {
     const data = await fetchHistory(props.sessionId)
     lines.value = data.messages ?? []
+    await nextTick()
+    if (scrollRef.value) scrollRef.value.scrollTop = scrollRef.value.scrollHeight
   } catch (e) {
     error.value = e instanceof Error ? e.message : '读取历史失败'
   } finally {
@@ -64,14 +67,21 @@ watch(
 </script>
 
 <template>
-  <div class="gal-modal-mask" @click.self="emit('close')">
-    <div class="gal-panel max-h-[85vh] w-[min(92vw,640px)] p-5">
+  <div class="gal-modal-mask history-mask" data-no-story-advance @click.self="emit('close')">
+    <div class="gal-panel history-panel h-[min(78vh,720px)] w-[min(92vw,760px)] p-5">
       <header class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-bold tracking-[0.15em] text-[#dff7ff] drop-shadow">对话历史</h2>
-        <button class="gal-link-btn" @click="emit('close')">关闭</button>
+        <button
+          class="history-close"
+          type="button"
+          aria-label="关闭对话历史"
+          @click="emit('close')"
+        >
+          ×
+        </button>
       </header>
 
-      <main class="flex-1 overflow-y-auto pr-1">
+      <main ref="scrollRef" class="history-scroll min-h-0 flex-1 overflow-y-auto pr-2">
         <p v-if="loading" class="text-sm text-[#a9e8ff]/60">读取历史…</p>
         <p v-else-if="error" class="text-sm text-red-300">{{ error }}</p>
         <p v-else-if="lines.length === 0" class="text-sm text-[#d7effa]/50">暂无对话记录。</p>
@@ -90,3 +100,40 @@ watch(
     </div>
   </div>
 </template>
+
+<style scoped>
+.history-mask {
+  background: rgba(4, 8, 18, 0.18);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.history-panel {
+  background: linear-gradient(180deg, rgba(11, 20, 36, 0.66), rgba(7, 16, 30, 0.62));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.history-close {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: 999px;
+  color: rgba(223, 247, 255, 0.88);
+  font-size: 1.65rem;
+  line-height: 1;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.history-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.history-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+</style>
