@@ -43,6 +43,10 @@ class CharacterRequest:
     # the "current character state" layer (docs/04 §18.3). None when the state
     # is not tracked (e.g. scripted lines, or no mood committed yet).
     mood: CharacterMood | None = None
+    # The character's own reasoning from the previous turn, fed back so its
+    # train of thought is continuous (docs/04 §9 CharacterState.last_reasoning).
+    # Empty on the first turn or when the previous reply carried no reasoning.
+    last_reasoning: str = ""
     # A bounded question proposal, never Ground Truth and never a state change.
     inquiry: Inquiry | None = None
     # Immutable evidence explicitly shown to this character; the player
@@ -123,6 +127,21 @@ class CharacterMood:
         except (TypeError, ValueError):
             return None
         return CharacterMood(positive=positive, excitement=excitement).clamped()
+
+
+@dataclass
+class CharacterState:
+    """Per-character persistent runtime state (docs/04 §9).
+
+    Grows from the first concrete field (the two-axis mood) into the richer
+    internal state a "thinking" character needs. ``last_reasoning`` is the
+    character's own "why I replied this way" from the previous turn, fed back
+    so its train of thought stays continuous instead of resetting every turn.
+    Like ``mood``, it is internal only and never reaches the Frontend.
+    """
+
+    mood: CharacterMood | None = None
+    last_reasoning: str = ""
 
 
 @dataclass
@@ -424,6 +443,7 @@ class GenerativeRuntime(CharacterRuntime):
             and not request.narrative_directive
             and not request.recent_conversation
             and request.mood is None
+            and not request.last_reasoning
         ):
             return request.player_message
         parts: list[str] = []
@@ -435,6 +455,14 @@ class GenerativeRuntime(CharacterRuntime):
                 "你当前的心情：积极"
                 f"{request.mood.positive:.1f} / 激动{request.mood.excitement:.1f}"
                 "（范围都是 -1 到 1）。请让你的语气与你当前的心情一致。"
+            )
+        if request.last_reasoning:
+            # docs/04 §9: the character's own previous train of thought, so the
+            # reply continues a running inner monologue instead of resetting.
+            parts.append(
+                "你上一轮心里想的是："
+                + request.last_reasoning
+                + "。请延续这个想法，不要每轮都像重新开始。\n"
             )
         if request.narrative_context:
             parts.append("当前剧情：\n" + request.narrative_context)

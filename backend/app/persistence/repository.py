@@ -20,7 +20,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from app.characters.base import CharacterMood
+from app.characters.base import CharacterMood, CharacterState
 from app.game.memory import EpisodicMemory
 from app.narrative.state import Chapter1State, NarrativeState
 
@@ -45,7 +45,7 @@ class PersistedSession:
     script_cursor: dict | None = None
     # Per-character persistent mood (docs/04 §9, CharacterStateService), keyed
     # by character_id. Empty on snapshots written before this state existed.
-    character_states: dict[str, CharacterMood] = field(default_factory=dict)
+    character_states: dict[str, CharacterState] = field(default_factory=dict)
     # 快速上线固定剧本游标（story_runtime.py，临时组件）：{"node_index": int}。
     # None = 故事模式尚未开始（含旧快照），恢复后从头开始。
     story_cursor: dict | None = None
@@ -134,8 +134,8 @@ def _session_to_dict(session: PersistedSession) -> dict:
         "consumed_script_nodes": sorted(session.consumed_script_nodes),
         "script_cursor": session.script_cursor,
         "character_states": {
-            owner: _mood_to_dict(mood)
-            for owner, mood in session.character_states.items()
+            owner: _character_state_to_dict(state)
+            for owner, state in session.character_states.items()
         },
         "story_cursor": session.story_cursor,
     }
@@ -169,8 +169,8 @@ def _session_from_dict(data: dict) -> PersistedSession:
         # Backward compatible: snapshots written before the mood state existed
         # lack this key, so an absent value means "no mood committed yet".
         character_states={
-            owner: _mood_from_dict(mood)
-            for owner, mood in data.get("character_states", {}).items()
+            owner: _character_state_from_dict(value)
+            for owner, value in data.get("character_states", {}).items()
         },
         # Backward compatible: snapshots written before the story mode existed
         # lack this key, so an absent value means "story not started".
@@ -273,3 +273,24 @@ def _mood_from_dict(data: dict) -> CharacterMood:
         positive=float(data["positive"]),
         excitement=float(data["excitement"]),
     )
+
+
+def _character_state_to_dict(state: CharacterState) -> dict:
+    return {
+        "mood": _mood_to_dict(state.mood) if state.mood is not None else None,
+        "last_reasoning": state.last_reasoning,
+    }
+
+
+def _character_state_from_dict(data) -> CharacterState:
+    """Backward compatible: snapshots written before CharacterState existed
+    stored a flat mood dict ({"positive": .., "excitement": ..}); newer
+    snapshots nest mood under "mood" (None when not yet committed) and carry
+    "last_reasoning" (docs/04 §9)."""
+    if isinstance(data, dict) and "mood" in data:
+        mood = _mood_from_dict(data["mood"]) if data["mood"] is not None else None
+        return CharacterState(
+            mood=mood,
+            last_reasoning=data.get("last_reasoning", ""),
+        )
+    return CharacterState(mood=_mood_from_dict(data))

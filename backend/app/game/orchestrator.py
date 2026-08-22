@@ -323,6 +323,12 @@ class GameOrchestrator:
                     mood=self._character_state.mood_for(
                         session.session_id, character_id
                     ),
+                    # Current Character State (docs/04 §9): the character's own
+                    # reasoning from the previous turn, fed back so its train of
+                    # thought stays continuous across turns.
+                    last_reasoning=self._character_state.reasoning_for(
+                        session.session_id, character_id
+                    ),
                     inquiry=inquiry,
                     presented_evidence=self._presented_evidence_for(
                         narrative_state, character_id
@@ -445,6 +451,13 @@ class GameOrchestrator:
             # rejected reply never changes the character's persistent state.
             self._character_state.commit_mood(
                 session.session_id, character_id, response.next_mood
+            )
+        if approved:
+            # Validate-Before-Commit (docs/04 §51): the model's reasoning is a
+            # proposal that lands only after the reply passes validation, so a
+            # rejected reply never changes the character's train of thought.
+            self._character_state.commit_reasoning(
+                session.session_id, character_id, response.reasoning
             )
         if approved and decision.kind == "event":
             self._engine.commit(self._state.state_for(session.session_id), decision)
@@ -835,8 +848,9 @@ class GameOrchestrator:
     def _character_emotion(self, session_id: str | None, character_id: str) -> str:
         if session_id is None:
             return "neutral"
-        moods = self._character_state.snapshot(session_id) or {}
-        return self._mood_emotion(moods.get(character_id))
+        states = self._character_state.snapshot(session_id) or {}
+        state = states.get(character_id)
+        return self._mood_emotion(state.mood if state is not None else None)
 
     def _investigation_state_view(
         self, state: NarrativeState, session_id: str | None = None
