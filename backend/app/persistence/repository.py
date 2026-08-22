@@ -279,6 +279,7 @@ def _character_state_to_dict(state: CharacterState) -> dict:
     return {
         "mood": _mood_to_dict(state.mood) if state.mood is not None else None,
         "last_reasoning": state.last_reasoning,
+        "relationship_stage": state.relationship_stage,
     }
 
 
@@ -292,5 +293,6 @@ def _character_state_from_dict(data) -> CharacterState:
         return CharacterState(
             mood=mood,
             last_reasoning=data.get("last_reasoning", ""),
+            relationship_stage=data.get("relationship_stage", ""),
         )
     return CharacterState(mood=_mood_from_dict(data))

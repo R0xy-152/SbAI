@@ -50,6 +50,7 @@ class MockProvider(LLMProvider):
                 "action_proposals": [],
                 "fact_refs": [],
                 "reasoning": "这是本地模拟的推理说明。",
+                "relationship": "familiar",
                 "mood": {"positive": 0.2, "excitement": -0.1},
             },
             ensure_ascii=False,
