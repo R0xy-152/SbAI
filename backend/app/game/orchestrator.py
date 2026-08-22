@@ -278,7 +278,9 @@ class GameOrchestrator:
         # TV-13: deterministic memory selection (docs/05 §37-38) — only this
         # character's memories, importance/recency ordered, LIMIT N.
         memory_store = self._memory.store_for(session.session_id)
-        memories = memory_store.retrieve(character_id, limit=MEMORY_RETRIEVAL_LIMIT)
+        memories = memory_store.retrieve(
+            character_id, limit=MEMORY_RETRIEVAL_LIMIT, query=message
+        )
         # docs/05 §31: the player-model notes this character formed about the
         # Player from its own player_* memories (owner-scoped, never others').
         player_notes = format_memories(

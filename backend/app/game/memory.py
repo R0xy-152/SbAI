@@ -31,6 +31,24 @@ DEFAULT_IMPORTANCE = 5
 KNOWN_CHARACTERS = frozenset({"deepseek", "claude"})
 
 
+def _bigrams(text: str) -> set[str]:
+    """Character bigrams, ignoring whitespace — a tokenizer-free unit that
+    works for Chinese text without a word segmenter (docs/05 §40)."""
+    chars = [ch for ch in text if not ch.isspace()]
+    return {chars[i] + chars[i + 1] for i in range(len(chars) - 1)}
+
+
+def relevance_score(query: str, text: str) -> float:
+    """Jaccard overlap of character bigrams — a lightweight, deterministic
+    relevance signal. No embeddings / vector DB (docs/05 §39, §41: semantic
+    retrieval is not required before pgvector). 0.0 when nothing overlaps."""
+    q = _bigrams(query)
+    t = _bigrams(text)
+    if not q or not t:
+        return 0.0
+    return len(q & t) / len(q | t)
+
+
 class MemoryRejected(Exception):
     """A Memory Proposal failed the Write Gate (docs/05 §34-35).
 
@@ -115,11 +133,24 @@ class MemoryStore:
         return memory
 
     def retrieve(
-        self, owner_character_id: str, limit: int = 5
+        self, owner_character_id: str, limit: int = 5, query: str | None = None
     ) -> list[EpisodicMemory]:
-        """Deterministic retrieval (docs/05 §38): only the owning character's
-        memories, ordered importance DESC then created_at DESC, LIMIT N."""
+        """Deterministic retrieval (docs/05 §38) plus optional lightweight
+        relevance (docs/05 §40-41): only the owning character's memories. With
+        no query, order importance DESC then created_at DESC (LIMIT N). With a
+        query, surface the memories most relevant to the query first (character
+        bigram overlap, no embeddings / vector DB), falling back to
+        importance/recency when nothing overlaps."""
         memories = self._memories.get(owner_character_id, [])
+        if query:
+            scored = [
+                (memory, relevance_score(query, memory.content))
+                for memory in memories
+            ]
+            scored.sort(
+                key=lambda pair: (-pair[1], -pair[0].importance, -pair[0].created_at)
+            )
+            return [memory for memory, _ in scored[:limit]]
         ordered = sorted(memories, key=lambda m: (-m.importance, -m.created_at))
         return ordered[:limit]
 
