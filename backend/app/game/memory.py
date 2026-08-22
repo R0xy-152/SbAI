@@ -123,6 +123,22 @@ class MemoryStore:
         ordered = sorted(memories, key=lambda m: (-m.importance, -m.created_at))
         return ordered[:limit]
 
+    def retrieve_player_notes(
+        self, owner_character_id: str, limit: int = 10
+    ) -> list[EpisodicMemory]:
+        """The player-model notes this character formed about the Player
+        (docs/05 §31): memories whose type starts with "player_" — names,
+        preferences, fears, attitudes. These are always relevant to "who am I
+        talking to", so they are surfaced separately from the recency-ranked
+        general memories (docs/05 §38). Still owner-scoped (docs/05 §16-17)."""
+        memories = [
+            memory
+            for memory in self._memories.get(owner_character_id, [])
+            if memory.memory_type.startswith("player_")
+        ]
+        ordered = sorted(memories, key=lambda m: -m.created_at)
+        return ordered[:limit]
+
     def snapshot(self) -> dict[str, list[EpisodicMemory]]:
         """The full store content, for persistence (TV-14)."""
         return {owner: list(memories) for owner, memories in self._memories.items()}
