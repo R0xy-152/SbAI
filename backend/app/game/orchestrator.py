@@ -35,6 +35,7 @@ from app.game.memory import (
     format_memories,
     validate_memory_proposal,
 )
+from app.game.knowledge import KnowledgeService
 from app.game.state.character_state import CharacterStateService
 from app.game.state.service import StateService
 from app.game.state.session import GameSession, SessionStore
@@ -179,6 +180,7 @@ class GameOrchestrator:
         # orchestrator: it coordinates, it does not store per-session state.
         self._state = StateService()
         self._memory = MemoryService()
+        self._knowledge = KnowledgeService()
         # Per-character persistent state (docs/04 §9): the two-axis mood the
         # model proposes and the orchestrator commits/restores per session.
         self._character_state = CharacterStateService()
@@ -873,6 +875,14 @@ class GameOrchestrator:
             raise ValueError("character is not available")
         presented_to = chapter.presented_evidence.setdefault(evidence_id, set())
         presented_to.add(character_id)
+        # Knowledge ledger (who-knows-what): presenting evidence is a legal
+        # information transfer — the character now knows this evidence. It is
+        # never auto-shared to other characters (docs/05 §51).
+        session = self._sessions.get(session_id)
+        turn = session.player_turn_count() if session is not None else 0
+        self._knowledge.ledger_for(session_id).record(
+            character_id, evidence_id, source="presented_evidence", turn=turn
+        )
         if self._repository is not None:
             self._repository.save(self._snapshot(session_id))
         return PresentEvidenceResult(
@@ -1317,6 +1327,7 @@ class GameOrchestrator:
         )
         self._state.restore(session.session_id, persisted.narrative_state)
         self._memory.restore(session.session_id, persisted.memories)
+        self._knowledge.restore(session.session_id, persisted.knowledge)
         if self._script is not None:
             self._script.restore(
                 session.session_id, persisted.consumed_script_nodes
@@ -1349,6 +1360,11 @@ class GameOrchestrator:
             or self._characters.default_character,
             narrative_state=state,
             memories=store.snapshot() if store is not None else {},
+            knowledge=(
+                self._knowledge.get(session_id).snapshot()
+                if self._knowledge.get(session_id) is not None
+                else {}
+            ),
             consumed_script_nodes=(
                 self._script.snapshot(session_id)
                 if self._script is not None
