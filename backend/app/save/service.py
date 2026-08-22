@@ -117,7 +117,11 @@ class SaveSnapshotService:
             "present_characters": sorted(
                 set(chapter.available_characters) | {"deepseek"}
             ),
-            "emotion": {cid: _mood_to_dict(m) for cid, m in moods.items()},
+            "emotion": {
+                cid: _mood_to_dict(m.mood)
+                for cid, m in moods.items()
+                if m.mood is not None
+            },
             "last_dialogue": last_dialogue,
         }
 
