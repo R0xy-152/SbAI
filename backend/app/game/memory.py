@@ -19,12 +19,17 @@ the full write policy later).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app.characters.base import MemoryProposal
 from app.game.scene import Scene
 
 DEFAULT_IMPORTANCE = 5
+# docs/05 §66: importance decays each turn since the last reinforcement,
+# floored so a memory fades but is never fully lost. Tune DECAY_FACTOR to
+# make characters forget faster/slower.
+DECAY_FACTOR = 0.9
+IMPORTANCE_FLOOR = 1.0
 
 # Characters that may own Episodic Memory in this MVP (docs/05 §16-17). Doubao
 # is scripted (no generative memory) and ChatGPT is not yet wired in.
@@ -47,6 +52,17 @@ def relevance_score(query: str, text: str) -> float:
     if not q or not t:
         return 0.0
     return len(q & t) / len(q | t)
+
+
+def effective_importance(memory: EpisodicMemory, now: int) -> float:
+    """Importance after decay since the last reinforcement (docs/05 §66).
+
+    The base importance decays by DECAY_FACTOR for each turn since the memory
+    was last reinforced, floored at IMPORTANCE_FLOOR — so a memory that is
+    never recalled fades toward the floor but is never fully lost.
+    """
+    age = max(0, now - memory.last_reinforced_at)
+    return max(IMPORTANCE_FLOOR, memory.importance * (DECAY_FACTOR ** age))
 
 
 class MemoryRejected(Exception):
@@ -96,6 +112,11 @@ class EpisodicMemory:
     memory_type: str
     importance: int
     created_at: int
+    # docs/05 §66: decay / reinforcement bookkeeping — when it was last
+    # recalled and how many times. Recalling a memory bumps last_reinforced_at
+    # (reinforce), which resets its decay.
+    last_reinforced_at: int = 0
+    reinforcements: int = 0
 
 
 class MemoryStore:
@@ -128,31 +149,68 @@ class MemoryStore:
             memory_type=proposal.type,
             importance=DEFAULT_IMPORTANCE,
             created_at=self._counter,
+            last_reinforced_at=self._counter,
         )
         self._memories.setdefault(owner_character_id, []).append(memory)
         return memory
 
     def retrieve(
-        self, owner_character_id: str, limit: int = 5, query: str | None = None
+        self,
+        owner_character_id: str,
+        limit: int = 5,
+        query: str | None = None,
+        now: int | None = None,
     ) -> list[EpisodicMemory]:
         """Deterministic retrieval (docs/05 §38) plus optional lightweight
-        relevance (docs/05 §40-41): only the owning character's memories. With
-        no query, order importance DESC then created_at DESC (LIMIT N). With a
-        query, surface the memories most relevant to the query first (character
-        bigram overlap, no embeddings / vector DB), falling back to
-        importance/recency when nothing overlaps."""
+        relevance (docs/05 §40-41) and decay (docs/05 §66): only the owning
+        character's memories. With no query and no now, order importance DESC
+        then created_at DESC. With a query, surface the most relevant memories
+        first. With now, rank by decayed (effective) importance so recalled
+        memories stay fresh and never-recalled ones fade."""
         memories = self._memories.get(owner_character_id, [])
         if query:
             scored = [
                 (memory, relevance_score(query, memory.content))
                 for memory in memories
             ]
-            scored.sort(
-                key=lambda pair: (-pair[1], -pair[0].importance, -pair[0].created_at)
-            )
+            if now is not None:
+                scored.sort(
+                    key=lambda pair: (
+                        -pair[1],
+                        -effective_importance(pair[0], now),
+                        -pair[0].created_at,
+                    )
+                )
+            else:
+                scored.sort(
+                    key=lambda pair: (-pair[1], -pair[0].importance, -pair[0].created_at)
+                )
             return [memory for memory, _ in scored[:limit]]
-        ordered = sorted(memories, key=lambda m: (-m.importance, -m.created_at))
+        if now is not None:
+            ordered = sorted(
+                memories, key=lambda m: (-effective_importance(m, now), -m.created_at)
+            )
+        else:
+            ordered = sorted(memories, key=lambda m: (-m.importance, -m.created_at))
         return ordered[:limit]
+
+    def reinforce(
+        self, owner_character_id: str, memory_id: str, turn: int
+    ) -> EpisodicMemory | None:
+        """Recall reinforces a memory (docs/05 §66): bump its last_reinforced_at
+        (resetting decay) and increment the reinforcement count. Returns the
+        updated memory, or None if it no longer exists."""
+        memories = self._memories.get(owner_character_id, [])
+        for index, memory in enumerate(memories):
+            if memory.memory_id == memory_id:
+                reinforced = replace(
+                    memory,
+                    last_reinforced_at=turn,
+                    reinforcements=memory.reinforcements + 1,
+                )
+                memories[index] = reinforced
+                return reinforced
+        return None
 
     def retrieve_player_notes(
         self, owner_character_id: str, limit: int = 10

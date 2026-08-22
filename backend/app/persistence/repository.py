@@ -254,6 +254,8 @@ def _memory_to_dict(memory: EpisodicMemory) -> dict:
         "memory_type": memory.memory_type,
         "importance": memory.importance,
         "created_at": memory.created_at,
+        "last_reinforced_at": memory.last_reinforced_at,
+        "reinforcements": memory.reinforcements,
     }
 
 
@@ -266,6 +268,9 @@ def _memory_from_dict(data: dict) -> EpisodicMemory:
         memory_type=data["memory_type"],
         importance=data["importance"],
         created_at=data["created_at"],
+        # Backward compatible: snapshots before decay existed lack these keys.
+        last_reinforced_at=data.get("last_reinforced_at", data["created_at"]),
+        reinforcements=data.get("reinforcements", 0),
     )
 
 
