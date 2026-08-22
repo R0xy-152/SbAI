@@ -353,6 +353,25 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
 )
 
 
+# Shared dialogue-style rules appended to every generative character's system
+# prompt (docs/04 §18.1 Global Runtime Rules). The goal is to make a reply read
+# like a person with their own intent and knowledge blind spots, not an
+# omniscient, even-tempered assistant: no template politeness, a reason to be
+# talking, admitted uncertainty, recall of what was already said, and short
+# human-length turns.
+CONVERSATION_STYLE_RULES = (
+    "\n\n对话风格（每一句回复都必须遵守）：\n"
+    "1. 禁止助手腔：不要出现“作为AI”“很高兴为你”“当然可以”“请问还有什么需要帮助”"
+    "之类的客套；像有自己情绪和想法的人一样说话，而不是客服。\n"
+    "2. 你有自己的目的，不是在答题：你可以追问、转移话题、拒绝回答、"
+    "只透露一部分，也可以反问“那你呢”；不要有问必答、问什么答什么。\n"
+    "3. 不确定就承认：不知道、没听清、想不起来的事，就表现出犹豫或不确定，"
+    "不要装作全知全能。\n"
+    "4. 记得并引用：如果玩家之前说过的话和现在相关，自然地提起它（比如“你刚才说……”）。\n"
+    "5. 一次只说 1–3 句，像真人对话一样短促、留白，不要长篇大论。\n"
+)
+
+
 def format_conversation(recent: list[dict]) -> str:
     """Render the recent messages into the transcript the model sees
     (docs/05 §7: player messages, character messages, and (later) audible
@@ -391,7 +410,7 @@ class GenerativeRuntime(CharacterRuntime):
         self._provider = provider
 
     def _system_prompt(self) -> str:
-        return self.persona_system + STRUCTURED_OUTPUT_INSTRUCTIONS
+        return self.persona_system + CONVERSATION_STYLE_RULES + STRUCTURED_OUTPUT_INSTRUCTIONS
 
     def _build_user_message(self, request: CharacterRequest) -> str:
         """Compose the user turn: the authorized narrative context (docs/04 §8),
