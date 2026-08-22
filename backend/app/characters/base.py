@@ -47,6 +47,13 @@ class CharacterRequest:
     # train of thought is continuous (docs/04 §9 CharacterState.last_reasoning).
     # Empty on the first turn or when the previous reply carried no reasoning.
     last_reasoning: str = ""
+    # The character's committed relationship stage toward the Player (docs/05
+    # §45), injected as "current character state" so its attitude is continuous.
+    relationship_stage: str = ""
+    # The player-model notes this character has formed about the Player from
+    # its own player_* memories only (docs/05 §16-17, §31) — never other
+    # characters' private knowledge.
+    player_notes: str = ""
     # A bounded question proposal, never Ground Truth and never a state change.
     inquiry: Inquiry | None = None
     # Immutable evidence explicitly shown to this character; the player
@@ -85,6 +92,13 @@ ALLOWED_EMOTIONS = frozenset(
     {"neutral", "happy", "annoyed", "angry", "embarrassed", "serious", "surprised", "jealous", "nervous", "sad"}
 )
 ALLOWED_ANIMATIONS = frozenset({"none", "shake", "strong_shake", "fade_in", "fade_out", "small_jump", "slide_in_left", "slide_in_right"})
+
+# Named relationship stages (docs/05 §45): the character's committed attitude
+# toward the Player. Model-proposed like mood; only the committed value is fed
+# back. Deterministic narrative advancement can layer on top later.
+ALLOWED_RELATIONSHIP_STAGES = frozenset(
+    {"stranger", "neutral", "familiar", "trusting", "attached", "jealous", "wary", "hostile"}
+)
 
 
 @dataclass
@@ -142,6 +156,9 @@ class CharacterState:
 
     mood: CharacterMood | None = None
     last_reasoning: str = ""
+    # The character's committed relationship stage toward the Player (docs/05
+    # §45): model-proposed, committed after validation, fed back next turn.
+    relationship_stage: str = ""
 
 
 @dataclass
@@ -175,6 +192,10 @@ class CharacterResponse:
     # CharacterStateService only when the reply passes validation. None = keep
     # the previous mood (the model did not output a valid mood).
     next_mood: CharacterMood | None = None
+    # The model's updated relationship stage after this turn (docs/05 §45).
+    # Tolerant like mood: committed only when it is in the allow-list; None =
+    # keep the previous stage (the model did not output a valid stage).
+    next_relationship_stage: str | None = None
 
 
 class CharacterResponseValidationError(Exception):
@@ -234,6 +255,7 @@ def parse_character_response(raw: str, expected_character_id: str) -> CharacterR
         claim_refs=_parse_claim_refs(data.get("claim_refs")),
         reasoning=_parse_reasoning(data.get("reasoning")),
         next_mood=CharacterMood.from_dict(data.get("mood")),
+        next_relationship_stage=_parse_relationship_stage(data.get("relationship")),
     )
 
 
@@ -241,6 +263,14 @@ def _parse_reasoning(value) -> str:
     """The optional reasoning text; absent or non-string becomes "". Tolerant:
     a missing reasoning never rejects the reply (docs/04 §48)."""
     return value.strip() if isinstance(value, str) else ""
+
+
+def _parse_relationship_stage(value) -> str | None:
+    """The optional relationship stage; tolerant like mood — absent or not in
+    the allow-list becomes None so it never rejects the reply (docs/04 §48)."""
+    if not isinstance(value, str) or value not in ALLOWED_RELATIONSHIP_STAGES:
+        return None
+    return value
 
 
 def _parse_memory_proposals(value) -> list[MemoryProposal]:
@@ -351,6 +381,7 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
     '{"character_id": "deepseek", "dialogue": "你要说的话", "emotion": "neutral", '
     '"animation_proposal": "none", "memory_proposals": [], "action_proposals": [], '
     '"fact_refs": [], "reasoning": "你为什么要这样回复", '
+    '"relationship": "familiar", '
     '"mood": {"positive": 0.0, "excitement": 0.0}}\n'
     "字段要求：\n"
     "- dialogue：你要说的话本身，保持你的口癖，是完整的自然句子。\n"
@@ -361,14 +392,17 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
     "  元素必须是 {\"type\": \"类别\", \"content\": \"一句话说明\"}，"
     "例如 {\"type\": \"player_name\", \"content\": \"Player说自己叫阿明\"}；"
     "content 必须是一句完整的话，不要使用 value 等其它字段名。\n"
+    "  关于 Player 的信息（名字、喜好、害怕、态度等）type 一律用 player_ 开头。\n"
     "- action_proposals：当前阶段通常为空数组。\n"
     "- fact_refs：当前阶段为空数组。\n"
     "- reasoning：用 1-2 句说明你为什么要这样回复（结合你的人设、当前语境和你此刻的心情）。"
     "玩家看不到这段话，它只用来让你先想清楚再开口。\n"
+    "- relationship：你回复完之后与 Player 的关系阶段，只能是 stranger、neutral、familiar、trusting、attached、jealous、wary、hostile 之一，"
+    "要让关系随对话自然变化。\n"
     "- mood：你回复完之后的新心情，是一个 {\"positive\": 数值, \"excitement\": 数值} 对象，"
     "两个数值都在 -1 到 1 之间（positive=积极值，excitement=激动值），"
     "要让心情随对话自然变化。\n"
-    "9 个字段都必须出现。"
+    "10 个字段都必须出现。"
 )
 
 
@@ -444,6 +478,8 @@ class GenerativeRuntime(CharacterRuntime):
             and not request.recent_conversation
             and request.mood is None
             and not request.last_reasoning
+            and not request.relationship_stage
+            and not request.player_notes
         ):
             return request.player_message
         parts: list[str] = []
@@ -455,6 +491,14 @@ class GenerativeRuntime(CharacterRuntime):
                 "你当前的心情：积极"
                 f"{request.mood.positive:.1f} / 激动{request.mood.excitement:.1f}"
                 "（范围都是 -1 到 1）。请让你的语气与你当前的心情一致。"
+            )
+        if request.relationship_stage:
+            # docs/05 §45: the committed relationship stage is current character
+            # state — the reply's attitude toward the Player stays continuous.
+            parts.append(
+                "你此刻与 Player 的关系阶段："
+                + request.relationship_stage
+                + "。请让你的态度与这个阶段一致，并随对话自然推进。"
             )
         if request.last_reasoning:
             # docs/04 §9: the character's own previous train of thought, so the
@@ -470,6 +514,10 @@ class GenerativeRuntime(CharacterRuntime):
             parts.append("当前环境：\n" + request.environment_info)
         if request.memory_context:
             parts.append("回忆：\n" + request.memory_context)
+        if request.player_notes:
+            # docs/05 §31: what this character has formed about the Player from
+            # its own player_* memories — always relevant to "who am I talking to".
+            parts.append("你对 Player 的了解：\n" + request.player_notes)
         if request.narrative_directive:
             # docs/04 §18: the directive sits after the authorized context and
             # before the conversation — it states this turn's story goal, not

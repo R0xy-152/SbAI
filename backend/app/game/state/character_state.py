@@ -65,6 +65,20 @@ class CharacterStateService:
         if reasoning:
             self._ensure_state(session_id, character_id).last_reasoning = reasoning
 
+    def relationship_stage_for(self, session_id: str, character_id: str) -> str:
+        """The character's committed relationship stage, or "" if none yet."""
+        state = self.state_for(session_id, character_id)
+        return state.relationship_stage if state is not None else ""
+
+    def commit_relationship_stage(
+        self, session_id: str, character_id: str, stage: str
+    ) -> None:
+        """Store the character's updated relationship stage toward the Player
+        (docs/05 §45). The orchestrator calls this only after the reply passes
+        validation, so a rejected reply never changes the relationship."""
+        if stage:
+            self._ensure_state(session_id, character_id).relationship_stage = stage
+
     def snapshot(self, session_id: str) -> dict[str, CharacterState]:
         """The per-character states to persist (docs/02 §21)."""
         return dict(self._states.get(session_id, {}))
