@@ -40,6 +40,7 @@ from app.game.state.service import StateService
 from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.game.validation import ResponseRejected, validate_response
+from app.game.consistency import SemanticConsistencyChecker
 from app.narrative.chapter1_script import BEGIN_CHAPTER, Chapter1ScriptRuntime
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.interpreter import NarrativeInterpreter
@@ -152,6 +153,11 @@ class GameOrchestrator:
         # docs/19：新的序章固定剧本；与 legacy story runtime 分开，保证既有
         # 第一章 story_cursor={node_index} 存档仍按原内容恢复。
         prologue_runtime: PrologueRuntime | None = None,
+        # Semantic consistency gate (defense-in-depth, optional): when given,
+        # an LLM judge checks each approved reply for subtle leaks/fabrications
+        # beyond the deterministic validate_response. None keeps the existing
+        # behaviour (no extra LLM call per turn).
+        consistency_checker: SemanticConsistencyChecker | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -194,6 +200,7 @@ class GameOrchestrator:
         self._save_service = save_service
         self._story_runtime = story_runtime
         self._prologue_runtime = prologue_runtime
+        self._consistency_checker = consistency_checker
         self._player_by_session: dict[str, str] = {}
         # T2review P1-3：per-session 锁——Turn 的 Provider 读取、状态提交、
         # 消息写入与持久化必须串行化，不允许交错。
@@ -370,6 +377,39 @@ class GameOrchestrator:
             )
             response = runtime.safe_fallback()
             approved = False
+        if approved and self._consistency_checker is not None:
+            # Semantic consistency gate (defense-in-depth): the deterministic
+            # gate above is the hard boundary; this LLM judge catches subtler
+            # leaks/fabrications/contradictions. A rejected reply falls back.
+            authorized_parts: list[str] = []
+            if context.environment_info:
+                authorized_parts.append("环境：" + context.environment_info)
+            if context.narrative_context:
+                authorized_parts.append("剧情：" + context.narrative_context)
+            if memories:
+                authorized_parts.append("记忆：" + format_memories(memories))
+            if player_notes:
+                authorized_parts.append("对Player的了解：" + player_notes)
+            if presented_evidence:
+                authorized_parts.append(
+                    "已出示证据："
+                    + "、".join(item["evidence_id"] for item in presented_evidence)
+                )
+            verdict = self._consistency_checker.check(
+                character_id=character_id,
+                authorized_context="\n".join(authorized_parts),
+                player_message=message,
+                dialogue=response.dialogue,
+                reasoning=response.reasoning,
+            )
+            if verdict.verdict == "reject":
+                logger.warning(
+                    "semantic consistency rejected (%s): %s",
+                    character_id,
+                    verdict.reason,
+                )
+                response = runtime.safe_fallback()
+                approved = False
         # The character output succeeded, so its memory proposals may pass the
         # Write Gate (docs/05 §34) and a selected event may commit atomically
         # (docs/03 §28-29). A rejected response proposes and commits nothing.
