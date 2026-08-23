@@ -42,6 +42,7 @@ from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.game.validation import ResponseRejected, validate_response
 from app.game.consistency import SemanticConsistencyChecker
+from app.game.interjection import named_primary, pick_interjector
 from app.narrative.chapter1_script import BEGIN_CHAPTER, Chapter1ScriptRuntime
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.interpreter import NarrativeInterpreter
@@ -96,6 +97,10 @@ class TurnResult:
     # Script Runtime / legacy directive mapping. Frontends prefer this over the
     # flat legacy strings.
     presentation_actions: tuple[PresentationAction, ...] = ()
+    # Co-presence interjections (docs/04 §60): supplementary replies from other
+    # present characters, generated after the primary reply. Empty when no one
+    # interjects (single-character scenes, or the primary named nobody).
+    interjections: tuple[CharacterResponse, ...] = ()
 
 
 @dataclass
@@ -243,10 +248,20 @@ class GameOrchestrator:
         postlude_character = self._prologue_chat_character(session.session_id)
         if postlude_character is not None and character_id is None:
             character_id = postlude_character
-        if character_id is None and self._speaker_selector is not None:
-            state = self._state.state_for(session.session_id)
-            available = set(state.chapter1.available_characters) or {self._characters.default_character}
-            character_id = self._speaker_selector.choose(message, available)
+        if character_id is None and postlude_character is None:
+            # 在场角色 = 叙事状态里的 available_characters；无叙事时用 get 读取
+            # （不创建状态，保持「无叙事即无状态」不变式）。
+            existing_state = self._state.get(session.session_id)
+            available = (
+                set(existing_state.chapter1.available_characters)
+                if existing_state is not None
+                else set()
+            ) or {self._characters.default_character}
+            # docs/04 §61: the player may name a present character to direct
+            # the reply — deterministic, and it beats the LLM speaker proposal.
+            character_id = named_primary(message, available)
+            if character_id is None and self._speaker_selector is not None:
+                character_id = self._speaker_selector.choose(message, available)
         character_id = self._characters.resolve(
             requested=character_id,
             last=session.current_character or None,
@@ -601,6 +616,37 @@ class GameOrchestrator:
                 },
             )
 
+        # Co-presence interjection (docs/04 §60): after the primary reply is
+        # recorded, at most one other present character may interject — only
+        # when the primary reply named them. Interjections never advance the
+        # plot (no Narrative Event, no claim/evidence refs) and are dropped on
+        # any validation failure, exactly like a rejected primary reply.
+        interjections: list[CharacterResponse] = []
+        if approved and response.dialogue:
+            present = set(audience)
+            interjector = pick_interjector(character_id, response.dialogue, present)
+            if interjector is not None and interjector != character_id:
+                interjection = self._respond_interjection(
+                    session,
+                    message,
+                    interjector,
+                    scene,
+                    narrative_state,
+                    memory_store,
+                    turn,
+                )
+                if interjection is not None:
+                    interjections.append(interjection)
+                    self._sessions.append_message(
+                        session.session_id,
+                        {
+                            "role": "character",
+                            "character_id": interjector,
+                            "content": interjection.dialogue,
+                            "heard_by": sorted(audience),
+                        },
+                    )
+
         # A once script node is consumed only when its line was actually
         # presented (validate-before-commit also applies to the script table,
         # docs/03 §28): a rejected line must not burn the node. Consume before
@@ -637,7 +683,135 @@ class GameOrchestrator:
                 )
                 + list(script_plan.actions if script_plan is not None else ())
             ),
+            interjections=tuple(interjections),
         )
+
+    def _respond_interjection(
+        self,
+        session: GameSession,
+        player_message: str,
+        interjector: str,
+        scene,
+        narrative_state,
+        memory_store,
+        turn: int,
+    ) -> CharacterResponse | None:
+        """Generate one bounded interjection (docs/04 §60).
+
+        Mirrors the primary reply's request-building and validation gate, but
+        commits only memory / mood / reasoning / relationship — never
+        claim/evidence refs and never a Narrative Event. Returns None when the
+        interjection is rejected, so the caller drops it silently.
+        """
+        runtime = self._characters.get(interjector)
+        context = CONTEXT_BUILDERS[interjector](scene, narrative_state)
+        memories = memory_store.retrieve(
+            interjector,
+            limit=MEMORY_RETRIEVAL_LIMIT,
+            query=player_message,
+            now=turn,
+        )
+        for memory in memories:
+            memory_store.reinforce(interjector, memory.memory_id, turn)
+        player_notes = format_memories(
+            memory_store.retrieve_player_notes(interjector)
+        )
+        response = runtime.respond(
+            CharacterRequest(
+                character_id=interjector,
+                player_message=player_message,
+                # The player message and the primary reply are already recorded,
+                # so the interjector hears both through _heard_messages.
+                recent_conversation=self._heard_messages(
+                    session.messages, interjector
+                )[-RECENT_WINDOW_MESSAGES:],
+                environment_info=context.environment_info,
+                narrative_context=context.narrative_context,
+                memory_context=format_memories(memories),
+                narrative_directive="",
+                mood=self._character_state.mood_for(session.session_id, interjector),
+                last_reasoning=self._character_state.reasoning_for(
+                    session.session_id, interjector
+                ),
+                relationship_stage=self._character_state.relationship_stage_for(
+                    session.session_id, interjector
+                ),
+                player_notes=player_notes,
+                inquiry=None,
+                presented_evidence=self._presented_evidence_for(
+                    narrative_state, interjector
+                ),
+            )
+        )
+        presented_evidence = self._presented_evidence_for(narrative_state, interjector)
+        try:
+            validate_response(
+                response,
+                character_id=interjector,
+                scene=scene,
+                allowed_evidence_ids=frozenset(
+                    item["evidence_id"] for item in presented_evidence
+                ),
+                allowed_observed_fact_ids=frozenset(
+                    fact_id
+                    for item in presented_evidence
+                    for fact_id in item["facts"]
+                ),
+            )
+        except ResponseRejected as exc:
+            logger.warning("interjection rejected (%s); dropping it", exc)
+            return None
+        if self._consistency_checker is not None:
+            authorized_parts: list[str] = []
+            if context.environment_info:
+                authorized_parts.append("环境：" + context.environment_info)
+            if context.narrative_context:
+                authorized_parts.append("剧情：" + context.narrative_context)
+            if memories:
+                authorized_parts.append("记忆：" + format_memories(memories))
+            if player_notes:
+                authorized_parts.append("对Player的了解：" + player_notes)
+            verdict = self._consistency_checker.check(
+                character_id=interjector,
+                authorized_context="\n".join(authorized_parts),
+                player_message=player_message,
+                dialogue=response.dialogue,
+                reasoning=response.reasoning,
+            )
+            if verdict.verdict == "reject":
+                logger.warning(
+                    "semantic consistency rejected interjection (%s): %s",
+                    interjector,
+                    verdict.reason,
+                )
+                return None
+        # Write Gate + persistent state, exactly as the primary reply (docs/05
+        # §34-35, docs/04 §51). No claim/evidence/doubao side effects.
+        for proposal in response.memory_proposals:
+            try:
+                validate_memory_proposal(
+                    proposal, character_id=interjector, scene=scene
+                )
+            except MemoryRejected as exc:
+                logger.warning(
+                    "interjection memory proposal rejected (%s): %r",
+                    exc,
+                    proposal.content,
+                )
+                continue
+            memory_store.propose(interjector, proposal)
+        if response.next_mood is not None:
+            self._character_state.commit_mood(
+                session.session_id, interjector, response.next_mood
+            )
+        self._character_state.commit_reasoning(
+            session.session_id, interjector, response.reasoning
+        )
+        if response.next_relationship_stage is not None:
+            self._character_state.commit_relationship_stage(
+                session.session_id, interjector, response.next_relationship_stage
+            )
+        return response
 
     def open_turn(
         self, session_id: str | None, *, player_id: str | None = None

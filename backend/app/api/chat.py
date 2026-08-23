@@ -51,6 +51,9 @@ class ChatResponse(BaseModel):
     presentation_actions: list[dict] = []
     claim_refs: list[str] = []
     script_sequence: list[dict] = []
+    # Co-presence interjections (docs/04 §60): supplementary replies from other
+    # present characters, in presentation order after the primary reply.
+    interjections: list[dict] = []
     quota_remaining: int
 
 
@@ -148,6 +151,15 @@ def chat(
         presentation_actions=[a.model_dump() for a in result.presentation_actions],
         claim_refs=result.response.claim_refs,
         script_sequence=[line.__dict__ for line in result.script_sequence],
+        interjections=[
+            {
+                "character_id": interjection.character_id,
+                "dialogue": interjection.dialogue,
+                "emotion": interjection.emotion,
+                "animation": interjection.animation_proposal,
+            }
+            for interjection in result.interjections
+        ],
         quota_remaining=quota_remaining,
     )
 
