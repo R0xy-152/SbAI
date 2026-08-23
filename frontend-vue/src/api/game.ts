@@ -44,6 +44,13 @@ export interface ChatResponse {
     emotion?: string | null
     animation?: string | null
   }>
+  /** Co-presence interjections (docs/04 §60)：主回应之后、其他在场角色的补充台词。 */
+  interjections: Array<{
+    character_id: string
+    dialogue: string
+    emotion?: string | null
+    animation?: string | null
+  }>
   quota_remaining: number
 }
 

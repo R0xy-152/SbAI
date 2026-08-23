@@ -236,6 +236,12 @@ async function onPlayerMessage(text?: unknown) {
         text: s.dialogue,
         emotion: s.emotion,
       })),
+      // 接话（docs/04 §60）：主回应之后、其他在场角色的补充台词，按序入队播放
+      ...(data.interjections ?? []).map((i) => ({
+        speaker: i.character_id,
+        text: i.dialogue,
+        emotion: i.emotion,
+      })),
     ]
     lineIndex = 0
     if (!playNextLine()) setInputMode(true)
@@ -629,6 +635,7 @@ async function submitPlayerDeduction(message: string) {
         presentation_actions: actions,
         claim_refs: [],
         script_sequence: [],
+        interjections: [],
         quota_remaining: auth.user?.quota_remaining ?? 0,
       })
     }
