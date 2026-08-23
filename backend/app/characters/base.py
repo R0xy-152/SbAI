@@ -47,6 +47,10 @@ class CharacterRequest:
     # train of thought is continuous (docs/04 §9 CharacterState.last_reasoning).
     # Empty on the first turn or when the previous reply carried no reasoning.
     last_reasoning: str = ""
+    # The character's own reflection from the previous turn (docs/04 §47.1
+    # extension: post-reply self-correction), fed back so its train of thought
+    # can self-correct instead of resetting. Empty when reflection is off.
+    last_reflection: str = ""
     # The character's committed relationship stage toward the Player (docs/05
     # §45), injected as "current character state" so its attitude is continuous.
     relationship_stage: str = ""
@@ -156,6 +160,9 @@ class CharacterState:
 
     mood: CharacterMood | None = None
     last_reasoning: str = ""
+    # The character's own reflection from the previous turn, fed back for
+    # thought continuity and self-correction (docs/04 §47.1 extension).
+    last_reflection: str = ""
     # The character's committed relationship stage toward the Player (docs/05
     # §45): model-proposed, committed after validation, fed back next turn.
     relationship_stage: str = ""
@@ -507,6 +514,14 @@ class GenerativeRuntime(CharacterRuntime):
                 "你上一轮心里想的是："
                 + request.last_reasoning
                 + "。请延续这个想法，不要每轮都像重新开始。\n"
+            )
+        if request.last_reflection:
+            # docs/04 §47.1 extension: the character's own reflection on its
+            # last reply, so it can self-correct instead of repeating mistakes.
+            parts.append(
+                "你上一轮反思自己说的话是："
+                + request.last_reflection
+                + "。请在这次回复里体现出你注意到了这一点。"
             )
         if request.narrative_context:
             parts.append("当前剧情：\n" + request.narrative_context)

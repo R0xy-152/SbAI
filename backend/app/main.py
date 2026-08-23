@@ -30,6 +30,7 @@ from app.characters.deepseek import DeepSeekRuntime
 from app.characters.doubao import DoubaoRuntime
 from app.game.orchestrator import GameOrchestrator
 from app.game.consistency import SemanticConsistencyChecker
+from app.game.reflection import Reflector
 from app.game.state.session import SessionStore
 from app.narrative.interpreter import NarrativeInterpreter
 from app.narrative.inquiry import Chapter1InquiryInterpreter
@@ -111,6 +112,12 @@ def create_app() -> FastAPI:
     consistency_checker: SemanticConsistencyChecker | None = None
     if os.environ.get("GAL_CONSISTENCY_CHECK", "off") == "on":
         consistency_checker = SemanticConsistencyChecker(deepseek_provider)
+    # Character self-reflection (docs/04 §47.1 extension): OFF by default, since
+    # each reflection is an extra LLM call per turn. GAL_REFLECTION=on enables
+    # it with the real DeepSeek provider; under the mock provider it fails open.
+    reflector: Reflector | None = None
+    if os.environ.get("GAL_REFLECTION", "off") == "on":
+        reflector = Reflector(deepseek_provider)
     # Each generative character binds its own provider through the shared
     # LLMProvider interface (docs/02 §18). MVP default is the shared DeepSeek
     # adapter; Anthropic is an explicit opt-in (see build_provider). Each keeps
@@ -159,6 +166,7 @@ def create_app() -> FastAPI:
         # 07 剧本（docs/story/07，评审稿）。与旧调查玩法并行，互不依赖。
         story_runtime=StoryRuntime(),
         consistency_checker=consistency_checker,
+        reflector=reflector,
         # docs/19：序章与既有第一章故事 Runtime 并行；story_id=prologue
         # 才会进入无序探班流程，旧 story_cursor 继续由 StoryRuntime 恢复。
         prologue_runtime=PrologueRuntime(),

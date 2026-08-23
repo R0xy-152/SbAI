@@ -65,6 +65,19 @@ class CharacterStateService:
         if reasoning:
             self._ensure_state(session_id, character_id).last_reasoning = reasoning
 
+    def reflection_for(self, session_id: str, character_id: str) -> str:
+        """The character's last committed reflection, or "" if none yet."""
+        state = self.state_for(session_id, character_id)
+        return state.last_reflection if state is not None else ""
+
+    def commit_reflection(
+        self, session_id: str, character_id: str, reflection: str
+    ) -> None:
+        """Store the character's reflection for the next turn's continuity.
+        Empty reflection is ignored so a missing one keeps the previous."""
+        if reflection:
+            self._ensure_state(session_id, character_id).last_reflection = reflection
+
     def relationship_stage_for(self, session_id: str, character_id: str) -> str:
         """The character's committed relationship stage, or "" if none yet."""
         state = self.state_for(session_id, character_id)

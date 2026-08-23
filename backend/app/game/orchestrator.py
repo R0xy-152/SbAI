@@ -43,6 +43,7 @@ from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.game.validation import ResponseRejected, validate_response
 from app.game.consistency import SemanticConsistencyChecker
 from app.game.interjection import named_primary, pick_interjector
+from app.game.reflection import Reflector
 from app.narrative.chapter1_script import BEGIN_CHAPTER, Chapter1ScriptRuntime
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.interpreter import NarrativeInterpreter
@@ -164,6 +165,11 @@ class GameOrchestrator:
         # beyond the deterministic validate_response. None keeps the existing
         # behaviour (no extra LLM call per turn).
         consistency_checker: SemanticConsistencyChecker | None = None,
+        # Character self-reflection (optional): when given, the primary reply's
+        # speaker reflects on what it just said after the turn passes validation,
+        # and that reflection is fed back next turn. None keeps the existing
+        # behaviour (no extra LLM call per turn). Off by default.
+        reflector: Reflector | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -208,6 +214,7 @@ class GameOrchestrator:
         self._story_runtime = story_runtime
         self._prologue_runtime = prologue_runtime
         self._consistency_checker = consistency_checker
+        self._reflector = reflector
         self._player_by_session: dict[str, str] = {}
         # T2review P1-3：per-session 锁——Turn 的 Provider 读取、状态提交、
         # 消息写入与持久化必须串行化，不允许交错。
@@ -363,6 +370,11 @@ class GameOrchestrator:
                     # reasoning from the previous turn, fed back so its train of
                     # thought stays continuous across turns.
                     last_reasoning=self._character_state.reasoning_for(
+                        session.session_id, character_id
+                    ),
+                    # Current Character State (docs/04 §47.1 extension): the
+                    # character's own reflection on its last reply.
+                    last_reflection=self._character_state.reflection_for(
                         session.session_id, character_id
                     ),
                     # Current Character State (docs/05 §45): the committed
@@ -534,6 +546,21 @@ class GameOrchestrator:
             self._character_state.commit_reasoning(
                 session.session_id, character_id, response.reasoning
             )
+            # Character self-reflection (docs/04 §47.1 extension): after the
+            # reply passed validation, the speaker reflects on it once and the
+            # reflection is fed back next turn. Fails open — a provider error
+            # yields an empty reflection, never a rejected turn.
+            if self._reflector is not None and response.dialogue:
+                reflection = self._reflector.reflect(
+                    character_id=character_id,
+                    persona=runtime.persona_system,
+                    dialogue=response.dialogue,
+                    reasoning=response.reasoning,
+                    player_message=message,
+                )
+                self._character_state.commit_reflection(
+                    session.session_id, character_id, reflection
+                )
         if approved and response.next_relationship_stage is not None:
             # Validate-Before-Commit (docs/04 §51): the relationship stage is a
             # proposal that lands only after the reply passes validation, so a
@@ -731,6 +758,9 @@ class GameOrchestrator:
                 narrative_directive="",
                 mood=self._character_state.mood_for(session.session_id, interjector),
                 last_reasoning=self._character_state.reasoning_for(
+                    session.session_id, interjector
+                ),
+                last_reflection=self._character_state.reflection_for(
                     session.session_id, interjector
                 ),
                 relationship_stage=self._character_state.relationship_stage_for(
