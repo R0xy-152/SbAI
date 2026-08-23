@@ -44,6 +44,7 @@ from app.game.validation import ResponseRejected, validate_response
 from app.game.consistency import SemanticConsistencyChecker
 from app.game.interjection import named_primary, pick_interjector
 from app.game.reflection import Reflector
+from app.game.emotion import evolve_mood
 from app.narrative.chapter1_script import BEGIN_CHAPTER, Chapter1ScriptRuntime
 from app.narrative.events import NarrativeDecision, NarrativeEngine, NarrativeEvent
 from app.narrative.interpreter import NarrativeInterpreter
@@ -536,8 +537,16 @@ class GameOrchestrator:
             # Validate-Before-Commit (docs/04 §51): the model's mood is a
             # proposal that lands only after the reply passes validation, so a
             # rejected reply never changes the character's persistent state.
+            # docs/04 §9 extension: shape the proposal into a continuous
+            # emotional arc (decay + smoothing) instead of committing verbatim,
+            # so the mood transitions instead of jumping turn to turn.
             self._character_state.commit_mood(
-                session.session_id, character_id, response.next_mood
+                session.session_id,
+                character_id,
+                evolve_mood(
+                    self._character_state.mood_for(session.session_id, character_id),
+                    response.next_mood,
+                ),
             )
         if approved:
             # Validate-Before-Commit (docs/04 §51): the model's reasoning is a
@@ -832,7 +841,12 @@ class GameOrchestrator:
             memory_store.propose(interjector, proposal)
         if response.next_mood is not None:
             self._character_state.commit_mood(
-                session.session_id, interjector, response.next_mood
+                session.session_id,
+                interjector,
+                evolve_mood(
+                    self._character_state.mood_for(session.session_id, interjector),
+                    response.next_mood,
+                ),
             )
         self._character_state.commit_reasoning(
             session.session_id, interjector, response.reasoning

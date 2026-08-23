@@ -146,8 +146,9 @@ def test_mood_commits_and_reaches_next_turn():
     assert "积极" not in provider.users[0]
     # The model's mood is committed and injected into the next turn.
     orchestrator.handle_turn(first.session_id, "你好呀")
-    assert "积极0.9" in provider.users[1]
-    assert "激动0.4" in provider.users[1]
+    # mood 经确定性情绪演化（evolve_mood：衰减 + 平滑）后提交，不再是逐字值
+    assert "积极0.5" in provider.users[1]
+    assert "激动0.2" in provider.users[1]
 
 
 def test_no_mood_output_keeps_no_mood():
@@ -263,7 +264,8 @@ def test_mood_survives_session_restore(tmp_path):
     )
     orchestrator2.handle_turn(result.session_id, "你好呀")
     # The restored mood is injected into the first prompt of the new process.
-    assert "积极0.8" in provider2.users[0]
+    # (0.8 经 evolve_mood 平滑后约为 0.5)
+    assert "积极0.5" in provider2.users[0]
     assert "激动0.1" in provider2.users[0]
 
 
