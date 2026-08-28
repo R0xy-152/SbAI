@@ -30,3 +30,4 @@
 - 2026-08-21（四次部署）：e2e 适配序章新流程；文字速度基线 1.2x；设置移除睁眼转场开关；修复序章瞬间闪现 background1.png；新增 AUTO/SKIP/SAVE/LOAD 控制条
 - 2026-08-22（五次部署）：替换 chatgpt_happy 为透明背景版本；三人集合立绘恢复原尺寸同基线（取消 scale/offset_y）；自由对话新增点击任意位置/滚轮下滑「继续对话」（回应态可用），滚轮上滑打开历史
 - 2026-08-28（六次部署）：sbai.xin 备案通过并上线 HTTPS —— 云解析加 A 记录（@/www → 114.55.133.96），Caddyfile 加 sbai.xin/www.sbai.xin，Let's Encrypt 证书自动签发（有效期至 2026-11-26），GAL_AUTH_COOKIE_SECURE 改 true（纯 HTTP IP 入口不再支持登录）
+- 2026-08-28（安全加固）：外部端口扫描+内部排查后 —— /srv/gal/.env 改 600；sshd 关闭 X11Forwarding/AllowTcpForwarding；安装启用 fail2ban（sshd jail）；前端 8080 改绑 127.0.0.1（docker-compose.yml 同步入库，外网 8080 已关闭）。待用户在控制台：安全组收紧 22 源 IP、删除 8080 放行、更换 root 密码

@@ -14,7 +14,7 @@ services:
     build:
       context: ./frontend-vue
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"
     # 服务器部署：进程退出自动拉起（docker compose up -d 后随 Docker 自启）
     restart: unless-stopped
     depends_on:
