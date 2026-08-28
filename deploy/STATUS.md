@@ -15,7 +15,7 @@
 - DEEPSEEK_API_KEY：已配置，仅存服务器 `/srv/gal/.env`（不入库）；缺 key 时回落 mock
 - 备案指引（控制台走查）：`deploy/ALIYUN.md` §④
 
-- [ ] 服务器 root 临时密码：Gal@2026abc，当前正在频繁修改上线的时期，暂时不管密码更改问题但确保不泄露
+- SSH 访问：本机密钥 `~/.ssh/gal_root_ed25519`（Host 别名 `gal`，`ssh gal` 即密钥登录）；root 密码不入库，由用户在控制台自行设为强密码（agent 走密钥，无需知晓密码）
 ## 待办
 
 - [x] sbai.xin ICP 备案 + HTTPS 上线（2026-08-28）：A 记录 @/www → 114.55.133.96；Caddyfile 加域名；Let's Encrypt 证书自动签发；GAL_AUTH_COOKIE_SECURE 改 true。正式地址 https://sbai.xin/
