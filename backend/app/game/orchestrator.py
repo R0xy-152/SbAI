@@ -1676,10 +1676,12 @@ class GameOrchestrator:
         """docs/21 §2：prologue_start / prologue_visit_completed。"""
         if self._ops is None or not isinstance(runtime, PrologueRuntime):
             return
+        bound = self._player_by_session.get(session_id)
         if before is None:
             self._ops_record(
                 EVENT_PROLOGUE_START,
                 session_id=session_id,
+                user_id=bound,
                 payload={"story_id": PrologueRuntime.story_id},
             )
         after = runtime.snapshot(session_id)
@@ -1694,6 +1696,7 @@ class GameOrchestrator:
                 self._ops_record(
                     EVENT_PROLOGUE_VISIT_COMPLETED,
                     session_id=session_id,
+                    user_id=bound,
                     character_id=character_id,
                     payload={"character_id": character_id},
                 )
@@ -1710,9 +1713,11 @@ class GameOrchestrator:
         if self._ops is None or not isinstance(runtime, PrologueRuntime):
             return
         choice_id = current.get("choice_id")
+        bound = self._player_by_session.get(session_id)
         self._ops_record(
             EVENT_PROLOGUE_CHOICE,
             session_id=session_id,
+            user_id=bound,
             payload={"choice_id": choice_id, "option_id": option_id, "label": label},
         )
         if choice_id == "PROLOGUE_VISIT_CHARACTER":
@@ -1721,6 +1726,7 @@ class GameOrchestrator:
             self._ops_record(
                 EVENT_PROLOGUE_VISIT_CHOSEN,
                 session_id=session_id,
+                user_id=bound,
                 character_id=option_id,
                 payload={"character_id": option_id, "order": len(visited) + 1},
             )
@@ -1728,6 +1734,7 @@ class GameOrchestrator:
             self._ops_record(
                 EVENT_PROLOGUE_COMPLETED,
                 session_id=session_id,
+                user_id=bound,
                 character_id=option_id,
                 payload={"chat_character_id": option_id},
             )
