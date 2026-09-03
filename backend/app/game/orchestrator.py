@@ -1629,6 +1629,7 @@ class GameOrchestrator:
             self._ops.record(
                 EVENT_AI_CHAT_ENTER,
                 session_id=session_id,
+                user_id=self._player_by_session.get(session_id),
                 character_id=character_id,
                 payload={"character_id": character_id},
             )

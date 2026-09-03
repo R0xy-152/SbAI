@@ -154,6 +154,7 @@ def test_ai_chat_enter_once_and_turn_metric(tmp_path):
     enters = ops.list_events(event_name=EVENT_AI_CHAT_ENTER)
     assert len(enters) == 1  # 每会话一次
     assert enters[0].payload["character_id"] == chat_character
+    assert enters[0].user_id == "player-1"
     assert ops.list_events(event_name=EVENT_AI_CHAT_TURN)  # _Runtime 无指标 → 只记事件
 
 
