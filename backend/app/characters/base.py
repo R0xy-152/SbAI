@@ -386,7 +386,7 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
     "也不要使用 markdown 代码块标记。\n"
     "JSON 结构示例：\n"
     '{"character_id": "deepseek", "dialogue": "你要说的话", "emotion": "neutral", '
-    '"animation_proposal": "none", "memory_proposals": [], "action_proposals": [], '
+    '"animation_proposal": "none", "memory_proposals": [{"type": "player_fear", "content": "Player说自己很怕黑"}], "action_proposals": [], '
     '"fact_refs": [], "reasoning": "你为什么要这样回复", '
     '"relationship": "familiar", '
     '"mood": {"positive": 0.0, "excitement": 0.0}}\n'
@@ -394,11 +394,15 @@ STRUCTURED_OUTPUT_INSTRUCTIONS = (
     "- dialogue：你要说的话本身，保持你的口癖，是完整的自然句子。\n"
     "- emotion：必须且只能是 neutral、happy、annoyed、angry、embarrassed、serious、surprised、jealous、nervous、sad 之一。\n"
     "- animation_proposal：必须且只能是 none、shake、strong_shake、fade_in、fade_out 之一。\n"
-    "- memory_proposals：只有 Player 明确提到值得长期记住的信息"
-    "（如名字、喜好、害怕的事物）时才填入，否则为空数组。\n"
+    "- memory_proposals：你记忆 Player 长期信息的唯一通道。每当 Player 透露关于自己的长期信息"
+    "（名字、喜好、害怕、习惯、承诺、重要经历等），就必须提案，不要省略；"
+    "宁可多提（重复或琐碎内容会被系统自动去重或忽略），漏提才是错误。\n"
+    "  触发示例：Player 说“我叫小明，最怕黑” → "
+    "[{\"type\": \"player_name\", \"content\": \"Player叫小明\"}, "
+    "{\"type\": \"player_fear\", \"content\": \"Player说自己最怕黑\"}]。\n"
     "  元素必须是 {\"type\": \"类别\", \"content\": \"一句话说明\"}，"
-    "例如 {\"type\": \"player_name\", \"content\": \"Player说自己叫阿明\"}；"
-    "content 必须是一句完整的话，不要使用 value 等其它字段名。\n"
+    "content 必须是一句完整的话，不要使用 value 等其它字段名；"
+    "只有确实没有新信息时才输出空数组。\n"
     "  关于 Player 的信息（名字、喜好、害怕、态度等）type 一律用 player_ 开头。\n"
     "- action_proposals：当前阶段通常为空数组。\n"
     "- fact_refs：当前阶段为空数组。\n"

@@ -943,6 +943,8 @@ Write Gate
 SAVE / IGNORE
 ```
 
+提示词层约定（2026-09-03）：结构化输出契约（characters/base.py 的 STRUCTURED_OUTPUT_INSTRUCTIONS）通过字段说明 + few-shot 示例引导模型主动产出记忆提案（「每当 Player 透露长期信息就必须提案，宁可多提，系统会去重」）。真机回放显示真实模型自发提案率仅 3.2%（validation-results/eval-memory-recall-realdata），该约定是写入层的引导手段，不替代 Write Gate 的确定性过滤。
+
 ---
 
 # 35. Write Gate至少检查
