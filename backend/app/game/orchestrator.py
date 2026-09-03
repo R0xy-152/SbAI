@@ -387,7 +387,7 @@ class GameOrchestrator:
                     player_notes=player_notes,
                     inquiry=inquiry,
                     presented_evidence=self._presented_evidence_for(
-                        narrative_state, character_id
+                        session.session_id, character_id
                     ),
                 )
             )
@@ -395,7 +395,7 @@ class GameOrchestrator:
         # impermissible response (wrong character, unauthorized fact, visual
         # leak, disallowed action) is rejected before it can touch history,
         # memory, state or the frontend, and replaced with a safe neutral line.
-        presented_evidence = self._presented_evidence_for(narrative_state, character_id)
+        presented_evidence = self._presented_evidence_for(session.session_id, character_id)
         try:
             validate_response(
                 response,
@@ -778,11 +778,11 @@ class GameOrchestrator:
                 player_notes=player_notes,
                 inquiry=None,
                 presented_evidence=self._presented_evidence_for(
-                    narrative_state, interjector
+                    session.session_id, interjector
                 ),
             )
         )
-        presented_evidence = self._presented_evidence_for(narrative_state, interjector)
+        presented_evidence = self._presented_evidence_for(session.session_id, interjector)
         try:
             validate_response(
                 response,
@@ -1424,18 +1424,28 @@ class GameOrchestrator:
         runtime.commit(session_id, plan)
         return plan
 
-    @staticmethod
-    def _presented_evidence_for(
-        state: NarrativeState | None, character_id: str
-    ) -> list[dict]:
+    def _presented_evidence_for(self, session_id: str, character_id: str) -> list[dict]:
+        """Evidence explicitly shown to this character, read from the knowledge
+        ledger (who-knows-what, docs/05 §51). Falls back to the legacy
+        narrative-state map for snapshots written before the ledger existed."""
+        state = self._state.get(session_id)
         if state is None:
             return []
         chapter = state.chapter1
+        ledger = self._knowledge.get(session_id)
+        known = ledger.known_facts(character_id) if ledger is not None else frozenset()
+        if not known:
+            # Backward compatible: snapshots before the ledger carried presented
+            # evidence only in the narrative-state map.
+            known = frozenset(
+                evidence_id
+                for evidence_id, characters in chapter.presented_evidence.items()
+                if character_id in characters
+            )
         return [
             evidence_view(evidence_id, acquired=True, presented_to={character_id})
             for evidence_id in sorted(chapter.acquired_evidence)
-            if character_id in chapter.presented_evidence.get(evidence_id, set())
-            and evidence_id in EVIDENCE_REGISTRY
+            if evidence_id in known and evidence_id in EVIDENCE_REGISTRY
         ]
 
     def _inquiry(self, session_id: str, message: str, character_id: str) -> Inquiry | None:
@@ -1811,17 +1821,22 @@ class GameOrchestrator:
         return present | {character_id}
 
     def _heard_messages(self, messages: list[dict], character_id: str) -> list[dict]:
-        """Return public lines heard while present plus this character's replies."""
-        return [
-            message
-            for message in messages
-            if (
-                message.get("role") == "player"
-                and character_id
-                in message.get("heard_by", {message.get("character_id")})
-            )
-            or message.get("character_id") == character_id
-        ]
+        """Return public lines heard while present plus this character's replies.
+
+        Player lines are audible to everyone in 'heard_by'; character lines
+        are audible to their speaker and to every co-present character in
+        'heard_by' (docs/04 §60), so an interjector actually hears the
+        primary reply it is answering. Legacy messages without 'heard_by'
+        fall back to the speaker only (backward compatible).
+        """
+        heard: list[dict] = []
+        for message in messages:
+            if message.get("character_id") == character_id:
+                heard.append(message)
+                continue
+            if character_id in message.get("heard_by", ()):
+                heard.append(message)
+        return heard
 
     def _narrative_decision(
         self, session_id: str, message: str

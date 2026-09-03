@@ -17,7 +17,7 @@ from app.game.consistency import (
 )
 from app.game.orchestrator import GameOrchestrator
 from app.game.state.session import SessionStore
-from app.providers.base import LLMProvider
+from app.providers.base import LLMProvider, ProviderError
 from app.providers.mock import MockProvider
 
 
@@ -74,6 +74,23 @@ def test_checker_prompt_carries_authorized_context():
     # The rubric names the three violation classes.
     for keyword in ("leak", "fabrication", "contradiction"):
         assert keyword in CONSISTENCY_SYSTEM_PROMPT
+
+
+class _FailingJudge(LLMProvider):
+    def complete(self, **kwargs) -> str:
+        raise ProviderError("judge provider down")
+
+
+def test_checker_fails_open_on_provider_error():
+    """A judge that cannot be reached must never block the reply (fail-open)."""
+    checker = SemanticConsistencyChecker(_FailingJudge())
+    verdict = checker.check(
+        character_id="deepseek",
+        authorized_context="",
+        player_message="你好",
+        dialogue="你好呀",
+    )
+    assert verdict.verdict == "pass"
 
 
 # ---- orchestrator wiring ----

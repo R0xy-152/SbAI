@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-from app.providers.base import LLMProvider
+from app.providers.base import LLMProvider, ProviderError
 
 
 @dataclass(frozen=True)
@@ -79,10 +79,15 @@ class SemanticConsistencyChecker:
             f"角色回复：{dialogue}\n"
             f"角色内心想法（仅供校验参考）：{reasoning or '（无）'}"
         )
-        raw = self._provider.complete(
-            system=CONSISTENCY_SYSTEM_PROMPT,
-            user=user,
-            max_tokens=256,
-            response_format={"type": "json_object"},
-        )
+        try:
+            raw = self._provider.complete(
+                system=CONSISTENCY_SYSTEM_PROMPT,
+                user=user,
+                max_tokens=256,
+                response_format={"type": "json_object"},
+            )
+        except ProviderError:
+            # Fail open: a judge that cannot be reached must never block a
+            # reply that already passed the deterministic gate.
+            return ConsistencyVerdict("pass", "judge provider unavailable")
         return parse_consistency_verdict(raw)

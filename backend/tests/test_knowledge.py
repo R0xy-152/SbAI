@@ -114,3 +114,31 @@ def test_present_evidence_records_knowledge():
     assert ledger.knows("deepseek", EV01_NOTE_V03) is True
     # Not auto-shared to another character (docs/05 §51).
     assert ledger.knows("claude", EV01_NOTE_V03) is False
+
+
+def test_presented_evidence_reads_from_ledger():
+    """_presented_evidence_for 以知识账本为 who-knows-what 权威来源。"""
+    orchestrator = _orchestrator()
+    session_id = orchestrator._sessions.get_or_create(None).session_id
+    state = orchestrator._state.state_for(session_id)
+    state.revealed_facts.add("FIRST_IMPOSSIBLE_EVENT_RESOLVED")
+    state.chapter1.acquired_evidence.add(EV01_NOTE_V03)
+    state.chapter1.available_characters.add("deepseek")
+    orchestrator.present_evidence(session_id, "deepseek", EV01_NOTE_V03)
+
+    presented = orchestrator._presented_evidence_for(session_id, "deepseek")
+    assert [item["evidence_id"] for item in presented] == [EV01_NOTE_V03]
+    # 未被告知的角色仍拿不到该证据。
+    assert orchestrator._presented_evidence_for(session_id, "claude") == []
+
+
+def test_presented_evidence_falls_back_to_legacy_map():
+    """账本为空（旧快照）时回退到叙事状态里的 presented_evidence 映射。"""
+    orchestrator = _orchestrator()
+    session_id = orchestrator._sessions.get_or_create(None).session_id
+    state = orchestrator._state.state_for(session_id)
+    state.chapter1.acquired_evidence.add(EV01_NOTE_V03)
+    state.chapter1.presented_evidence.setdefault(EV01_NOTE_V03, set()).add("deepseek")
+
+    presented = orchestrator._presented_evidence_for(session_id, "deepseek")
+    assert [item["evidence_id"] for item in presented] == [EV01_NOTE_V03]

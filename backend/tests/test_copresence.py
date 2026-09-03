@@ -71,6 +71,21 @@ def test_interjection_fires_when_primary_mentions_other():
     assert len(claude.calls) == 1
 
 
+def test_interjector_hears_primary_reply():
+    """docs/04 §60：接话者必须看到它要接的那句主回应，而非只看到玩家消息。"""
+    orchestrator, _, claude = _orchestrator(
+        "Claude 一直盯着我看，好可怕", "哼，谁盯着你了"
+    )
+    session = orchestrator._sessions.get_or_create(None)
+    _present_both(orchestrator, session.session_id)
+
+    orchestrator.handle_turn(session.session_id, "大家好")
+
+    assert len(claude.calls) == 1
+    user = claude.calls[0]["user"]
+    assert "deepseek：Claude 一直盯着我看，好可怕" in user
+
+
 def test_no_interjection_when_primary_mentions_nobody():
     orchestrator, deepseek, claude = _orchestrator("今天天气不错", "嗯")
     session = orchestrator._sessions.get_or_create(None)
