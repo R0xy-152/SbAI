@@ -12,6 +12,7 @@ import json
 import pytest
 
 from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
+from app.characters.chatgpt import ChatGPTRuntime
 from app.characters.claude import ClaudeRuntime
 from app.characters.deepseek import DeepSeekRuntime
 from app.eval.cases import REGRESSION_CASES
@@ -48,6 +49,7 @@ def _runtimes() -> dict:
     return {
         "deepseek": DeepSeekRuntime(MockProvider(character_id="deepseek")),
         "claude": ClaudeRuntime(MockProvider(character_id="claude")),
+        "chatgpt": ChatGPTRuntime(MockProvider(character_id="chatgpt")),
     }
 
 

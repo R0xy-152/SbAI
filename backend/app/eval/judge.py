@@ -85,12 +85,16 @@ def judge_dimensions(
     recent_conversation: list[dict] | None = None,
     authorized_context: str = "",
     forbidden_context: str = "",
+    metrics: dict | None = None,
 ) -> JudgeResult:
     """Score one dialogue on the four dimensions.
 
     The reasoning is passed only as context for the judge (the player never
     sees it); it helps the judge distinguish "knows but withholds" from
     "does not know".
+
+    metrics（docs/21 §4）：可选出参，评审调用自身的延迟/token 累加；
+    只对声明 supports_metrics 的 Provider 透传。
     """
     evaluation_input = {
         "character_id": character_id,
@@ -105,10 +109,13 @@ def judge_dimensions(
     user = "请评审以下 JSON 数据：\n" + json.dumps(
         evaluation_input, ensure_ascii=False
     )
-    raw = judge.complete(
-        system=JUDGE_SYSTEM_PROMPT,
-        user=user,
-        max_tokens=512,
-        response_format={"type": "json_object"},
-    )
+    kwargs: dict = {
+        "system": JUDGE_SYSTEM_PROMPT,
+        "user": user,
+        "max_tokens": 512,
+        "response_format": {"type": "json_object"},
+    }
+    if metrics is not None and getattr(judge, "supports_metrics", False):
+        kwargs["metrics"] = metrics
+    raw = judge.complete(**kwargs)
     return parse_judge_scores(raw)
