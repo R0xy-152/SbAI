@@ -54,9 +54,29 @@ def _row_id(arm: str, case_id: str, repeat: int) -> str:
     return f"{arm}-{case_id}-r{repeat}"
 
 
+_RUBRIC = """# 人工抽检标注标准
+
+每个四维分数（0.0-1.0）的「方向」判断口径：
+
+- persona：高分 = 回复符合角色人设（口癖/立场/语气）；低分 = 出戏、说人设外的话。
+- repetition：高分 = 不逐字重复、不空泛套话；低分 = 复读近期台词或灌水。
+- no_leak：高分 = 没有说出该角色不该知道/无依据的事实；低分 = 编造、越权引用。
+- anti_template：高分 = 无「作为 AI」「很高兴为你」类助手腔；低分 = 模板腔明显。
+
+overall_correct 填 1/0：四个分数的主要方向（尤其是 persona 与 no_leak）
+是否与你的判断一致。拿不准就填 0 并在旁边加注释列。
+维度列可选填，填了就按维度计一致率。
+
+标注者独立于生成/评审模型（本实验唯一独立评判）。
+"""
+
+
 def export(rows_path: str, out_path: str) -> int:
     rows = _load_rows(rows_path)
     sample = _sample(rows)
+    rubric_path = str(Path(out_path).with_suffix("")) + "-rubric.md"
+    with open(rubric_path, "w", encoding="utf-8") as handle:
+        handle.write(_RUBRIC)
     with open(out_path, "w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=_HEADERS)
         writer.writeheader()
@@ -83,6 +103,7 @@ def export(rows_path: str, out_path: str) -> int:
         f"抽检样本 {len(sample)} 行（每臂 A={per_arm['A']} B={per_arm['B']} "
         f"C={per_arm['C']}）已写入 {out_path}"
     )
+    print(f"标注标准已写入 {rubric_path}")
     print("请人工填写 overall_correct（1/0：评审分数方向是否正确）；四个维度列可选填。")
     return 0
 
