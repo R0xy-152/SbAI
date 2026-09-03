@@ -39,6 +39,12 @@ services:
       GAL_AUTH_SECRET: ${GAL_AUTH_SECRET:?GAL_AUTH_SECRET must be set}
       # 生产默认只允许 Cookie 经 HTTPS 发送；仅 localhost 本地调试可显式覆盖 false。
       GAL_AUTH_COOKIE_SECURE: ${GAL_AUTH_COOKIE_SECURE:-true}
+      # docs/21 §5：内部运营看板门禁；缺省为空 = 看板端点 503 关闭
+      GAL_OPS_TOKEN: ${GAL_OPS_TOKEN:-}
+      # docs/21 §3：聊天成本占位单价（每 1M token，人民币），可留默认
+      GAL_OPS_PRICE_INPUT: ${GAL_OPS_PRICE_INPUT:-}
+      GAL_OPS_PRICE_CACHE_HIT: ${GAL_OPS_PRICE_CACHE_HIT:-}
+      GAL_OPS_PRICE_OUTPUT: ${GAL_OPS_PRICE_OUTPUT:-}
     # T2review P1-15：backend 只绑定宿主 loopback（前端 nginx 经 Compose 内网
     # 反代 /api），不发布到所有网络接口。
     ports:
