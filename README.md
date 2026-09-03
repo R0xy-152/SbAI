@@ -1,14 +1,16 @@
 # 《完蛋，我被AI娘包围了》
 
-> AI + Galgame + 对话式悬疑解谜游戏。
+> **AI 叙事一致性引擎 + 对话式悬疑解谜游戏（demo）。** 核心命题："语言自由，事实不自由"——让 AI 自由表演，但说不了一句没有依据的话。
 
 一款 AI-native 的 Galgame：玩家作为「游戏制作人」，在制作现场与四位 AI 娘（**DeepSeek**、**ChatGPT**、**Claude**、**豆包**）互动，通过自然语言对话推进剧情、收集线索、进行推理，最终揭开隐藏的真相。前端只负责表现，所有剧情、状态与角色行为由后端确定性叙事运行时权威决定。
+
+**在线体验**：<https://sbai.xin/>（序章固定剧本 + AI 后日谈自由聊天）
 
 ## 当前阶段
 
 - ✅ **序章（docs/19）已上线**：标题「开始游戏」→ 章节选择（当前仅序章解锁）→ 固定剧本播放器（`/story?story_id=prologue`）→ 无序探班三名角色 → 三人集合 → 选一名 AI 进入 `/game` 后日谈自由聊天。
 - ✅ 场景演出接线、AUTO/SKIP/SAVE/LOAD、邀请码账号（docs/18）、章节选择、存档系统。
-- 🔜 第一章调查主线（docs/10/11）、单审小游戏、Recovery、Security Review 等内容处于验证/开发阶段。
+- 🔜 第一章（《03:17 Incident》固定剧本骨架 + 调查玩法全链）已实现并通过测试，章节入口待上线（Beta 暂缓，内容见 docs/09/10/11）。
 
 > **注意**：当前阶段**不写新剧情**，只在现有框架下测试、修补、完善（详见 [AGENTS.md](AGENTS.md)）。
 
@@ -41,9 +43,24 @@ FastAPI（权威游戏状态）
 PostgreSQL（存档 JSONB）+ JSON 会话文件
 ```
 
+系统架构图（可交互版见 `docs/architecture/project-architecture.html`）：
+
+![系统架构](docs/architecture/project-architecture.visual-check.1440x900.dark.png)
+
 - **Docs-first**：`/docs` 是事实来源，代码与文档冲突以文档为准。
 - **前端只负责表现**：只消费后端下发的确定性结果（`presentation_actions` / `presentation_state`），不做剧情判断。
 - **LLM 不可信**：生成内容必须经 Structured Response → Schema/Character/Narrative Validation → Present，不能直接改 Game State/Frontend/DB。
+
+## 技术亮点（系统如何管住 LLM）
+
+- **LLM 不可信是设计前提**：所有生成内容走 Structured Response → Schema/Character/Narrative 三层校验 → Present，LLM 不能直接改 Game State / 前端 / 数据库。
+- **确定性叙事运行时**：Signal → Event → Requirements → Commit，主线事件 once + 幂等；关键事实首次披露、剧情推进、Reveal 全部由后端确定性控制，AI 只负责语言表达（docs/MVP/03）。
+- **角色信息隔离**：DeepSeek「看不见」是权限边界——视觉场景信息在 Context 层就被拦截，不是 prompt 请求（docs/04）。
+- **记忆系统**：确定性检索 + 轻量语义召回 + 衰减/强化；玩家画像（player_notes）与剧情记忆（memory_context）分区（docs/MVP/05）。
+- **事实账本 + 一致性校验**：每个角色「知道什么」由 Knowledge Ledger 记账；生成回复经 SemanticConsistencyChecker 校验，Provider 故障时 fail-open 不卡死回合。
+- **自我反思回灌**：角色对上一回合的自我反思注入下一轮上下文（默认关，可配置）。
+- **LLM-as-judge 回归评测**：8 个固定回归用例 × 4 维度（人设一致性 / 反复读 / 事实不泄漏 / 反模板腔），随 DeepSeek 真机跑分（见「评测」节）。
+- **工程纪律**：docs-first、556 后端测试、77 前端单测、Conventional Commits、validation-results 证据链、Docker 生产部署（备案 + HTTPS）。
 
 ## 快速开始（Docker）
 
@@ -114,9 +131,31 @@ npm run typecheck  # vue-tsc
 
 ## 测试与验证
 
-- 后端：`backend && python -m pytest -q`（456 passed, 12 skipped）
-- 前端单元：`frontend-vue && npm run test:unit`（71 passed）
+- 后端：`backend && python -m pytest -q`（556 passed, 12 skipped，GAL_PROVIDER=mock）
+- 前端单元：`frontend-vue && npm run test:unit`（77 passed）
 - 前端 e2e：`frontend-vue && npm run test:e2e`（Playwright，macOS 需调整 `playwright.config.ts` 的 Python 路径）
+
+## 评测（LLM-as-judge）
+
+角色回复质量由独立评审模型按 4 个维度打分（0.0–1.0，越高越好；实现见 `backend/app/eval/`）：
+
+| 维度 | 含义 |
+|---|---|
+| persona | 人设一致性 |
+| repetition | 反复读（低逐字重复/空泛套话） |
+| no_leak | 事实不泄漏（不说无依据/越权的事实） |
+| anti_template | 反模板腔（无「作为 AI」助手腔） |
+
+**真机回归**（2026-09-03，DeepSeek 实时生成 + 独立评审，8 个固定用例：闲聊 / 说谎诱导 / 追问 / 试探 / 矛盾）：
+
+| 维度 | 平均分 |
+|---|---|
+| persona | 0.81 |
+| repetition | 0.85 |
+| no_leak | 0.86 |
+| anti_template | 0.88 |
+
+系统管线 A/B 对比（记忆/画像/反思回灌）与一致性校验器红队记录见 `validation-results/eval-*`。
 
 ## 许可证
 
