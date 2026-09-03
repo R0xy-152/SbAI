@@ -126,7 +126,7 @@ def test_legal_memory_saved_and_recalled():
 
     runtime.proposals = []
     orchestrator.handle_turn(session_id, "随便聊聊。")
-    assert "怕黑" in runtime.requests[-1].memory_context
+    assert "怕黑" in runtime.requests[-1].player_notes
 
 
 def test_player_statement_does_not_become_ground_truth():

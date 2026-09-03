@@ -155,8 +155,8 @@ def test_refresh_restores_everything_and_continues(tmp_path):
 
     # DeepSeek / Claude Memory Scope stays correct (docs/06 §20): DeepSeek
     # still has her memory.
-    memory_context_deepseek = deepseek_b.requests[0].memory_context
-    assert "怕黑" in memory_context_deepseek
+    player_notes_deepseek = deepseek_b.requests[0].player_notes
+    assert "怕黑" in player_notes_deepseek
 
     # Current Character restored: a message without character_id goes to
     # DeepSeek (the restored last speaker), not to Claude.

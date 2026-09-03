@@ -140,18 +140,31 @@ class MemoryStore:
         return ordered[:limit]
 
     def retrieve_context(
-        self, owner_character_id: str, limit: int = 5
+        self,
+        owner_character_id: str,
+        limit: int = 5,
+        player_note_limit: int = 5,
     ) -> tuple[list[EpisodicMemory], list[EpisodicMemory]]:
-        """Select one bounded context window, then partition player notes.
+        """Select a bounded general-memory window and a separate bounded
+        player-note window (docs/05 §31, §37-38).
 
-        Both groups come from the same deterministic retrieval result, so the
-        total stays within ``limit`` and a player note is never injected twice.
+        The two groups are disjoint, so no memory is injected twice. Player
+        notes are retrieved independently of the general importance/recency
+        ranking, so an older note about the Player is not dropped just because
+        more recent scene memories outrank it (issue #3).
         """
-        selected = self.retrieve(owner_character_id, limit=limit)
-        player_notes = [
-            memory for memory in selected if memory.memory_type.startswith("player_")
-        ]
-        return selected, player_notes
+        player_notes = self.retrieve_player_notes(
+            owner_character_id, limit=player_note_limit
+        )
+        player_ids = {memory.memory_id for memory in player_notes}
+        ordered = sorted(
+            self._memories.get(owner_character_id, []),
+            key=lambda memory: (-memory.importance, -memory.created_at),
+        )
+        general = [
+            memory for memory in ordered if memory.memory_id not in player_ids
+        ][:limit]
+        return general, player_notes
 
     def snapshot(self) -> dict[str, list[EpisodicMemory]]:
         """The full store content, for persistence (TV-14)."""

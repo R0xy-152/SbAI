@@ -1025,7 +1025,7 @@ Conversation Summary
 
 已经足够。
 
-当前 Context Selection 对同一角色只执行一次上述有界检索（默认总 LIMIT 5），通用 `memory_context` 保持完整结果，同时标记其中的 `player_*` 子集供画像区块使用。最终 Prompt 必须去重，同一 Memory 只能出现一次。DeepSeek、ChatGPT、Claude 各自拥有独立 owner scope；豆包仍使用确定性 Script State。
+当前 Context Selection 对同一角色执行两个互不相交的有界窗口：通用 `memory_context`（默认 LIMIT 5，importance/recency 排序，排除 `player_*`）与玩家画像窗口（默认 LIMIT 5，按 recency 独立召回 `player_*` 记忆）。画像独立于通用排序召回，较早的 Player 认知不会因被更近期的一般记忆挤出而丢失；两窗口互斥，同一 Memory 只出现一次。DeepSeek、ChatGPT、Claude 各自拥有独立 owner scope；豆包仍使用确定性 Script State。
 
 ---
 

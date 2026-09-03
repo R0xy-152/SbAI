@@ -160,12 +160,24 @@ def test_context_retrieval_partitions_notes_without_duplicates_or_extra_items():
         memory_type = "player_note" if index % 2 == 0 else "scene_note"
         store.propose("deepseek", MemoryProposal(memory_type, f"memory-{index}"))
 
-    memories, player_notes = store.retrieve_context("deepseek", limit=5)
-    selected_ids = [memory.memory_id for memory in memories]
-    assert len(selected_ids) == 5
-    assert len(selected_ids) == len(set(selected_ids))
-    assert {memory.memory_id for memory in player_notes} <= set(selected_ids)
+    general, player_notes = store.retrieve_context("deepseek", limit=5)
+    general_ids = [memory.memory_id for memory in general]
+    player_ids = [memory.memory_id for memory in player_notes]
+    assert len(general_ids) == len(set(general_ids))
+    assert not (set(general_ids) & set(player_ids))
+    assert all(not memory.memory_type.startswith("player_") for memory in general)
     assert all(memory.memory_type.startswith("player_") for memory in player_notes)
+
+
+def test_player_notes_surface_outside_general_ranking():
+    store = MemoryStore()
+    store.propose("deepseek", MemoryProposal("player_name", "Player叫阿明"))
+    for index in range(5):
+        store.propose("deepseek", MemoryProposal("scene_note", f"scene-{index}"))
+
+    general, player_notes = store.retrieve_context("deepseek", limit=5)
+    assert [memory.content for memory in player_notes] == ["Player叫阿明"]
+    assert all(memory.memory_id != player_notes[0].memory_id for memory in general)
 
 
 def test_player_notes_are_rendered_only_once_when_also_in_memory_context():
