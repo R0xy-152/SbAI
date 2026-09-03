@@ -1027,9 +1027,15 @@ Conversation Summary
 
 当前 Context Selection 对同一角色执行两个互不相交的有界窗口：通用 `memory_context`（默认 LIMIT 5，importance/recency 排序，排除 `player_*`）与玩家画像窗口（默认 LIMIT 5，按 recency 独立召回 `player_*` 记忆）。画像独立于通用排序召回，较早的 Player 认知不会因被更近期的一般记忆挤出而丢失；两窗口互斥，同一 Memory 只出现一次。DeepSeek、ChatGPT、Claude 各自拥有独立 owner scope；豆包仍使用确定性 Script State。
 
+当玩家消息作为 query 传入时（每轮默认行为），两个窗口在各自排序之上追加轻量相关性排序：character-bigram Jaccard 重叠分（`relevance_score`，无 embedding / 向量库，deterministic）。玩家主动提起的更早事实会被带回窗口（2026-09-03 记忆召回实验：一般记忆窗口命中 5/10 → 10/10；画像窗口同样受益）。
+
+互斥不变量基于该角色**全部** `player_*` 记忆 id：即使某画像不在当前画像窗口内（被 recency cap 挤出），也绝不进入通用窗口。该不变量曾在 2026-09-03 实验中因窗口溢出被破坏（溢出画像经一般窗口召回并进入强化循环），已修复并配有回归测试（test_relationship_and_player_model.py）。
+
 ---
 
 # 39. 当前不要求Semantic Retrieval
+
+注：§38 的轻量相关性排序（bigram 重叠）不属于 Semantic Retrieval，不依赖 Embedding / 向量库。
 
 当前状态：
 

@@ -50,6 +50,22 @@ def test_retrieve_with_query_falls_back_to_recency_when_no_overlap():
     ]
 
 
+def test_retrieve_player_notes_with_query_surfaces_older_relevant_note():
+    store = MemoryStore()
+    store.propose("deepseek", MemoryProposal("player_name", "Player叫小明"))
+    for index in range(5):
+        store.propose("deepseek", MemoryProposal("player_like", f"Player喜欢事物{index}"))
+
+    # No query: the recency cap drops the oldest note.
+    assert "Player叫小明" not in [
+        m.content for m in store.retrieve_player_notes("deepseek", limit=5)
+    ]
+
+    # With query: the relevant older note is ranked back into the window.
+    notes = store.retrieve_player_notes("deepseek", limit=5, query="小明是谁")
+    assert "Player叫小明" in [m.content for m in notes]
+
+
 # ---- orchestrator wiring: the player message is passed as the query ----
 
 

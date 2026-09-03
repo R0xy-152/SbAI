@@ -152,7 +152,7 @@ def layer1() -> None:
         off_g, _ = off_hits["general:" + token]
         on_g, _ = on_hits["general:" + token]
         print(f"    {token}: OFF={'GEN' if off_g else 'MISS'}  ON={'GEN' if on_g else 'MISS'}")
-    print("  玩家画像命中（PL=画像通道；GEN=溢出后走一般窗口，分区不变量被破坏）：")
+    print("  玩家画像命中（PL=画像通道；GEN=溢出走一般窗口，分区不变量修复后应恒为 MISS）：")
     for token, _t, _c, _q in PLAYER:
         off_g, off_pl = off_hits["player:" + token]
         on_g, on_pl = on_hits["player:" + token]
@@ -167,7 +167,7 @@ def layer1() -> None:
     leak_off = sum(1 for k, v in off_hits.items() if k.startswith("player:") and v[0])
     leak_on = sum(1 for k, v in on_hits.items() if k.startswith("player:") and v[0])
     print(f"  汇总：一般记忆窗口 OFF {gen_off}/10 vs ON {gen_on}/10；玩家画像通道 OFF {pl_off}/6 vs ON {pl_on}/6")
-    print(f"  画像经一般窗口泄漏通道命中：OFF {leak_off}/6 vs ON {leak_on}/6（分区不变量在窗口溢出时被破坏，见记录）")
+    print(f"  画像经一般窗口泄漏通道命中：OFF {leak_off}/6 vs ON {leak_on}/6（分区不变量修复后应恒为 0/6）")
 
     # 侧查：召回强化（一般窗口被召回的记忆 reinforcements>=1）
     snap = on_store.snapshot()["deepseek"]

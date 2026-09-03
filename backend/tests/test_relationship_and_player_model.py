@@ -180,6 +180,27 @@ def test_player_notes_surface_outside_general_ranking():
     assert all(memory.memory_id != player_notes[0].memory_id for memory in general)
 
 
+def test_partition_invariant_holds_for_player_notes_outside_window():
+    """Regression (memory-recall experiment, 2026-09-03): a player_* note that
+    fell outside the recency-capped notes window used to leak into the general
+    window through query relevance. The general window must exclude ALL
+    player_* memories, in or out of the notes window (docs/05 §38)."""
+    store = MemoryStore()
+    store.propose("deepseek", MemoryProposal("player_name", "Player叫小明"))
+    for index in range(6):
+        store.propose("deepseek", MemoryProposal("player_like", f"Player喜欢事物{index}"))
+    store.propose("deepseek", MemoryProposal("scene_note", "教室里有一台收音机"))
+
+    # 7 player notes > cap 5: the oldest note (小明) is outside the notes window.
+    general, player_notes = store.retrieve_context("deepseek", limit=5, query="小明是谁")
+    assert all(not memory.memory_type.startswith("player_") for memory in general)
+    assert "Player叫小明" in [memory.content for memory in player_notes]
+
+    general2, notes2 = store.retrieve_context("deepseek", limit=5)
+    assert all(not memory.memory_type.startswith("player_") for memory in general2)
+    assert "Player叫小明" not in [memory.content for memory in notes2]
+
+
 def test_player_notes_are_rendered_only_once_when_also_in_memory_context():
     runtime = DeepSeekRuntime(MockProvider())
     user = runtime._build_user_message(

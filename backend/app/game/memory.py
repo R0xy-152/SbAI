@@ -215,18 +215,26 @@ class MemoryStore:
 
 
     def retrieve_player_notes(
-        self, owner_character_id: str, limit: int = 5
+        self, owner_character_id: str, limit: int = 5, query: str | None = None
     ) -> list[EpisodicMemory]:
         """The player-model notes this character formed about the Player
         (docs/05 §31): memories whose type starts with "player_" — names,
         preferences, fears, attitudes. These are always relevant to "who am I
         talking to", so they are surfaced separately from the recency-ranked
-        general memories (docs/05 §38). Still owner-scoped (docs/05 §16-17)."""
+        general memories (docs/05 §38). Still owner-scoped (docs/05 §16-17).
+
+        With a query, notes are relevance-ranked (docs/05 §38 轻量相关性排序)
+        so an older note the player is actively asking about is not dropped by
+        the recency cap. This channel has no decay/reinforcement."""
         memories = [
             memory
             for memory in self._memories.get(owner_character_id, [])
             if memory.memory_type.startswith("player_")
         ]
+        if query:
+            scored = [(memory, relevance_score(query, memory.content)) for memory in memories]
+            scored.sort(key=lambda pair: (-pair[1], -pair[0].created_at))
+            return [memory for memory, _ in scored[:limit]]
         ordered = sorted(memories, key=lambda m: -m.created_at)
         return ordered[:limit]
 
@@ -246,14 +254,25 @@ class MemoryStore:
         ranking, so an older note about the Player is not dropped just because
         more recent scene memories outrank it (issue #3).
 
-        query and now are forwarded to retrieve() so the lightweight semantic
-        relevance ranking (docs/05 §40-41) and decayed-importance ranking
-        (docs/05 §66) both survive the partitioned recall.
+        Partition invariant (docs/05 §38, memory-recall experiment
+        2026-09-03): the general window excludes EVERY player_* memory of the
+        owner, not only the ones inside the current notes window — a note that
+        fell outside the recency-capped window used to be treated as a general
+        memory and leak in through query relevance.
+
+        query is forwarded to both windows so the lightweight relevance
+        ranking (docs/05 §38) applies to general memories and player notes
+        alike; now is forwarded to retrieve() for decayed-importance ranking
+        (docs/05 §66).
         """
+        player_ids = {
+            memory.memory_id
+            for memory in self._memories.get(owner_character_id, [])
+            if memory.memory_type.startswith("player_")
+        }
         player_notes = self.retrieve_player_notes(
-            owner_character_id, limit=player_note_limit
+            owner_character_id, limit=player_note_limit, query=query
         )
-        player_ids = {memory.memory_id for memory in player_notes}
         ranked = self.retrieve(owner_character_id, limit=None, query=query, now=now)
         general = [
             memory for memory in ranked if memory.memory_id not in player_ids

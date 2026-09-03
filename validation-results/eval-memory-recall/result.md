@@ -44,6 +44,8 @@
   1. player_notes 通道无 query 且 cap 5——更早玩家画像会被挤出，是否给画像通道也接入语义召回；
   2. 分区不变量缺陷——retrieve_context 的 player_ids 过滤应基于该角色全部 player_* 记忆 id（而非仅当前 top-5 画像窗口），一行级修复。
 
+> 后续（2026-09-03）：以上两项已按用户确认完成，见 `validation-results/memory-partition-fix/result.md`；本记录中的命中数据为修复前状态。
+
 ## 已知限制
 
 - 只测 deepseek 单角色、16 条事实、20 轮干扰的单一配置；更大规模/多角色留待后续。
