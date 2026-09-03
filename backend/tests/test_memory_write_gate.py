@@ -92,7 +92,7 @@ def test_unknown_owner_rejected():
     with pytest.raises(MemoryRejected):
         validate_memory_proposal(
             MemoryProposal("player_fear", "Player说自己很怕黑"),
-            character_id="chatgpt",
+            character_id="doubao",
             scene=BINDING_ROOM,
         )
 

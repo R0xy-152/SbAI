@@ -204,6 +204,11 @@ Character State不等于Memory。
 
 当前已实现的首个 `character_state` 字段是**二维心情 mood**（`positive` 积极值 / `excitement` 激动值，均 ∈[-1,1]），由 `CharacterStateService` 按 session + character 持久化，逐轮随模型输出演化并回灌下一轮提示词（去人机感）。与命名表情 `emotion` 的区别见 §42.1。
 
+当前 `CharacterState` 还包含：
+
+- `last_reasoning`：仅保存上一轮通过校验的内部回复理由；本轮缺失时必须清空，不能继续把更早内容冒充“上一轮”。回灌前仍受角色知识边界约束，DeepSeek 的非法视觉信息不得借此进入下一轮 Context。
+- `relationship_stage`：角色对 Player 的内部表达阶段，仅允许固定枚举值并在完整 Character Validation 后提交。它不属于 Narrative State，不能解锁 Fact、Event、Scene 或前端状态。
+
 ---
 
 # 10. character_knowledge
@@ -1016,13 +1021,14 @@ Claude只能基于她被授权的Knowledge进行推理。
   "action_proposals": [],
   "fact_refs": [],
   "reasoning": "我看不见，需要先问清楚环境，而不是乱猜。",
+  "relationship": "familiar",
   "mood": { "positive": -0.2, "excitement": 0.1 }
 }
 ```
 
 正式字段允许在实现阶段做小幅调整。
 
-`reasoning` 与 `mood` 属于「容错可选」字段：Schema 校验不因缺失/非法而拒绝（缺失→默认空 / None，越界→clamp），但提示词里要求模型必须输出。二者只进模型上下文与内部状态，不进前端。
+`reasoning`、`relationship` 与 `mood` 属于「容错可选」字段：Schema 校验不因缺失/非法而拒绝（缺失→默认空 / None，越界→clamp），但提示词里要求模型必须输出。三者只进模型上下文与内部状态，不进前端，也不得直接改变 Narrative State。
 
 ---
 
@@ -1198,6 +1204,8 @@ Narrative Validation
 
 `reasoning` 只作为内部约束与调试信息，绝不进入 Frontend 或正式 History。
 
+只有上一轮通过 Character / Narrative Validation 的 `reasoning` 可以进入下一轮 Context；如果本轮缺失则清空。它不能绕过 Knowledge、Memory Scope 或 DeepSeek 视觉权限。
+
 ---
 
 # 48. Schema Validation
@@ -1210,6 +1218,7 @@ Narrative Validation
 - emotion属于允许集合
 - animation属于允许集合
 - Proposal结构合法
+- relationship 属于允许阶段集合
 
 ---
 
@@ -1223,6 +1232,7 @@ Narrative Validation
 - ChatGPT是否出现明显阵营反转
 - Claude是否严重违反固定人格
 - 是否引用角色无权知道的Fact
+- 内部 reasoning 是否夹带角色无权知道的信息
 
 ---
 

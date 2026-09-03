@@ -220,6 +220,18 @@ def test_complete_omits_temperature_when_none():
     assert provider.complete(system="s", user="u") == "ok"
 
 
+def test_complete_does_not_send_unsupported_frequency_penalty():
+    # DeepSeek deprecated frequency_penalty and ignores it, especially in
+    # thinking mode. Do not advertise or send a no-op control.
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        assert "frequency_penalty" not in body
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    provider = _provider_with_transport(handler)
+    assert provider.complete(system="s", user="u") == "ok"
+
+
 def test_complete_accepts_injected_api_key_without_env(monkeypatch):
     # The env var is absent but an explicit key is passed.
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)

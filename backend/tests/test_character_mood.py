@@ -12,6 +12,7 @@ import json
 from app.characters.base import (
     CharacterMood,
     CharacterRequest,
+    CharacterState,
     parse_character_response,
 )
 from app.characters.deepseek import DeepSeekRuntime
@@ -157,6 +158,56 @@ def test_no_mood_output_keeps_no_mood():
     assert "积极" not in provider.users[1]
 
 
+def test_reasoning_commits_and_reaches_next_turn():
+    # The character's own "why I replied this way" is fed back next turn, so its
+    # train of thought stays continuous (docs/04 §9 CharacterState.last_reasoning).
+    provider = _MoodProvider(mood=None)
+    orchestrator = _orchestrator(provider)
+    first = orchestrator.handle_turn(None, "你好")
+    # First turn has no committed reasoning yet → no inner-thought line.
+    assert "心里想" not in provider.users[0]
+    orchestrator.handle_turn(first.session_id, "你好呀")
+    assert "心里想" in provider.users[1]
+    assert "测试推理。" in provider.users[1]
+
+
+def test_reasoning_absent_keeps_no_reasoning_line():
+    class _NoReasoningProvider(LLMProvider):
+        def __init__(self) -> None:
+            self.users: list[str] = []
+
+        def complete(self, **kwargs) -> str:
+            self.users.append(kwargs["user"])
+            return _structured_json()  # no reasoning field
+
+    provider = _NoReasoningProvider()
+    orchestrator = _orchestrator(provider)
+    first = orchestrator.handle_turn(None, "你好")
+    orchestrator.handle_turn(first.session_id, "你好呀")
+    assert "心里想" not in provider.users[1]
+
+
+def test_missing_reasoning_clears_the_previous_turn_reasoning():
+    class _IntermittentReasoningProvider(LLMProvider):
+        def __init__(self) -> None:
+            self.users: list[str] = []
+
+        def complete(self, **kwargs) -> str:
+            self.users.append(kwargs["user"])
+            if len(self.users) == 1:
+                return _structured_json(reasoning="只属于第一轮。")
+            return _structured_json()
+
+    provider = _IntermittentReasoningProvider()
+    orchestrator = _orchestrator(provider)
+    first = orchestrator.handle_turn(None, "第一轮")
+    orchestrator.handle_turn(first.session_id, "第二轮")
+    orchestrator.handle_turn(first.session_id, "第三轮")
+
+    assert "只属于第一轮" in provider.users[1]
+    assert "只属于第一轮" not in provider.users[2]
+
+
 def test_runtime_does_not_disable_thinking():
     # The shared runtime used to pass thinking={"type": "disabled"}; it now
     # leaves thinking to the provider default (on for DeepSeek), so the model
@@ -175,12 +226,47 @@ def test_character_states_persist_round_trip(tmp_path):
     repo.save(
         PersistedSession(
             session_id="s1",
-            character_states={"deepseek": CharacterMood(0.4, -0.6)},
+            character_states={
+                "deepseek": CharacterState(mood=CharacterMood(0.4, -0.6))
+            },
         )
     )
     loaded = repo.load("s1")
-    assert loaded.character_states["deepseek"].positive == 0.4
-    assert loaded.character_states["deepseek"].excitement == -0.6
+    assert loaded.character_states["deepseek"].mood.positive == 0.4
+    assert loaded.character_states["deepseek"].mood.excitement == -0.6
+
+
+def test_reasoning_persists_round_trip(tmp_path):
+    repo = JsonSessionRepository(tmp_path)
+    repo.save(
+        PersistedSession(
+            session_id="s1",
+            character_states={
+                "deepseek": CharacterState(
+                    mood=CharacterMood(0.4, -0.6),
+                    last_reasoning="她好像有点可疑。",
+                )
+            },
+        )
+    )
+    loaded = repo.load("s1")
+    assert loaded.character_states["deepseek"].last_reasoning == "她好像有点可疑。"
+
+
+def test_legacy_flat_mood_snapshot_loads_as_character_state(tmp_path):
+    # Backward compatible: snapshots written before CharacterState existed
+    # stored character_states as a flat mood dict; they must still load.
+    repo = JsonSessionRepository(tmp_path)
+    repo.save(PersistedSession(session_id="legacy"))
+    path = tmp_path / "legacy.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["character_states"] = {"deepseek": {"positive": 0.4, "excitement": -0.6}}
+    path.write_text(json.dumps(data), encoding="utf-8")
+    loaded = repo.load("legacy")
+    state = loaded.character_states["deepseek"]
+    assert state.mood.positive == 0.4
+    assert state.mood.excitement == -0.6
+    assert state.last_reasoning == ""
 
 
 def test_mood_survives_session_restore(tmp_path):

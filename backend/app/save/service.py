@@ -17,6 +17,7 @@ transaction / atomic file write).
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from datetime import datetime, timezone
 
 from app.game.orchestrator import GameOrchestrator
@@ -39,7 +40,8 @@ from app.save.repository import (
 # docs/13 §16.2: the snapshot schema version, saved from the first version.
 # A structural change to the snapshot must bump this and add a Migration;
 # silently changing JSON structure is forbidden.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+OLDEST_SUPPORTED_SCHEMA_VERSION = 1
 
 CHAPTER_ID = "ch1"
 
@@ -81,6 +83,41 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _migrate_snapshot(snapshot: dict, schema_version: int) -> dict:
+    """Return a current-version copy of a supported save snapshot.
+
+    v1 stored ``character_states[character_id]`` as a flat mood object. v2
+    stores the complete CharacterState while remaining tolerant of the short-
+    lived nested-v1 shape written by the feature branch before this migration.
+    """
+    if not OLDEST_SUPPORTED_SCHEMA_VERSION <= schema_version <= SCHEMA_VERSION:
+        raise SaveSchemaError(
+            f"save schema_version {schema_version} is not supported "
+            f"(supported {OLDEST_SUPPORTED_SCHEMA_VERSION}..{SCHEMA_VERSION})"
+        )
+
+    migrated = deepcopy(snapshot)
+    if schema_version == 1:
+        states = migrated.get("character_states") or {}
+        migrated_states: dict[str, dict] = {}
+        for character_id, value in states.items():
+            if isinstance(value, dict) and "mood" in value:
+                migrated_states[character_id] = {
+                    "mood": value.get("mood"),
+                    "last_reasoning": value.get("last_reasoning", ""),
+                    "relationship_stage": value.get("relationship_stage", ""),
+                }
+            else:
+                migrated_states[character_id] = {
+                    "mood": value,
+                    "last_reasoning": "",
+                    "relationship_stage": "",
+                }
+        migrated["character_states"] = migrated_states
+        migrated["schema_version"] = 2
+    return migrated
+
+
 class SaveSnapshotService:
     """Coordinates Capture / Save / List / Load against one SaveRepository."""
 
@@ -117,7 +154,11 @@ class SaveSnapshotService:
             "present_characters": sorted(
                 set(chapter.available_characters) | {"deepseek"}
             ),
-            "emotion": {cid: _mood_to_dict(m) for cid, m in moods.items()},
+            "emotion": {
+                cid: _mood_to_dict(m.mood)
+                for cid, m in moods.items()
+                if m.mood is not None
+            },
             "last_dialogue": last_dialogue,
         }
 
@@ -306,13 +347,9 @@ class SaveSnapshotService:
         save = self._repository.get_by_id(save_id)
         if save is None or save.player_id != player_id:
             raise KeyError(f"unknown save: {save_id}")
-        if save.schema_version != SCHEMA_VERSION:
-            raise SaveSchemaError(
-                f"save schema_version {save.schema_version} is not supported "
-                f"(current {SCHEMA_VERSION})"
-            )
-        self._validate_snapshot_invariants(save.snapshot)
-        new_session_id = orchestrator.import_snapshot(save.snapshot)
+        snapshot = _migrate_snapshot(save.snapshot, save.schema_version)
+        self._validate_snapshot_invariants(snapshot)
+        new_session_id = orchestrator.import_snapshot(snapshot)
         # 故事进度摘要：前端据此路由（故事存档 → /story；已完结/旧玩法存档
         # → /game），不改变 GameViewState 契约（docs/17 结局后自由聊天）。
         progress = orchestrator.story_progress(new_session_id)
