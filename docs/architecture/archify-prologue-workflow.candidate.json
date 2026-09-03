@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "序章游戏流程（docs/19）",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1500,
+      660
+    ],
+    "views": [
+      {
+        "id": "happy-path",
+        "label": "主线流程",
+        "focus": [
+          "start",
+          "chapters",
+          "visit-choice",
+          "branch",
+          "reunion",
+          "free-chat"
+        ],
+        "note": "从开始游戏到进入自由聊天的完整主线。"
+      },
+      {
+        "id": "visit-loop",
+        "label": "探班循环",
+        "focus": [
+          "visit-choice",
+          "branch",
+          "reunion"
+        ],
+        "note": "无序探班三名角色，全部访问后进入三人集合。"
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "player",
+      "label": "玩家"
+    },
+    {
+      "id": "frontend",
+      "label": "Vue 前端"
+    },
+    {
+      "id": "backend",
+      "label": "后端（Orchestrator）"
+    },
+    {
+      "id": "runtime",
+      "label": "剧情运行时"
+    }
+  ],
+  "phases": [
+    {
+      "id": "open",
+      "label": "开局与探班",
+      "fromCol": 0,
+      "toCol": 3
+    },
+    {
+      "id": "reunion-phase",
+      "label": "三人集合",
+      "fromCol": 4,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "aftertalk",
+      "label": "后日谈自由聊天",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "start",
+    "chapters",
+    "visit-choice",
+    "branch",
+    "reunion",
+    "free-chat"
+  ],
+  "nodes": [
+    {
+      "id": "start",
+      "lane": "player",
+      "col": 0,
+      "type": "external",
+      "label": "开始游戏",
+      "sublabel": "标题按钮"
+    },
+    {
+      "id": "chapters",
+      "lane": "frontend",
+      "col": 1,
+      "type": "frontend",
+      "label": "章节选择",
+      "sublabel": "/chapters"
+    },
+    {
+      "id": "visit-choice",
+      "lane": "backend",
+      "col": 2,
+      "type": "backend",
+      "label": "探班选择",
+      "sublabel": "剩余角色"
+    },
+    {
+      "id": "branch",
+      "lane": "runtime",
+      "col": 3,
+      "type": "backend",
+      "label": "角色探班篇",
+      "sublabel": "无序探班"
+    },
+    {
+      "id": "reunion",
+      "lane": "backend",
+      "col": 4,
+      "type": "backend",
+      "label": "三人集合",
+      "sublabel": "三篇均完成",
+      "tag": "PROLOGUE-REUNION"
+    },
+    {
+      "id": "free-chat",
+      "lane": "frontend",
+      "col": 5,
+      "type": "frontend",
+      "label": "自由聊天",
+      "sublabel": "/game"
+    }
+  ],
+  "edges": [
+    {
+      "from": "start",
+      "to": "chapters",
+      "label": "进入章节选择",
+      "variant": "emphasis",
+      "role": "main",
+      "labelDy": 55
+    },
+    {
+      "from": "chapters",
+      "to": "visit-choice",
+      "label": "进入序章",
+      "variant": "emphasis",
+      "role": "main",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "visit-choice",
+      "to": "branch",
+      "label": "探班一名角色",
+      "variant": "emphasis",
+      "role": "main",
+      "labelDy": 55
+    },
+    {
+      "from": "branch",
+      "to": "reunion",
+      "label": "三篇均完成",
+      "variant": "emphasis",
+      "role": "main",
+      "labelDy": 55
+    },
+    {
+      "from": "reunion",
+      "to": "free-chat",
+      "label": "选一名 AI",
+      "variant": "emphasis",
+      "role": "main"
+    },
+    {
+      "from": "branch",
+      "to": "visit-choice",
+      "label": "仍有未访问角色",
+      "variant": "dashed",
+      "role": "return",
+      "route": "return-left",
+      "labelDy": 24
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "主线",
+      "items": [
+        "开始游戏 → 章节选择 → 探班 → 三人集合 → 自由聊天",
+        "序章 AI 停用：/story 固定剧本逐行推进"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "探班循环",
+      "items": [
+        "三名角色无序访问，每篇结束回到探班选择",
+        "三篇全部完成后进入三人集合"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "后日谈",
+      "items": [
+        "三人集合后选一名 AI 进入 /game 自由聊天",
+        "自由聊天启用真实 DeepSeek，缺 key 回落 mock"
+      ]
+    }
+  ]
+}

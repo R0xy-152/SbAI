@@ -5,9 +5,9 @@
   "status": "pass",
   "visualReview": "pending",
   "artifact": {
-    "path": "/Users/ming/gal/SbAI/docs/architecture/project-architecture.html",
-    "sha256": "67174ca94d02cb20e12b67ba7e39169cc96d69d035efa37b81391fb1bfac8aad",
-    "bytes": 645463
+    "path": "/Users/ming/gal/SbAI/docs/architecture/project-presentation-dataflow.html",
+    "sha256": "c12b772dccaba5ec2decb85a04200a0b12d3020951234f723a3b233ecaa5fb7a",
+    "bytes": 632248
   },
   "state": {
     "detail": "read",
@@ -89,7 +89,7 @@
         "overflowY": false,
         "ok": true,
         "resolvedTheme": "light",
-        "file": "project-architecture.visual-check.1440x900.light.png"
+        "file": "project-presentation-dataflow.visual-check.1440x900.light.png"
       },
       {
         "width": 1440,
@@ -103,7 +103,7 @@
         "overflowY": false,
         "ok": true,
         "resolvedTheme": "dark",
-        "file": "project-architecture.visual-check.1440x900.dark.png"
+        "file": "project-presentation-dataflow.visual-check.1440x900.dark.png"
       },
       {
         "width": 2048,
@@ -117,7 +117,7 @@
         "overflowY": false,
         "ok": true,
         "resolvedTheme": "light",
-        "file": "project-architecture.visual-check.2048x1320.light.png"
+        "file": "project-presentation-dataflow.visual-check.2048x1320.light.png"
       },
       {
         "width": 2048,
@@ -131,13 +131,13 @@
         "overflowY": false,
         "ok": true,
         "resolvedTheme": "dark",
-        "file": "project-architecture.visual-check.2048x1320.dark.png"
+        "file": "project-presentation-dataflow.visual-check.2048x1320.dark.png"
       }
     ],
-    "contactSheet": "project-architecture.visual-check.html"
+    "contactSheet": "project-presentation-dataflow.visual-check.html"
   },
   "sidecars": {
-    "receipt": "project-architecture.visual-check.json",
-    "contactSheet": "project-architecture.visual-check.html"
+    "receipt": "project-presentation-dataflow.visual-check.json",
+    "contactSheet": "project-presentation-dataflow.visual-check.html"
   }
 }

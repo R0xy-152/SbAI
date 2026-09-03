@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "序章阶段状态机（PrologueRuntime）",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1100,
+      566
+    ],
+    "views": [
+      {
+        "id": "main-lifecycle",
+        "label": "主线阶段",
+        "focus": [
+          "intro",
+          "visit-choice",
+          "branch",
+          "reunion",
+          "chat-choice"
+        ],
+        "note": "从开场到后日谈选择的五个主线阶段。"
+      },
+      {
+        "id": "visit-loop",
+        "label": "探班循环",
+        "focus": [
+          "visit-choice",
+          "branch",
+          "reunion"
+        ],
+        "note": "无序探班的循环与三人集合的进入条件。"
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "主线阶段"
+    }
+  ],
+  "states": [
+    {
+      "id": "intro",
+      "type": "start",
+      "label": "开场",
+      "sublabel": "intro 台词",
+      "lane": "main",
+      "col": 0,
+      "step": "01"
+    },
+    {
+      "id": "visit-choice",
+      "type": "decision",
+      "label": "探班选择",
+      "sublabel": "剩余角色",
+      "lane": "main",
+      "col": 1,
+      "step": "02"
+    },
+    {
+      "id": "branch",
+      "type": "active",
+      "label": "角色探班篇",
+      "sublabel": "无序访问",
+      "lane": "main",
+      "col": 2,
+      "step": "03"
+    },
+    {
+      "id": "reunion",
+      "type": "active",
+      "label": "三人集合",
+      "sublabel": "三篇均完成",
+      "lane": "main",
+      "col": 3,
+      "step": "04",
+      "tag": "PROLOGUE-REUNION"
+    },
+    {
+      "id": "chat-choice",
+      "type": "success",
+      "label": "后日谈选择",
+      "sublabel": "选一名 AI → /game",
+      "lane": "main",
+      "col": 4,
+      "step": "05"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "intro-done",
+      "from": "intro",
+      "to": "visit-choice",
+      "label": "开场结束",
+      "labelDy": 55
+    },
+    {
+      "id": "pick-character",
+      "from": "visit-choice",
+      "to": "branch",
+      "label": "选一名角色",
+      "variant": "emphasis",
+      "labelDy": 55
+    },
+    {
+      "id": "loop-back",
+      "from": "branch",
+      "to": "visit-choice",
+      "label": "仍有未访问角色",
+      "variant": "dashed",
+      "route": "top-channel"
+    },
+    {
+      "id": "all-visited",
+      "from": "branch",
+      "to": "reunion",
+      "label": "三篇均完成",
+      "variant": "emphasis",
+      "labelDy": 55
+    },
+    {
+      "id": "reunion-done",
+      "from": "reunion",
+      "to": "chat-choice",
+      "label": "后日谈选一名 AI",
+      "labelDy": 55
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "主线",
+      "items": [
+        "开场 → 探班 → 三人集合 → 后日谈选择五个阶段",
+        "主线推进由 PrologueRuntime 权威决定（AI 停用）"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "探班循环",
+      "items": [
+        "探班选择是决策点：从剩余角色中选一名",
+        "仍有未访问角色时回到探班选择，形成无序循环"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "终点",
+      "items": [
+        "三篇均完成才进入三人集合",
+        "后日谈选择后进入 /game 对应角色自由聊天"
+      ]
+    }
+  ]
+}

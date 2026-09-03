@@ -8,43 +8,21 @@
       {
         "id": "main-request-path",
         "label": "主请求路径",
-        "focus": [
-          "player",
-          "vue-frontend",
-          "fastapi",
-          "orchestrator",
-          "save-service",
-          "postgres"
-        ],
+        "focus": ["player", "vue-frontend", "fastapi", "orchestrator", "save-service", "postgres"],
         "note": "玩家输入 → 表现层 → 权威后端 → 存档的完整链路。"
       },
       {
         "id": "generative-runtime",
         "label": "生成与剧情",
-        "focus": [
-          "orchestrator",
-          "characters",
-          "providers",
-          "narrative-script"
-        ],
-        "note": "四角色 Runtime、LLM Provider 与确定性剧情/脚本/选项。"
+        "focus": ["orchestrator", "characters", "providers", "narrative-script"],
+        "note": "四角色 Runtime、LLM Provider 与序章/第一章确定性剧情运行时。"
       },
       {
         "id": "persistence-assets",
         "label": "存档与静态资源",
-        "focus": [
-          "save-service",
-          "json-store",
-          "postgres",
-          "assets",
-          "legacy-frontend"
-        ],
-        "note": "双存档后端与静态素材 allow-list 挂载。"
+        "focus": ["save-service", "json-store", "postgres", "assets", "legacy-frontend"],
+        "note": "双存档后端与静态素材挂载。"
       }
-    ],
-    "viewBox": [
-      1400,
-      720
     ]
   },
   "components": [
@@ -53,206 +31,118 @@
       "type": "external",
       "label": "玩家",
       "sublabel": "浏览器",
-      "pos": [
-        40,
-        300
-      ],
-      "size": [
-        120,
-        64
-      ]
+      "pos": [40, 300],
+      "size": [120, 64]
     },
     {
       "id": "vue-frontend",
       "type": "frontend",
       "label": "Vue 3 前端",
       "sublabel": "frontend-vue/ · Vite+TS+Pinia",
-      "pos": [
-        220,
-        300
-      ],
-      "size": [
-        170,
-        64
-      ]
+      "pos": [220, 300],
+      "size": [170, 64]
     },
     {
       "id": "legacy-frontend",
       "type": "frontend",
       "label": "旧前端（冻结）",
       "sublabel": "frontend-deprecated/ · vanilla JS",
-      "pos": [
-        220,
-        500
-      ],
-      "size": [
-        170,
-        64
-      ]
+      "pos": [220, 500],
+      "size": [170, 64]
     },
     {
       "id": "fastapi",
       "type": "backend",
       "label": "FastAPI 后端",
-      "sublabel": ":8000 · GAL_PROVIDER=mock/deepseek",
-      "pos": [
-        430,
-        300
-      ],
-      "size": [
-        160,
-        64
-      ]
+      "sublabel": ":8000 · auth/chat/game/saves/story",
+      "pos": [430, 300],
+      "size": [170, 64]
     },
     {
       "id": "assets",
       "type": "backend",
       "label": "静态素材挂载",
       "sublabel": "/char · /backgroud · /frontend-deprecated",
-      "pos": [
-        430,
-        110
-      ],
-      "size": [
-        160,
-        64
-      ]
+      "pos": [430, 110],
+      "size": [170, 64]
     },
     {
       "id": "orchestrator",
       "type": "backend",
       "label": "GameOrchestrator",
       "sublabel": "权威状态 · per-session 锁",
-      "pos": [
-        650,
-        300
-      ],
-      "size": [
-        170,
-        64
-      ]
+      "pos": [650, 300],
+      "size": [170, 64]
     },
     {
       "id": "characters",
       "type": "backend",
       "label": "角色 Runtime ×4",
       "sublabel": "DeepSeek · Claude · ChatGPT · 豆包",
-      "pos": [
-        650,
-        110
-      ],
-      "size": [
-        170,
-        64
-      ]
+      "pos": [650, 110],
+      "size": [170, 64]
     },
     {
       "id": "providers",
       "type": "external",
       "label": "LLM Providers",
       "sublabel": "Mock · DeepSeek · Anthropic",
-      "pos": [
-        890,
-        110
-      ],
-      "size": [
-        150,
-        64
-      ]
+      "pos": [890, 110],
+      "size": [150, 64]
     },
     {
       "id": "narrative-script",
       "type": "backend",
-      "label": "剧情与脚本",
-      "sublabel": "NarrativeState · Script DSL · 选项生成",
-      "pos": [
-        650,
-        500
-      ],
-      "size": [
-        170,
-        64
-      ]
+      "label": "剧情运行时",
+      "sublabel": "PrologueRuntime · StoryRuntime · Narrative",
+      "pos": [650, 500],
+      "size": [170, 64]
     },
     {
       "id": "save-service",
       "type": "backend",
       "label": "SaveSnapshotService",
       "sublabel": "AUTO checkpoint + 6 MANUAL",
-      "pos": [
-        890,
-        300
-      ],
-      "size": [
-        170,
-        64
-      ]
+      "pos": [890, 300],
+      "size": [170, 64]
     },
     {
       "id": "postgres",
       "type": "database",
       "label": "PostgreSQL",
       "sublabel": "JSONB 存档 · Compose 内网",
-      "pos": [
-        1150,
-        300
-      ],
-      "size": [
-        140,
-        64
-      ]
+      "pos": [1150, 300],
+      "size": [140, 64]
     },
     {
       "id": "json-store",
       "type": "database",
       "label": "JSON 本地存储",
-      "sublabel": "backend/data/ · 会话与存档 fixture",
-      "pos": [
-        890,
-        500
-      ],
-      "size": [
-        170,
-        64
-      ]
+      "sublabel": "backend/data/sessions · 会话文件",
+      "pos": [890, 500],
+      "size": [170, 64]
     }
   ],
   "boundaries": [
     {
       "kind": "region",
       "label": "前端表现层（不持有 Game Truth）",
-      "wraps": [
-        "vue-frontend",
-        "legacy-frontend"
-      ]
+      "wraps": ["vue-frontend", "legacy-frontend"]
     },
     {
       "kind": "region",
       "label": "FastAPI 游戏后端（权威状态）",
-      "wraps": [
-        "fastapi",
-        "assets",
-        "orchestrator",
-        "characters",
-        "narrative-script",
-        "save-service"
-      ]
+      "wraps": ["fastapi", "assets", "orchestrator", "characters", "narrative-script", "save-service"]
     },
     {
       "kind": "security-group",
-      "label": "安全边界：CORS 白名单 · 静态 allow-list · per-session 锁",
-      "wraps": [
-        "fastapi",
-        "assets"
-      ]
+      "label": "安全边界：CORS 白名单 · 静态 allow-list · 邀请码鉴权",
+      "wraps": ["fastapi", "assets"]
     },
     {
       "kind": "region",
       "label": "持久化层",
-      "wraps": [
-        "postgres",
-        "json-store"
-      ]
+      "wraps": ["postgres", "json-store"]
     }
   ],
   "connections": [
@@ -270,13 +160,14 @@
       "to": "fastapi",
       "label": "REST /api",
       "variant": "emphasis",
-      "labelDy": -60
+      "labelDy": -26
     },
     {
       "id": "fastapi-to-orch",
       "from": "fastapi",
       "to": "orchestrator",
-      "label": "handle_turn"
+      "label": "handle_turn / story_advance",
+      "labelDy": 56
     },
     {
       "id": "orch-to-characters",
@@ -303,7 +194,7 @@
       "to": "save-service",
       "label": "checkpoint 自动存档",
       "variant": "dashed",
-      "labelDy": -26
+      "labelDy": 56
     },
     {
       "id": "save-to-postgres",
@@ -315,7 +206,7 @@
       "id": "save-to-json",
       "from": "save-service",
       "to": "json-store",
-      "label": "JSON 文件（本地 fixture）",
+      "label": "JSON 文件（会话 fixture）",
       "variant": "dashed",
       "labelDy": 24
     },
@@ -323,9 +214,7 @@
       "id": "fastapi-to-assets",
       "from": "fastapi",
       "to": "assets",
-      "label": "静态挂载",
-      "fromSide": "top",
-      "toSide": "bottom"
+      "label": "静态挂载"
     },
     {
       "id": "legacy-to-fastapi",
@@ -341,6 +230,7 @@
       "title": "前端",
       "items": [
         "Vue 3 表现层只消费后端权威结果（docs/13 架构原则）",
+        "路由：标题 → /chapters → /story?story_id=prologue → /game",
         "旧前端冻结保留，同 /api 可回退"
       ]
     },
@@ -349,17 +239,17 @@
       "title": "后端",
       "items": [
         "GameOrchestrator 权威状态 + per-session 锁（Turn 原子）",
-        "确定性剧情：03:17 → 调查 → 私审 → Recovery → Security Review → Bad End",
-        "四角色 Runtime + Presence Gate + Claim disclosure gate"
+        "序章 PrologueRuntime：探班循环 → 三人集合 → 后日谈",
+        "四角色 Runtime + LLM Provider 缺 key 回落 mock"
       ]
     },
     {
       "dot": "rose",
       "title": "安全与数据",
       "items": [
-        "静态挂载 allow-list / CORS 白名单 / player_id 白名单",
-        "AUTO checkpoint（仅剧情节点）+ 6 MANUAL 存档",
-        "JSON 本地 fixture ↔ PostgreSQL 目标后端"
+        "静态挂载 allow-list / CORS 白名单 / 邀请码鉴权",
+        "AUTO checkpoint（场景边界）+ 6 MANUAL 存档",
+        "PostgreSQL JSONB ↔ JSON 会话文件"
       ]
     }
   ]

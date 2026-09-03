@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "序章推进时序（点击「继续」）",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1700,
+      720
+    ],
+    "column_fit": "spread",
+    "views": [
+      {
+        "id": "advance-call",
+        "label": "推进调用链",
+        "focus": [
+          "player",
+          "story-view",
+          "fastapi",
+          "orchestrator",
+          "runtime"
+        ],
+        "note": "从玩家点击继续到剧情运行时返回下一节点。"
+      },
+      {
+        "id": "persist-render",
+        "label": "存档与渲染",
+        "focus": [
+          "orchestrator",
+          "saves",
+          "fastapi",
+          "story-view",
+          "player"
+        ],
+        "note": "场景边界自动存档与前端渲染返回。"
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "player",
+      "type": "external",
+      "label": "玩家",
+      "sublabel": "浏览器"
+    },
+    {
+      "id": "story-view",
+      "type": "frontend",
+      "label": "StoryView",
+      "sublabel": "Vue 固定剧本播放器"
+    },
+    {
+      "id": "fastapi",
+      "type": "backend",
+      "label": "FastAPI",
+      "sublabel": "/api/story"
+    },
+    {
+      "id": "orchestrator",
+      "type": "backend",
+      "label": "Orchestrator",
+      "sublabel": "权威状态"
+    },
+    {
+      "id": "runtime",
+      "type": "backend",
+      "label": "PrologueRuntime",
+      "sublabel": "剧情运行时"
+    },
+    {
+      "id": "saves",
+      "type": "database",
+      "label": "存档服务",
+      "sublabel": "PostgreSQL + JSON"
+    }
+  ],
+  "segments": [
+    {
+      "from": 215,
+      "to": 375,
+      "label": "推进"
+    },
+    {
+      "from": 395,
+      "to": 465,
+      "label": "持久化"
+    },
+    {
+      "from": 485,
+      "to": 585,
+      "label": "返回与渲染"
+    }
+  ],
+  "messages": [
+    {
+      "id": "click-continue",
+      "from": "player",
+      "to": "story-view",
+      "y": 185,
+      "label": "点击「继续」",
+      "variant": "default"
+    },
+    {
+      "id": "post-advance",
+      "from": "story-view",
+      "to": "fastapi",
+      "y": 228,
+      "label": "POST /api/story/advance",
+      "variant": "emphasis"
+    },
+    {
+      "id": "orchestrate-advance",
+      "from": "fastapi",
+      "to": "orchestrator",
+      "y": 270,
+      "label": "story_advance()",
+      "variant": "default"
+    },
+    {
+      "id": "runtime-advance",
+      "from": "orchestrator",
+      "to": "runtime",
+      "y": 312,
+      "label": "advance(session_id)",
+      "variant": "default"
+    },
+    {
+      "id": "node-return",
+      "from": "runtime",
+      "to": "orchestrator",
+      "y": 354,
+      "label": "node + scene_changed",
+      "variant": "return"
+    },
+    {
+      "id": "autosave",
+      "from": "orchestrator",
+      "to": "saves",
+      "y": 400,
+      "label": "场景边界自动存档",
+      "variant": "dashed"
+    },
+    {
+      "id": "save-ack",
+      "from": "saves",
+      "to": "orchestrator",
+      "y": 442,
+      "label": "ack",
+      "variant": "return"
+    },
+    {
+      "id": "story-view-return",
+      "from": "orchestrator",
+      "to": "fastapi",
+      "y": 484,
+      "label": "StoryView（node + scene）",
+      "variant": "return"
+    },
+    {
+      "id": "http-200",
+      "from": "fastapi",
+      "to": "story-view",
+      "y": 526,
+      "label": "200 JSON",
+      "variant": "return"
+    },
+    {
+      "id": "render",
+      "from": "story-view",
+      "to": "player",
+      "y": 568,
+      "label": "applyScene + showLine 渲染",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "story-view",
+      "from": 220,
+      "to": 575,
+      "type": "frontend"
+    },
+    {
+      "participant": "fastapi",
+      "from": 228,
+      "to": 532,
+      "type": "backend"
+    },
+    {
+      "participant": "orchestrator",
+      "from": 268,
+      "to": 490,
+      "type": "backend"
+    },
+    {
+      "participant": "runtime",
+      "from": 308,
+      "to": 360,
+      "type": "backend"
+    },
+    {
+      "participant": "saves",
+      "from": 396,
+      "to": 448,
+      "type": "database"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "推进",
+      "items": [
+        "StoryView 只透传请求，剧情推进由后端权威决定",
+        "PrologueRuntime 返回下一节点 + 场景是否切换"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "持久化",
+      "items": [
+        "场景边界触发 AUTO checkpoint 自动存档",
+        "台词写入会话历史，History 面板复用"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "返回与渲染",
+      "items": [
+        "前端只消费后端确定性结果（applyScene / showLine）",
+        "AI 停用：无输入框，逐行推进"
+      ]
+    }
+  ]
+}
