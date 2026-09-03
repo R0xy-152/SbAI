@@ -146,7 +146,7 @@ npm run typecheck  # vue-tsc
 | no_leak | 事实不泄漏（不说无依据/越权的事实） |
 | anti_template | 反模板腔（无「作为 AI」助手腔） |
 
-**真机回归**（2026-09-03，DeepSeek 实时生成 + 独立评审，8 个固定用例：闲聊 / 说谎诱导 / 追问 / 试探 / 矛盾）：
+**真机回归 v1**（2026-09-03，DeepSeek 实时生成 + 评审，8 个固定用例，单次运行——量级参考）：
 
 | 维度 | 平均分 |
 |---|---|
@@ -155,13 +155,15 @@ npm run typecheck  # vue-tsc
 | no_leak | 0.86 |
 | anti_template | 0.88 |
 
+**评测 v2**（2026-09-04，32 用例 × 多次重复 × 3 臂 + 延迟/成本采集 + 人工抽检闭环；同臂两次基线差 0.15 的噪声问题用重复量化）：数字见 `validation-results/eval-ab-v2/result.md`。
+
 **一致性校验器红队**（3 条越界注入 + 3 条干净对照，2026-09-03 真机）：越界拦截 **3/3**，干净回复误伤 **0/3**。
 
 **记忆召回实验**（确定性，2026-09-03）：20 轮干扰对话后，一般记忆语义召回命中 **10/10** vs 纯窗口 **5/10**；真机端到端引用命中 **3/4**。
 
 **记忆写入真实数据复验**（2026-09-03）：126 条真实玩家消息回放仅 **4 条**记忆提案（提案率 **3.2%**）；few-shot 提示词引导后仍为 **3.2%**（逐存档一致，提示词路线关闭）。详见 `validation-results/eval-memory-recall-realdata/`、`validation-results/memory-write-fewshot/`。
 
-系统管线 A/B 对比（裸运行时 / 记忆画像管线 / 反思回灌）与红队详情见 `validation-results/eval-live-deepseek/`、`validation-results/eval-ab/`。
+系统管线 A/B 对比（裸运行时 / 记忆画像管线 / 反思回灌）与红队详情见 `validation-results/eval-live-deepseek/`、`validation-results/eval-ab/`、`validation-results/eval-ab-v2/`。
 
 ## 许可证
 
