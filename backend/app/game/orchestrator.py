@@ -271,12 +271,12 @@ class GameOrchestrator:
         # TV-13: deterministic memory selection (docs/05 §37-38) — only this
         # character's memories, importance/recency ordered, LIMIT N.
         memory_store = self._memory.store_for(session.session_id)
-        memories = memory_store.retrieve(character_id, limit=MEMORY_RETRIEVAL_LIMIT)
+        memories, player_memories = memory_store.retrieve_context(
+            character_id, limit=MEMORY_RETRIEVAL_LIMIT
+        )
         # docs/05 §31: the player-model notes this character formed about the
         # Player from its own player_* memories (owner-scoped, never others').
-        player_notes = format_memories(
-            memory_store.retrieve_player_notes(character_id)
-        )
+        player_notes = format_memories(player_memories)
         # Script layer (docs/03 §37): a turn at a scripted beat speaks its
         # authored line instead of the LLM. The state change that beat depends
         # on (the Narrative Event) still commits below, exactly as on an

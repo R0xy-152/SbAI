@@ -146,6 +146,42 @@ def test_player_notes_are_owner_scoped():
     assert store.retrieve_player_notes("claude") == []
 
 
+def test_chatgpt_can_own_player_notes():
+    store = MemoryStore()
+    store.propose("chatgpt", MemoryProposal("player_preference", "Player喜欢安静"))
+    assert [
+        memory.content for memory in store.retrieve_player_notes("chatgpt")
+    ] == ["Player喜欢安静"]
+
+
+def test_context_retrieval_partitions_notes_without_duplicates_or_extra_items():
+    store = MemoryStore()
+    for index in range(8):
+        memory_type = "player_note" if index % 2 == 0 else "scene_note"
+        store.propose("deepseek", MemoryProposal(memory_type, f"memory-{index}"))
+
+    memories, player_notes = store.retrieve_context("deepseek", limit=5)
+    selected_ids = [memory.memory_id for memory in memories]
+    assert len(selected_ids) == 5
+    assert len(selected_ids) == len(set(selected_ids))
+    assert {memory.memory_id for memory in player_notes} <= set(selected_ids)
+    assert all(memory.memory_type.startswith("player_") for memory in player_notes)
+
+
+def test_player_notes_are_rendered_only_once_when_also_in_memory_context():
+    runtime = DeepSeekRuntime(MockProvider())
+    user = runtime._build_user_message(
+        CharacterRequest(
+            character_id="deepseek",
+            player_message="还记得吗？",
+            memory_context="- Player说自己很怕黑\n- 门外有声音",
+            player_notes="- Player说自己很怕黑",
+        )
+    )
+    assert user.count("Player说自己很怕黑") == 1
+    assert "门外有声音" in user
+
+
 def test_player_notes_injected_into_prompt():
     runtime = DeepSeekRuntime(MockProvider())
     user = runtime._build_user_message(

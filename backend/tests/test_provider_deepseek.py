@@ -220,30 +220,15 @@ def test_complete_omits_temperature_when_none():
     assert provider.complete(system="s", user="u") == "ok"
 
 
-def test_complete_sets_default_frequency_penalty():
-    # A small frequency_penalty is the default so replies do not verbatim
-    # repeat (复读) — one of the clearest "AI 人机感" tells.
-    def handler(request: httpx.Request) -> httpx.Response:
-        body = json.loads(request.content)
-        assert body["frequency_penalty"] == 0.5
-        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
-
-    provider = _provider_with_transport(handler)
-    assert provider.complete(system="s", user="u") == "ok"
-
-
-def test_complete_omits_frequency_penalty_when_none():
-    # frequency_penalty=None restores the API default and must not be sent.
+def test_complete_does_not_send_unsupported_frequency_penalty():
+    # DeepSeek deprecated frequency_penalty and ignores it, especially in
+    # thinking mode. Do not advertise or send a no-op control.
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
         assert "frequency_penalty" not in body
         return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
 
-    provider = DeepSeekProvider(
-        api_key="test-key",
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
-        frequency_penalty=None,
-    )
+    provider = _provider_with_transport(handler)
     assert provider.complete(system="s", user="u") == "ok"
 
 

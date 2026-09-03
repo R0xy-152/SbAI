@@ -513,7 +513,17 @@ class GenerativeRuntime(CharacterRuntime):
         if request.environment_info:
             parts.append("当前环境：\n" + request.environment_info)
         if request.memory_context:
-            parts.append("回忆：\n" + request.memory_context)
+            # Player notes remain part of memory_context for the stable runtime
+            # request contract, but are rendered only in their dedicated block.
+            # This prevents the same memory from appearing twice in the prompt.
+            player_note_lines = set(request.player_notes.splitlines())
+            general_memory = "\n".join(
+                line
+                for line in request.memory_context.splitlines()
+                if line not in player_note_lines
+            )
+            if general_memory:
+                parts.append("回忆：\n" + general_memory)
         if request.player_notes:
             # docs/05 §31: what this character has formed about the Player from
             # its own player_* memories — always relevant to "who am I talking to".

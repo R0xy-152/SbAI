@@ -14,7 +14,11 @@ the LLM never mutates state directly — its mood / reasoning output is a
 
 from __future__ import annotations
 
-from app.characters.base import CharacterMood, CharacterState
+from app.characters.base import (
+    ALLOWED_RELATIONSHIP_STAGES,
+    CharacterMood,
+    CharacterState,
+)
 
 
 class CharacterStateService:
@@ -61,9 +65,9 @@ class CharacterStateService:
         self, session_id: str, character_id: str, reasoning: str
     ) -> None:
         """Store the character's reasoning for the next turn's continuity.
-        Empty reasoning is ignored so a missing reason keeps the previous one."""
-        if reasoning:
-            self._ensure_state(session_id, character_id).last_reasoning = reasoning
+        Empty reasoning explicitly clears the previous turn so an older thought
+        is never mislabeled as belonging to the immediately preceding turn."""
+        self._ensure_state(session_id, character_id).last_reasoning = reasoning
 
     def relationship_stage_for(self, session_id: str, character_id: str) -> str:
         """The character's committed relationship stage, or "" if none yet."""
@@ -76,8 +80,9 @@ class CharacterStateService:
         """Store the character's updated relationship stage toward the Player
         (docs/05 §45). The orchestrator calls this only after the reply passes
         validation, so a rejected reply never changes the relationship."""
-        if stage:
-            self._ensure_state(session_id, character_id).relationship_stage = stage
+        if stage not in ALLOWED_RELATIONSHIP_STAGES:
+            raise ValueError(f"unknown relationship stage: {stage!r}")
+        self._ensure_state(session_id, character_id).relationship_stage = stage
 
     def snapshot(self, session_id: str) -> dict[str, CharacterState]:
         """The per-character states to persist (docs/02 §21)."""

@@ -43,7 +43,7 @@ class MockProvider(LLMProvider):
         return json.dumps(
             {
                 "character_id": self._character_id,
-                "dialogue": f"这是 DeepSeek 的本地模拟回复：你说“{user}”。",
+                "dialogue": f"这是 {self._character_id} 的本地模拟回复：你说“{user}”。",
                 "emotion": "neutral",
                 "animation_proposal": "none",
                 "memory_proposals": [],

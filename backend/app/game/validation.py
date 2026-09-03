@@ -14,7 +14,7 @@ Frontend; the caller falls back to a safe, story-neutral line instead.
 
 from __future__ import annotations
 
-from app.characters.base import CharacterResponse
+from app.characters.base import ALLOWED_RELATIONSHIP_STAGES, CharacterResponse
 from app.game.scene import Scene
 
 # docs/04 §46 / docs/05 §40: the Fact ids each character is currently
@@ -91,10 +91,16 @@ def _character_validation(
     # preference (docs/04 §20): if she names the scene's visual ground truth,
     # she has been handed it out-of-band, and the reply is rejected.
     if character_id == "deepseek" and scene.wall_code:
-        if scene.wall_code in response.dialogue:
+        if scene.wall_code in response.dialogue or scene.wall_code in response.reasoning:
             raise ResponseRejected(
                 "deepseek referenced unauthorized visual scene fact"
             )
+
+    if (
+        response.next_relationship_stage is not None
+        and response.next_relationship_stage not in ALLOWED_RELATIONSHIP_STAGES
+    ):
+        raise ResponseRejected("relationship stage is not allowed")
 
 
 def _narrative_validation(response: CharacterResponse) -> None:

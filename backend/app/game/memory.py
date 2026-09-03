@@ -27,8 +27,8 @@ from app.game.scene import Scene
 DEFAULT_IMPORTANCE = 5
 
 # Characters that may own Episodic Memory in this MVP (docs/05 §16-17). Doubao
-# is scripted (no generative memory) and ChatGPT is not yet wired in.
-KNOWN_CHARACTERS = frozenset({"deepseek", "claude"})
+# remains scripted and therefore has no generative memory scope.
+KNOWN_CHARACTERS = frozenset({"deepseek", "claude", "chatgpt"})
 
 
 class MemoryRejected(Exception):
@@ -124,7 +124,7 @@ class MemoryStore:
         return ordered[:limit]
 
     def retrieve_player_notes(
-        self, owner_character_id: str, limit: int = 10
+        self, owner_character_id: str, limit: int = 5
     ) -> list[EpisodicMemory]:
         """The player-model notes this character formed about the Player
         (docs/05 §31): memories whose type starts with "player_" — names,
@@ -138,6 +138,20 @@ class MemoryStore:
         ]
         ordered = sorted(memories, key=lambda m: -m.created_at)
         return ordered[:limit]
+
+    def retrieve_context(
+        self, owner_character_id: str, limit: int = 5
+    ) -> tuple[list[EpisodicMemory], list[EpisodicMemory]]:
+        """Select one bounded context window, then partition player notes.
+
+        Both groups come from the same deterministic retrieval result, so the
+        total stays within ``limit`` and a player note is never injected twice.
+        """
+        selected = self.retrieve(owner_character_id, limit=limit)
+        player_notes = [
+            memory for memory in selected if memory.memory_type.startswith("player_")
+        ]
+        return selected, player_notes
 
     def snapshot(self) -> dict[str, list[EpisodicMemory]]:
         """The full store content, for persistence (TV-14)."""
