@@ -11,7 +11,7 @@ whenToUse: 用户要求部署上线、发布本地更新到服务器、或修复
 ## 0. 前置确认（不可跳过）
 
 1. **检查工作区未提交改动**：`git status --short`。只部署已提交的 commit；若有与本次部署无关的并行改动，**绝不卷入 bundle**（bundle 只含 commit，未提交改动天然不进）。
-2. **确认服务器密码**：root 密码见 `deploy/STATUS.md` 或私聊，**绝不写进 skill/仓库/提交记录**。
+2. **SSH 访问（密钥认证）**：本机 `ssh gal` 即可登录（Host 别名见 `~/.ssh/config`，密钥 `~/.ssh/gal_root_ed25519`，无需密码）；root 密码不入库，**绝不写进 skill/仓库/提交记录**。
 3. **本地验证**（可选但推荐）：
    - 后端：`cd backend && .venv/Scripts/python -m pytest -q`
    - 前端：`cd frontend-vue && npm.cmd run build`（PowerShell 禁止脚本运行，必须用 `npm.cmd` 而非 `npm`）
@@ -30,9 +30,10 @@ git bundle list-heads gal-new.bundle   # 必须显示最新 commit hash，确认
 
 ## 2. 上传到服务器
 
-```powershell
-cd D:\gal
-backend\.venv\Scripts\python.exe deploy\remote.py --host 114.55.133.96 --user root --password '<密码>' --put gal-new.bundle /srv/gal-new.bundle
+```bash
+# 密钥登录上传（本机 macOS；Windows 同样用 scp，密钥已配）
+cd /Users/ming/gal/SbAI
+scp gal-new.bundle gal:/srv/gal-new.bundle
 ```
 
 - 276MB 左右，约 1-3 分钟，建议后台运行。
@@ -43,7 +44,7 @@ backend\.venv\Scripts\python.exe deploy\remote.py --host 114.55.133.96 --user ro
 ## 3. 服务器 reset + 重建
 
 ```bash
-# 服务器上（经 remote.py --cmd）
+# 服务器上（ssh gal）
 cd /srv/gal && git fetch /srv/gal-new.bundle HEAD && git reset --hard FETCH_HEAD && git log --oneline -2
 cd /srv/gal && docker compose build backend frontend-vue && docker compose up -d
 ```

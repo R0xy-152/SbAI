@@ -14,7 +14,7 @@ services:
     build:
       context: ./frontend-vue
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"
     # 服务器部署：进程退出自动拉起（docker compose up -d 后随 Docker 自启）
     restart: unless-stopped
     depends_on:
@@ -37,8 +37,8 @@ services:
       GAL_AUTH_BACKEND: postgres
       GAL_AUTH_REQUIRED: ${GAL_AUTH_REQUIRED:-true}
       GAL_AUTH_SECRET: ${GAL_AUTH_SECRET:?GAL_AUTH_SECRET must be set}
-      # 当前 HTTP 小规模展示为 false；正式 HTTPS 必须改 true。
-      GAL_AUTH_COOKIE_SECURE: ${GAL_AUTH_COOKIE_SECURE:-false}
+      # 生产默认只允许 Cookie 经 HTTPS 发送；仅 localhost 本地调试可显式覆盖 false。
+      GAL_AUTH_COOKIE_SECURE: ${GAL_AUTH_COOKIE_SECURE:-true}
     # T2review P1-15：backend 只绑定宿主 loopback（前端 nginx 经 Compose 内网
     # 反代 /api），不发布到所有网络接口。
     ports:

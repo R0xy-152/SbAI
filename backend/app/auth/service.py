@@ -7,7 +7,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from app.auth.repository import AuthRepository, UserRecord
+from app.auth.repository import AuthRepository, DeveloperNote, UserRecord
 
 
 class InvalidInvite(Exception):
@@ -43,12 +43,17 @@ class AuthService:
     def token_digest(token: str) -> str:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
-    def create_user(self, display_name: str, quota: int = 100) -> tuple[UserRecord, str]:
+    def create_user(
+        self, display_name: str, quota: int = 100, label: str | None = None
+    ) -> tuple[UserRecord, str]:
         if not display_name.strip():
             raise ValueError("display name must not be empty")
         if quota < 0:
             raise ValueError("quota must be non-negative")
         invite = self.generate_invite()
+        # docs/20：label 是邀请码的「对应关系」标签；缺省回落到显示名，保证旧
+        # 建号流程无需改动即可按显示名聚合。
+        resolved_label = (label or display_name).strip() or None
         user = UserRecord(
             id=uuid.uuid4().hex,
             display_name=display_name.strip(),
@@ -57,6 +62,7 @@ class AuthService:
             quota_total=quota,
             quota_used=0,
             created_at=datetime.now(timezone.utc),
+            label=resolved_label,
         )
         self.repository.create_user(user)
         return user, invite
@@ -100,3 +106,11 @@ class AuthService:
         if user is None:
             raise KeyError(user_id)
         return user, invite
+
+    # docs/20：开发者留言（对开发者的话）—— 服务层暴露领域方法，避免调用方
+    # 链式直达 repository（code review：Message Chains）。
+    def add_developer_note(self, note: DeveloperNote) -> bool:
+        return self.repository.add_developer_note(note)
+
+    def list_developer_notes(self) -> list[DeveloperNote]:
+        return self.repository.list_developer_notes()

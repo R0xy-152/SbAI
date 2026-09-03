@@ -1149,11 +1149,11 @@ playtime_seconds
 
 ## 16.2 schema_version
 
-必须从第一版就保存：
+必须从第一版就保存。当前版本为 2：
 
 ```json
 {
-  "schema_version": 1
+  "schema_version": 2
 }
 ```
 
@@ -1167,6 +1167,8 @@ Save Migration
 
 禁止未来偷偷改变 JSON 结构而让旧存档静默损坏。
 
+`schema_version = 2` 对应 `character_states` 从扁平 mood 扩展为完整 CharacterState（`mood` / `last_reasoning` / `relationship_stage`）。加载器必须显式把 v1 的扁平 mood 迁移为 v2；未知的更旧或未来版本继续明确失败。
+
 ---
 
 # 17. Snapshot 内容
@@ -1175,7 +1177,7 @@ Save Migration
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "narrative": {},
   "script": {},
   "game_state": {},

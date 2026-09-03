@@ -863,6 +863,8 @@ Episodic Memory优先考虑：
 Player说自己怕黑。
 ```
 
+实现约定：此类 Episodic Memory 使用 `player_` 前缀的 `memory_type`（例如 `player_name`、`player_fear`）。前缀只用于已通过 Write Gate 的记忆分类，不能代替来源、可见性、猜测/事实和角色 owner 校验。
+
 ### 明确关系变化
 
 例如：
@@ -1022,6 +1024,8 @@ Conversation Summary
 ```
 
 已经足够。
+
+当前 Context Selection 对同一角色执行两个互不相交的有界窗口：通用 `memory_context`（默认 LIMIT 5，importance/recency 排序，排除 `player_*`）与玩家画像窗口（默认 LIMIT 5，按 recency 独立召回 `player_*` 记忆）。画像独立于通用排序召回，较早的 Player 认知不会因被更近期的一般记忆挤出而丢失；两窗口互斥，同一 Memory 只出现一次。DeepSeek、ChatGPT、Claude 各自拥有独立 owner scope；豆包仍使用确定性 Script State。
 
 ---
 

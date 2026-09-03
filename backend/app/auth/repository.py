@@ -15,8 +15,10 @@ CREATE TABLE IF NOT EXISTS users (
     quota_total         INTEGER NOT NULL CHECK (quota_total >= 0),
     quota_used          INTEGER NOT NULL DEFAULT 0 CHECK (quota_used >= 0),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_login_at       TIMESTAMPTZ
+    last_login_at       TIMESTAMPTZ,
+    label               TEXT
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS label TEXT;
 CREATE TABLE IF NOT EXISTS auth_sessions (
     token_digest  TEXT PRIMARY KEY,
     user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -32,7 +34,29 @@ CREATE TABLE IF NOT EXISTS game_session_owners (
 );
 CREATE INDEX IF NOT EXISTS ix_game_session_owners_user
     ON game_session_owners(user_id);
+CREATE TABLE IF NOT EXISTS developer_notes (
+    id           BIGSERIAL PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    display_name TEXT NOT NULL,
+    label        TEXT,
+    character_id TEXT NOT NULL,
+    content      TEXT NOT NULL,
+    session_id   TEXT NOT NULL UNIQUE,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ix_developer_notes_user ON developer_notes(user_id);
 """
+
+# users 的完整列清单：SELECT 与 UPDATE...RETURNING 共用，避免逐处手写九列
+#（code review：Duplicated Code / Shotgun Surgery）。顺序与 _user() 的位置索引
+# 严格一致，改列时必须同步 _user() 的 row[n]。
+_USER_COLUMNS = (
+    "id,display_name,invite_code_digest,status,quota_total,quota_used,"
+    "created_at,last_login_at,label"
+)
+_USER_COLUMNS_QUALIFIED = ", ".join(
+    f"u.{column}" for column in _USER_COLUMNS.split(",")
+)
 
 
 @dataclass(frozen=True)
@@ -45,10 +69,29 @@ class UserRecord:
     quota_used: int
     created_at: datetime
     last_login_at: datetime | None = None
+    # docs/20：邀请码的「对应关系」标签（如 网易 / 腾讯），用于 Excel 按组聚合
+    # 玩家「对开发者的话」。明文邀请码不落库（docs/18），仅存此标签。
+    label: str | None = None
 
     @property
     def quota_remaining(self) -> int:
         return max(0, self.quota_total - self.quota_used)
+
+
+@dataclass(frozen=True)
+class DeveloperNote:
+    """玩家「对开发者的话」一条留言（docs/20）。
+
+    display_name / label 在提交时冗余写入，导出 Excel 时无需再关联 users。
+    """
+
+    user_id: str
+    display_name: str
+    label: str | None
+    character_id: str
+    content: str
+    session_id: str
+    created_at: datetime
 
 
 @dataclass(frozen=True)
@@ -119,6 +162,12 @@ class AuthRepository(ABC):
     @abstractmethod
     def owns_game_session(self, user_id: str, session_id: str) -> bool: ...
 
+    @abstractmethod
+    def add_developer_note(self, note: DeveloperNote) -> bool: ...
+
+    @abstractmethod
+    def list_developer_notes(self) -> list[DeveloperNote]: ...
+
 
 class MemoryAuthRepository(AuthRepository):
     """Thread-safe local/test implementation; production uses PostgreSQL."""
@@ -127,6 +176,7 @@ class MemoryAuthRepository(AuthRepository):
         self._users: dict[str, UserRecord] = {}
         self._sessions: dict[str, tuple[str, datetime, datetime | None]] = {}
         self._owners: dict[str, str] = {}
+        self._notes: list[DeveloperNote] = []
         self._lock = threading.Lock()
 
     def create_user(self, user: UserRecord) -> None:
@@ -270,6 +320,18 @@ class MemoryAuthRepository(AuthRepository):
                 ))
             return stats
 
+    def add_developer_note(self, note: DeveloperNote) -> bool:
+        """幂等：同一 session 只落一条留言，重复写入返回 False。"""
+        with self._lock:
+            if any(existing.session_id == note.session_id for existing in self._notes):
+                return False
+            self._notes.append(note)
+            return True
+
+    def list_developer_notes(self) -> list[DeveloperNote]:
+        with self._lock:
+            return sorted(self._notes, key=lambda note: note.created_at)
+
 
 class PostgresAuthRepository(AuthRepository):
     def __init__(self, dsn: str) -> None:
@@ -302,29 +364,32 @@ class PostgresAuthRepository(AuthRepository):
         return UserRecord(
             id=row[0], display_name=row[1], invite_code_digest=row[2], status=row[3],
             quota_total=row[4], quota_used=row[5], created_at=row[6], last_login_at=row[7],
+            label=row[8],
         )
 
     def create_user(self, user: UserRecord) -> None:
+        placeholders = ", ".join(["%s"] * len(_USER_COLUMNS.split(",")))
         with self._conn() as conn:
             conn.execute(
-                "INSERT INTO users (id,display_name,invite_code_digest,status,quota_total,quota_used,created_at,last_login_at) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                f"INSERT INTO users ({_USER_COLUMNS}) VALUES ({placeholders})",
                 (user.id, user.display_name, user.invite_code_digest, user.status,
-                 user.quota_total, user.quota_used, user.created_at, user.last_login_at),
+                 user.quota_total, user.quota_used, user.created_at, user.last_login_at,
+                 user.label),
             )
 
     def list_users(self) -> list[UserRecord]:
         with self._conn() as conn:
-            rows = conn.execute("SELECT id,display_name,invite_code_digest,status,quota_total,quota_used,created_at,last_login_at FROM users ORDER BY created_at").fetchall()
+            rows = conn.execute(f"SELECT {_USER_COLUMNS} FROM users ORDER BY created_at").fetchall()
         return [self._user(row) for row in rows]
 
     def get_user(self, user_id: str) -> UserRecord | None:
         with self._conn() as conn:
-            row = conn.execute("SELECT id,display_name,invite_code_digest,status,quota_total,quota_used,created_at,last_login_at FROM users WHERE id=%s", (user_id,)).fetchone()
+            row = conn.execute(f"SELECT {_USER_COLUMNS} FROM users WHERE id=%s", (user_id,)).fetchone()
         return self._user(row)
 
     def find_by_invite(self, digest: str) -> UserRecord | None:
         with self._conn() as conn:
-            row = conn.execute("SELECT id,display_name,invite_code_digest,status,quota_total,quota_used,created_at,last_login_at FROM users WHERE invite_code_digest=%s", (digest,)).fetchone()
+            row = conn.execute(f"SELECT {_USER_COLUMNS} FROM users WHERE invite_code_digest=%s", (digest,)).fetchone()
         return self._user(row)
 
     def record_login(self, user_id: str, token_digest: str, expires_at: datetime) -> None:
@@ -335,7 +400,7 @@ class PostgresAuthRepository(AuthRepository):
     def user_for_session(self, token_digest: str, now: datetime) -> UserRecord | None:
         with self._conn() as conn:
             row = conn.execute(
-                "SELECT u.id,u.display_name,u.invite_code_digest,u.status,u.quota_total,u.quota_used,u.created_at,u.last_login_at FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_digest=%s AND s.revoked_at IS NULL AND s.expires_at>%s AND u.status='ACTIVE'",
+                f"SELECT {_USER_COLUMNS_QUALIFIED} FROM auth_sessions s JOIN users u ON u.id=s.user_id WHERE s.token_digest=%s AND s.revoked_at IS NULL AND s.expires_at>%s AND u.status='ACTIVE'",
                 (token_digest, now),
             ).fetchone()
         return self._user(row)
@@ -370,7 +435,7 @@ class PostgresAuthRepository(AuthRepository):
     def add_quota(self, user_id: str, amount: int) -> UserRecord | None:
         with self._conn() as conn:
             row = conn.execute(
-                "UPDATE users SET quota_total=quota_total+%s WHERE id=%s RETURNING id,display_name,invite_code_digest,status,quota_total,quota_used,created_at,last_login_at",
+                f"UPDATE users SET quota_total=quota_total+%s WHERE id=%s RETURNING {_USER_COLUMNS}",
                 (amount, user_id),
             ).fetchone()
         return self._user(row)
@@ -378,7 +443,7 @@ class PostgresAuthRepository(AuthRepository):
     def set_status(self, user_id: str, status: str) -> UserRecord | None:
         with self._conn() as conn:
             row = conn.execute(
-                "UPDATE users SET status=%s WHERE id=%s RETURNING id,display_name,invite_code_digest,status,quota_total,quota_used,created_at,last_login_at",
+                f"UPDATE users SET status=%s WHERE id=%s RETURNING {_USER_COLUMNS}",
                 (status, user_id),
             ).fetchone()
         return self._user(row)
@@ -386,7 +451,7 @@ class PostgresAuthRepository(AuthRepository):
     def rotate_invite(self, user_id: str, digest: str) -> UserRecord | None:
         with self._conn() as conn:
             row = conn.execute(
-                "UPDATE users SET invite_code_digest=%s WHERE id=%s RETURNING id,display_name,invite_code_digest,status,quota_total,quota_used,created_at,last_login_at",
+                f"UPDATE users SET invite_code_digest=%s WHERE id=%s RETURNING {_USER_COLUMNS}",
                 (digest, user_id),
             ).fetchone()
         return self._user(row)
@@ -428,3 +493,27 @@ class PostgresAuthRepository(AuthRepository):
         with self._conn() as conn:
             row = conn.execute("SELECT 1 FROM game_session_owners WHERE session_id=%s AND user_id=%s", (session_id, user_id)).fetchone()
         return row is not None
+
+    def add_developer_note(self, note: DeveloperNote) -> bool:
+        """幂等：同一 session 只落一条（UNIQUE(session_id) ON CONFLICT DO NOTHING）。"""
+        with self._conn() as conn:
+            cursor = conn.execute(
+                "INSERT INTO developer_notes (user_id,display_name,label,character_id,content,session_id,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (session_id) DO NOTHING",
+                (note.user_id, note.display_name, note.label, note.character_id,
+                 note.content, note.session_id, note.created_at),
+            )
+            return cursor.rowcount > 0
+
+    def list_developer_notes(self) -> list[DeveloperNote]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT user_id,display_name,label,character_id,content,session_id,created_at FROM developer_notes ORDER BY created_at"
+            ).fetchall()
+        return [
+            DeveloperNote(
+                user_id=row[0], display_name=row[1], label=row[2],
+                character_id=row[3], content=row[4], session_id=row[5],
+                created_at=row[6],
+            )
+            for row in rows
+        ]

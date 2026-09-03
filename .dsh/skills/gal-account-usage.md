@@ -11,14 +11,14 @@ whenToUse: 用户想监控邀请码使用情况、查看账号额度消耗、排
 ## 一条命令
 
 ```bash
-# 服务器上（本机经 deploy/remote.py --cmd 执行）
+# 服务器上（本机经 ssh gal 执行）
 cd /srv/gal && docker compose exec -T backend python -m app.auth.cli usage
 ```
 
-本机（Windows PowerShell）完整调用：
+本机完整调用（SSH 密钥登录，Host 别名 `gal`）：
 
-```powershell
-backend\.venv\Scripts\python.exe deploy\remote.py --host 114.55.133.96 --user root --password '<密码>' --cmd "cd /srv/gal && docker compose exec -T backend python -m app.auth.cli usage"
+```bash
+ssh gal "cd /srv/gal && docker compose exec -T backend python -m app.auth.cli usage"
 ```
 
 ## 输出格式（示例）

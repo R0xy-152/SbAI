@@ -239,6 +239,33 @@ def test_load_creates_new_active_session_and_persists(tmp_path):
 
 # ── 8. schema_version 不支持时明确失败 ───────────────────────────────────
 
+def test_v1_snapshot_is_migrated_to_current_character_state_shape(tmp_path):
+    orchestrator = _orchestrator(repository=JsonSessionRepository(tmp_path / "sess"))
+    service, repo = _service(tmp_path)
+    session_id = _orchestrator_helper_run(orchestrator)
+    orchestrator._character_state.commit_mood(
+        session_id, "deepseek", CharacterMood(positive=0.5, excitement=0.2)
+    )
+    saved = service.save_manual(orchestrator, "p1", session_id, 1)
+
+    record = repo.get_by_id(saved.id)
+    state = record.snapshot["character_states"]["deepseek"]
+    record.snapshot["character_states"]["deepseek"] = state["mood"]
+    record.snapshot["schema_version"] = 1
+    record.schema_version = 1
+    repo.upsert(record)
+
+    loaded = service.load_save(orchestrator, "p1", saved.id)
+    migrated = service.capture(orchestrator, loaded["session_id"])
+    assert migrated["schema_version"] == SCHEMA_VERSION == 2
+    assert migrated["character_states"]["deepseek"] == {
+        "mood": {"positive": 0.5, "excitement": 0.2},
+        "last_reasoning": "",
+        "relationship_stage": "",
+        "last_reflection": "",
+    }
+
+
 def test_unsupported_schema_version_fails_loudly(tmp_path):
     orchestrator = _orchestrator(repository=JsonSessionRepository(tmp_path / "sess"))
     service, repo = _service(tmp_path)

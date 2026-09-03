@@ -77,5 +77,7 @@ def test_orchestrator_passes_query_and_recalls_memory():
     first = orchestrator.handle_turn(None, "我很怕黑。")
     runtime.proposals = []
     orchestrator.handle_turn(first.session_id, "我怕黑怎么办？")
-    # The relevant memory is recalled into the character's memory context.
-    assert "怕黑" in runtime.requests[1].memory_context
+    # The relevant memory is recalled into the character's context. A
+    # player_* memory surfaces through the dedicated player-notes block
+    # (issue #3 partitioning), never through the general memory window.
+    assert "怕黑" in runtime.requests[1].player_notes

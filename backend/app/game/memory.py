@@ -32,8 +32,8 @@ DECAY_FACTOR = 0.9
 IMPORTANCE_FLOOR = 1.0
 
 # Characters that may own Episodic Memory in this MVP (docs/05 §16-17). Doubao
-# is scripted (no generative memory) and ChatGPT is not yet wired in.
-KNOWN_CHARACTERS = frozenset({"deepseek", "claude"})
+# remains scripted and therefore has no generative memory scope.
+KNOWN_CHARACTERS = frozenset({"deepseek", "claude", "chatgpt"})
 
 
 def _bigrams(text: str) -> set[str]:
@@ -157,7 +157,7 @@ class MemoryStore:
     def retrieve(
         self,
         owner_character_id: str,
-        limit: int = 5,
+        limit: int | None = 5,
         query: str | None = None,
         now: int | None = None,
     ) -> list[EpisodicMemory]:
@@ -212,8 +212,10 @@ class MemoryStore:
                 return reinforced
         return None
 
+
+
     def retrieve_player_notes(
-        self, owner_character_id: str, limit: int = 10
+        self, owner_character_id: str, limit: int = 5
     ) -> list[EpisodicMemory]:
         """The player-model notes this character formed about the Player
         (docs/05 §31): memories whose type starts with "player_" — names,
@@ -227,6 +229,36 @@ class MemoryStore:
         ]
         ordered = sorted(memories, key=lambda m: -m.created_at)
         return ordered[:limit]
+
+    def retrieve_context(
+        self,
+        owner_character_id: str,
+        limit: int = 5,
+        player_note_limit: int = 5,
+        query: str | None = None,
+        now: int | None = None,
+    ) -> tuple[list[EpisodicMemory], list[EpisodicMemory]]:
+        """Select a bounded general-memory window and a separate bounded
+        player-note window (docs/05 §31, §37-38).
+
+        The two groups are disjoint, so no memory is injected twice. Player
+        notes are retrieved independently of the general importance/recency
+        ranking, so an older note about the Player is not dropped just because
+        more recent scene memories outrank it (issue #3).
+
+        query and now are forwarded to retrieve() so the lightweight semantic
+        relevance ranking (docs/05 §40-41) and decayed-importance ranking
+        (docs/05 §66) both survive the partitioned recall.
+        """
+        player_notes = self.retrieve_player_notes(
+            owner_character_id, limit=player_note_limit
+        )
+        player_ids = {memory.memory_id for memory in player_notes}
+        ranked = self.retrieve(owner_character_id, limit=None, query=query, now=now)
+        general = [
+            memory for memory in ranked if memory.memory_id not in player_ids
+        ][:limit]
+        return general, player_notes
 
     def snapshot(self) -> dict[str, list[EpisodicMemory]]:
         """The full store content, for persistence (TV-14)."""

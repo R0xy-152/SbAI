@@ -188,6 +188,25 @@ def test_reasoning_absent_keeps_no_reasoning_line():
     assert "心里想" not in provider.users[1]
 
 
+def test_missing_reasoning_clears_the_previous_turn_reasoning():
+    class _IntermittentReasoningProvider(LLMProvider):
+        def __init__(self) -> None:
+            self.users: list[str] = []
+
+        def complete(self, **kwargs) -> str:
+            self.users.append(kwargs["user"])
+            if len(self.users) == 1:
+                return _structured_json(reasoning="只属于第一轮。")
+            return _structured_json()
+
+    provider = _IntermittentReasoningProvider()
+    orchestrator = _orchestrator(provider)
+    first = orchestrator.handle_turn(None, "第一轮")
+    orchestrator.handle_turn(first.session_id, "第二轮")
+    orchestrator.handle_turn(first.session_id, "第三轮")
+
+    assert "只属于第一轮" in provider.users[1]
+    assert "只属于第一轮" not in provider.users[2]
 def test_runtime_does_not_disable_thinking():
     # The shared runtime used to pass thinking={"type": "disabled"}; it now
     # leaves thinking to the provider default (on for DeepSeek), so the model

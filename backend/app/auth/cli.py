@@ -28,9 +28,14 @@ def _parser() -> argparse.ArgumentParser:
     create = sub.add_parser("create", help="create an account and print its invite once")
     create.add_argument("--name", required=True)
     create.add_argument("--quota", type=int, default=100)
+    create.add_argument("--label", default=None, help="invite-code 对应关系（docs/20，用于 Excel 聚合）")
 
     sub.add_parser("list", help="list accounts without invite digests")
     sub.add_parser("usage", help="show per-account usage (quota, logins, active sessions)")
+
+    export = sub.add_parser("export-notes", help="export developer notes + invite-codes.md into an Excel")
+    export.add_argument("--out", default=None, help="output xlsx path (default: repo-root developer-notes.xlsx)")
+    export.add_argument("--invite-codes", default=None, help="invite-codes.md path (default: repo-root invite-codes.md)")
 
     add = sub.add_parser("add-quota", help="increase permanent quota")
     add.add_argument("user_id")
@@ -56,9 +61,10 @@ def main(argv: list[str] | None = None) -> int:
     repository = service.repository
 
     if args.command == "create":
-        user, invite = service.create_user(args.name, args.quota)
+        user, invite = service.create_user(args.name, args.quota, args.label)
         print(f"user_id={user.id}")
         print(f"display_name={user.display_name}")
+        print(f"label={user.label}")
         print(f"invite_code={invite}")
         print("The invite code cannot be recovered from the database.")
         return 0
@@ -67,8 +73,22 @@ def main(argv: list[str] | None = None) -> int:
         for user in repository.list_users():
             print(
                 f"{user.id}\t{user.status}\t{user.quota_used}/{user.quota_total}"
-                f"\t{user.display_name}"
+                f"\t{user.display_name}\tlabel={user.label}"
             )
+        return 0
+
+    if args.command == "export-notes":
+        from pathlib import Path
+
+        from app.auth.export import load_invite_codes, write_xlsx
+
+        repo_root = Path(__file__).resolve().parents[3]
+        invite_path = Path(args.invite_codes) if args.invite_codes else repo_root / "invite-codes.md"
+        out_path = Path(args.out) if args.out else repo_root / "developer-notes.xlsx"
+        notes = repository.list_developer_notes()
+        write_xlsx(out_path, load_invite_codes(invite_path), notes)
+        print(f"notes={len(notes)}")
+        print(f"wrote={out_path}")
         return 0
 
     if args.command == "usage":

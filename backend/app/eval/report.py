@@ -43,10 +43,24 @@ def run_eval(
     rows: list[EvalRow] = []
     for case in cases:
         runtime = runtimes[case.character_id]
+        recent_conversation = [
+            {
+                "role": role,
+                "content": content,
+                **(
+                    {"character_id": case.character_id}
+                    if role == "character"
+                    else {}
+                ),
+            }
+            for role, content in case.recent_conversation
+        ]
         response = runtime.respond(
             CharacterRequest(
                 character_id=case.character_id,
                 player_message=case.player_message,
+                recent_conversation=recent_conversation,
+                narrative_context=case.authorized_context,
             )
         )
         result = judge_dimensions(
@@ -56,6 +70,9 @@ def run_eval(
             player_message=case.player_message,
             dialogue=response.dialogue,
             reasoning=response.reasoning,
+            recent_conversation=recent_conversation,
+            authorized_context=case.authorized_context,
+            forbidden_context=case.forbidden_context,
         )
         rows.append(EvalRow(case=case, dialogue=response.dialogue, result=result))
     return EvalReport(rows=rows)

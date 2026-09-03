@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from app.characters.base import CharacterRequest, CharacterResponse, CharacterRuntime
 from app.characters.claude import ClaudeRuntime
 from app.characters.deepseek import DeepSeekRuntime
 from app.eval.cases import REGRESSION_CASES
@@ -24,9 +25,11 @@ class _FakeJudge(LLMProvider):
     def __init__(self, raw: str) -> None:
         self._raw = raw
         self.system_prompts: list[str] = []
+        self.user_prompts: list[str] = []
 
     def complete(self, **kwargs) -> str:
         self.system_prompts.append(kwargs["system"])
+        self.user_prompts.append(kwargs["user"])
         return self._raw
 
 
@@ -61,6 +64,12 @@ def test_parse_judge_scores_tolerates_garbage():
     assert result.score("repetition") == 0.0
 
 
+@pytest.mark.parametrize("value", ["NaN", "Infinity", "-Infinity"])
+def test_parse_judge_scores_rejects_non_finite_values(value):
+    result = parse_judge_scores(json.dumps({"persona": value}))
+    assert result.score("persona") == 0.0
+
+
 def test_judge_prompt_carries_four_dimensions():
     judge = _FakeJudge(_GOOD_SCORES)
     judge_dimensions(
@@ -69,10 +78,45 @@ def test_judge_prompt_carries_four_dimensions():
         persona_hint="可爱",
         player_message="你好",
         dialogue="……",
+        recent_conversation=[
+            {"role": "player", "content": "你还记得吗？"},
+            {"role": "character", "character_id": "deepseek", "content": "记得。"},
+        ],
+        authorized_context="只能使用 Player 明确告知的信息。",
+        forbidden_context="不得声称亲眼看见墙面。",
     )
     prompt = judge.system_prompts[0]
     for keyword in ("人设一致性", "反复读", "事实不泄漏", "反模板腔"):
         assert keyword in prompt
+    user = judge.user_prompts[0]
+    assert "你还记得吗" in user
+    assert "只能使用 Player 明确告知的信息" in user
+    assert "不得声称亲眼看见墙面" in user
+
+
+class _CaptureRuntime(CharacterRuntime):
+    character_id = "deepseek"
+
+    def __init__(self) -> None:
+        self.requests: list[CharacterRequest] = []
+
+    def respond(self, request: CharacterRequest) -> CharacterResponse:
+        self.requests.append(request)
+        return CharacterResponse(character_id=self.character_id, dialogue="……")
+
+
+def test_run_eval_supplies_case_history_and_authorized_context():
+    runtime = _CaptureRuntime()
+    case = next(case for case in REGRESSION_CASES if case.case_id == "ds-followup")
+    run_eval(
+        {"deepseek": runtime},
+        _FakeJudge(_GOOD_SCORES),
+        cases=[case],
+    )
+
+    request = runtime.requests[0]
+    assert request.recent_conversation
+    assert request.narrative_context == case.authorized_context
 
 
 def test_run_eval_aggregates_averages():

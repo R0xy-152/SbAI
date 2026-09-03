@@ -5,9 +5,9 @@
   "status": "pass",
   "visualReview": "pending",
   "artifact": {
-    "path": "D:\\gal\\docs\\project-architecture.html",
-    "sha256": "d799b26ea794630a041ecae7f4abb8da0e5282f97bbdf69a547cb8d4e3a317f3",
-    "bytes": 645375
+    "path": "/Users/ming/gal/SbAI/docs/architecture/project-architecture.html",
+    "sha256": "67174ca94d02cb20e12b67ba7e39169cc96d69d035efa37b81391fb1bfac8aad",
+    "bytes": 645463
   },
   "state": {
     "detail": "read",
@@ -15,7 +15,7 @@
   },
   "chrome": {
     "status": "available",
-    "executable": "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe"
+    "executable": "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
   },
   "containment": {
     "status": "pass",

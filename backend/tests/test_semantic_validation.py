@@ -71,10 +71,22 @@ def test_deepseek_visual_fact_rejected():
         validate_response(response, character_id="deepseek", scene=BINDING_ROOM)
 
 
+def test_deepseek_visual_fact_in_reasoning_is_rejected_before_persistence():
+    response = _response(reasoning="我知道墙上的密码是0317，但先不告诉 Player。")
+    with pytest.raises(ResponseRejected):
+        validate_response(response, character_id="deepseek", scene=BINDING_ROOM)
+
+
 def test_claude_may_know_visual_fact():
     # Claude is not blind (docs/04 §35-39): the same line is legal for her.
     response = _response(character_id="claude", dialogue="墙上的密码是0317")
     validate_response(response, character_id="claude", scene=BINDING_ROOM)
+
+
+def test_programmatic_response_with_unknown_relationship_stage_is_rejected():
+    response = _response(next_relationship_stage="best_friends_forever")
+    with pytest.raises(ResponseRejected, match="relationship stage"):
+        validate_response(response, character_id="deepseek", scene=BINDING_ROOM)
 
 
 def test_disallowed_action_rejected():

@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "表现层数据流（后端权威 → 前端呈现）",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1440,
+      560
+    ],
+    "views": [
+      {
+        "id": "directive-path",
+        "label": "指令产出与归一",
+        "focus": [
+          "orchestrator",
+          "narrative",
+          "adapter"
+        ],
+        "note": "后端产出结构化演出指令，经 adapter 归一为统一状态。"
+      },
+      {
+        "id": "render-consume",
+        "label": "渲染消费",
+        "focus": [
+          "pinia",
+          "scene-render",
+          "dialog"
+        ],
+        "note": "前端 Pinia 状态驱动场景与台词两类渲染。"
+      }
+    ]
+  },
+  "stages": [
+    {
+      "label": "权威产出"
+    },
+    {
+      "label": "结构指令"
+    },
+    {
+      "label": "前端状态"
+    },
+    {
+      "label": "渲染消费"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "orchestrator",
+      "type": "backend",
+      "label": "GameOrchestrator",
+      "sublabel": "handle_turn / story_advance",
+      "stage": 0,
+      "row": 0
+    },
+    {
+      "id": "narrative",
+      "type": "backend",
+      "label": "剧情运行时",
+      "sublabel": "PrologueRuntime / Narrative",
+      "stage": 0,
+      "row": 2
+    },
+    {
+      "id": "adapter",
+      "type": "backend",
+      "label": "适配层",
+      "sublabel": "presentation-adapter",
+      "stage": 1,
+      "row": 1
+    },
+    {
+      "id": "pinia",
+      "type": "frontend",
+      "label": "Pinia Store",
+      "sublabel": "presentation.state",
+      "stage": 2,
+      "row": 1
+    },
+    {
+      "id": "scene-render",
+      "type": "frontend",
+      "label": "场景渲染",
+      "sublabel": "GameRolesStage + GameBackground",
+      "stage": 3,
+      "row": 0,
+      "width": 140
+    },
+    {
+      "id": "dialog",
+      "type": "frontend",
+      "label": "GameDialog",
+      "sublabel": "台词打字机",
+      "stage": 3,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "id": "actions",
+      "from": "orchestrator",
+      "to": "adapter",
+      "label": "presentation_actions",
+      "classification": "演出指令",
+      "variant": "emphasis"
+    },
+    {
+      "id": "scene-presentation",
+      "from": "narrative",
+      "to": "adapter",
+      "label": "scene.presentation",
+      "classification": "场景演出",
+      "variant": "default"
+    },
+    {
+      "id": "state",
+      "from": "adapter",
+      "to": "pinia",
+      "label": "PresentationState",
+      "classification": "统一状态",
+      "variant": "emphasis"
+    },
+    {
+      "id": "scene",
+      "from": "pinia",
+      "to": "scene-render",
+      "label": "scene + presentRolesList",
+      "classification": "立绘·背景",
+      "variant": "default"
+    },
+    {
+      "id": "dialogue",
+      "from": "pinia",
+      "to": "dialog",
+      "label": "dialogue + status",
+      "classification": "台词",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "权威单一来源",
+      "items": [
+        "后端 Narrative / Orchestrator 决定谁在场、表情与站位",
+        "前端不做剧情判断，只消费后端确定性结果"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "归一与状态",
+      "items": [
+        "presentation_actions / scene.presentation 经 adapter 归一",
+        "Pinia store 保存「当前应如何展示」，不持有 Game Truth"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "渲染消费",
+      "items": [
+        "场景渲染（立绘 + 背景）与台词打字机订阅独立数据切片",
+        "结构化指令统一驱动表现层，避免前端臆造在场"
+      ]
+    }
+  ]
+}

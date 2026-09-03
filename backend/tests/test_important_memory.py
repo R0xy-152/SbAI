@@ -102,7 +102,7 @@ def test_orchestrator_writes_then_recalls_memory():
 
     runtime.proposals = []
     orchestrator.handle_turn(session_id, "随便聊聊。")
-    assert "Player说自己很怕黑" in runtime.requests[1].memory_context
+    assert "Player说自己很怕黑" in runtime.requests[1].player_notes
 
 
 def test_memory_survives_recent_window():
@@ -121,7 +121,7 @@ def test_memory_survives_recent_window():
     last = runtime.requests[-1]
     # The memory content is the character's paraphrase ("说自己很怕黑"), so
     # assert on the meaning, not the literal player quote.
-    assert "怕黑" in last.memory_context
+    assert "怕黑" in last.player_notes
     # The original statement is no longer in the recent conversation...
     assert not any("我很怕黑" in message.get("content", "") for message in last.recent_conversation)
     # ...yet the character still legally has it through Important Memory.

@@ -31,10 +31,6 @@ class DeepSeekProvider(LLMProvider):
         # 前端 axios 超时（130s）覆盖「首轮超时 + 重试」最坏情形。
         timeout: float = 60.0,
         temperature: float | None = 0.1,
-        # A small frequency penalty curbs verbatim repetition (复读) — one of
-        # the clearest "AI 人机感" tells — without breaking persona. None = leave
-        # the API default (0.0). Range is [-2, 2]; 0.5 is a conservative default.
-        frequency_penalty: float | None = 0.5,
     ) -> None:
         self._api_key = api_key if api_key is not None else os.environ.get("DEEPSEEK_API_KEY", "")
         self._base_url = base_url
@@ -45,7 +41,7 @@ class DeepSeekProvider(LLMProvider):
         # thinking mode may ignore temperature; it is still set for the
         # non-thinking fallback path.
         self._temperature = temperature
-        self._frequency_penalty = frequency_penalty
+
 
     def complete(
         self,
@@ -71,8 +67,7 @@ class DeepSeekProvider(LLMProvider):
             payload["response_format"] = response_format
         if self._temperature is not None:
             payload["temperature"] = self._temperature
-        if self._frequency_penalty is not None:
-            payload["frequency_penalty"] = self._frequency_penalty
+
         if thinking is not None:
             # DeepSeek thinking mode is on by default (effort=high); a caller
             # may pass {"type": "disabled"} to turn it off for cheaper, faster
