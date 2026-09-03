@@ -155,7 +155,9 @@ npm run typecheck  # vue-tsc
 | no_leak | 0.86 |
 | anti_template | 0.88 |
 
-系统管线 A/B 对比（记忆/画像/反思回灌）与一致性校验器红队记录见 `validation-results/eval-*`。
+**一致性校验器红队**（3 条越界注入 + 3 条干净对照，2026-09-03 真机）：越界拦截 **3/3**，干净回复误伤 **0/3**。
+
+系统管线 A/B 对比（裸运行时 / 记忆画像管线 / 反思回灌）与红队详情见 `validation-results/eval-live-deepseek/`、`validation-results/eval-ab/`。
 
 ## 许可证
 
