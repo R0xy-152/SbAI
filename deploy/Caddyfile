@@ -1,0 +1,18 @@
+# 公网明文 HTTP 不提供页面或 API，直接转到正式 HTTPS 入口。
+# Location 不含 fragment；浏览器会保留本地的 #invite=...，邀请码不会发给 Caddy。
+http://114.55.133.96 {
+	redir https://sbai.xin{uri} permanent
+}
+
+# nip.io 仅保留旧链接兼容，统一收敛到正式域名。
+114.55.133.96.nip.io {
+	redir https://sbai.xin{uri} permanent
+}
+
+www.sbai.xin {
+	redir https://sbai.xin{uri} permanent
+}
+
+sbai.xin {
+	reverse_proxy 127.0.0.1:8080
+}

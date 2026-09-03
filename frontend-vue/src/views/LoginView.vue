@@ -2,11 +2,13 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { isInsecurePublicHttp } from '../utils/transport-security'
 
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const inviteCode = ref('')
+const insecureTransport = isInsecurePublicHttp(window.location)
 
 // 档位 B（二维码直达）：`https://sbai.xin/login#invite=<邀请码>`。
 // 邀请码放片段（#）里不出浏览器：不进 nginx/Caddy 访问日志、不进 Referer。
@@ -19,7 +21,7 @@ function inviteFromHash(): string | null {
 
 async function submit() {
   const code = inviteCode.value.trim()
-  if (!code || auth.busy) return
+  if (!code || auth.busy || insecureTransport) return
   try {
     await auth.login(code)
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
@@ -58,11 +60,14 @@ onMounted(async () => {
           autofocus
         />
         <p v-if="auth.error" class="login-error" role="alert">{{ auth.error }}</p>
-        <button type="submit" :disabled="!inviteCode.trim() || auth.busy">
+        <button type="submit" :disabled="!inviteCode.trim() || auth.busy || insecureTransport">
           {{ auth.busy ? '验证中…' : '进入游戏' }}
         </button>
       </form>
-      <p class="login-warning">当前为 HTTP 小规模展示环境，请勿在公共网络分享邀请码。</p>
+      <p v-if="insecureTransport" class="login-warning login-warning--danger" role="alert">
+        当前连接不安全，已阻止提交邀请码。请前往
+        <a href="https://sbai.xin/">HTTPS 正式入口</a>。
+      </p>
     </section>
   </main>
 </template>
@@ -96,4 +101,6 @@ button {
 button:disabled { opacity: .45; cursor: not-allowed; }
 .login-error { margin: 0; color: #ff9a9a; font-size: 13px; }
 .login-warning { margin: 24px 0 0; font-size: 12px; }
+.login-warning--danger { color: #ffb0b0; }
+.login-warning a { color: inherit; font-weight: 700; }
 </style>

@@ -85,21 +85,24 @@ curl -s -X POST http://127.0.0.1:<FRONTEND_PORT>/api/story/advance \
 curl -s 'http://127.0.0.1:<FRONTEND_PORT>/api/saves?player_id=deploy-check'
 #   返回的 auto 非 null 即 postgres 写入正常
 
-# 4.4 浏览器实测：打开 http://<server>:<FRONTEND_PORT>/
+# 4.4 浏览器实测：生产打开 https://sbai.xin/；本机才使用 http://127.0.0.1:<FRONTEND_PORT>/
 #   开始游戏 → 逐行推进 → 三个选项点（A/B/C 胶囊窗口）→「第一章 完」结局 → 返回标题
 ```
 
-## 5. 域名与 HTTPS（可选）
+## 5. 域名与 HTTPS（生产必需）
 
-### 5.1 方案一：上层 Caddy（自动 HTTPS，推荐）
+### 5.1 方案一：上层 Caddy（当前生产方案）
 
 ```
-# 保持 FRONTEND_PORT=8080，Caddy 反代：
-# Caddyfile:
-#   your.domain {
-#       reverse_proxy 127.0.0.1:8080
-#   }
+# 保持 FRONTEND_PORT=8080，安装仓库中的生产配置并重载：
+sudo install -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
+sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+sudo systemctl reload caddy
 ```
+
+`deploy/Caddyfile` 将纯 HTTP IP、旧 nip.io 与 www 入口统一重定向到
+`https://sbai.xin`。不得让公网 HTTP 入口反向代理页面或 `/api/auth/login`，
+否则邀请码会在 Cookie 签发前以明文 request body 穿过链路。
 
 ### 5.2 方案二：上层 Nginx + certbot
 
@@ -107,7 +110,18 @@ curl -s 'http://127.0.0.1:<FRONTEND_PORT>/api/saves?player_id=deploy-check'
 server {
     listen 80;
     server_name your.domain;
-    location / { proxy_pass http://127.0.0.1:8080; proxy_set_header Host $host; }
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl;
+    server_name your.domain;
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+    }
 }
 ```
 
@@ -142,13 +156,13 @@ docker compose exec -T postgres psql -U gal gal < saves-backup-XXXX.sql
 
 - backend 只绑定宿主 loopback（127.0.0.1:8000），公网不可直达；
 - postgres 不发布任何宿主端口；
-- 防火墙只放行 80/443（或所选的 FRONTEND_PORT）；
+- 防火墙只放行 80/443；80 端口仅用于重定向到 HTTPS，不提供应用内容；
 - 生产环境必须修改 POSTGRES_PASSWORD（.env）；
 - 仓库内绝不放任何 API key / .env。
 # 邀请码账号首次切换（docs/18）
 
 首次启用账号功能前，先在 `/srv/gal/.env` 配置随机 `GAL_AUTH_SECRET` 与
-`GAL_AUTH_COOKIE_SECURE=false`（当前 HTTP 展示）。该密钥后续不可随意更换，
+`GAL_AUTH_COOKIE_SECURE=true`。该密钥后续不可随意更换，
 否则所有既有邀请码摘要都会失效。
 
 切换步骤（明确会删除旧匿名存档与会话）：
@@ -172,5 +186,5 @@ docker compose exec backend python -m app.auth.cli rotate-code USER_ID
 docker compose exec backend python -m app.auth.cli revoke-sessions USER_ID
 ```
 
-切换正式 HTTPS 后，将 `.env` 的 `GAL_AUTH_COOKIE_SECURE` 改为 `true`，再执行
-`docker compose up -d backend`。
+仅 localhost 本地 HTTP 联调时可临时设置 `GAL_AUTH_COOKIE_SECURE=false`；公网部署
+不得关闭。修改后执行 `docker compose up -d backend`。

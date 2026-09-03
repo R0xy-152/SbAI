@@ -15,6 +15,11 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ replace: routerMock.replace }),
 }))
 
+const transportMock = vi.hoisted(() => ({ insecure: false }))
+vi.mock('../../utils/transport-security', () => ({
+  isInsecurePublicHttp: () => transportMock.insecure,
+}))
+
 const api = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   loginWithInvite: vi.fn(),
@@ -35,6 +40,7 @@ describe('LoginView（二维码 #invite 直达）', () => {
     setActivePinia(createPinia())
     localStorage.clear()
     vi.clearAllMocks()
+    transportMock.insecure = false
     routerMock.hash = '#invite=CODE-1234-5678'
     routerMock.query = {}
   })
@@ -57,6 +63,18 @@ describe('LoginView（二维码 #invite 直达）', () => {
     await flushPromises()
 
     expect(api.loginWithInvite).not.toHaveBeenCalled()
+  })
+
+  it('公网 HTTP 页面阻止自动提交并引导到正式 HTTPS 入口', async () => {
+    transportMock.insecure = true
+    api.loginWithInvite.mockResolvedValue(user)
+    const wrapper = mount(LoginView)
+    await flushPromises()
+
+    expect(api.loginWithInvite).not.toHaveBeenCalled()
+    expect(wrapper.find('button').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.login-warning').text()).toContain('已阻止提交邀请码')
+    expect(wrapper.find('.login-warning a').attributes('href')).toBe('https://sbai.xin/')
   })
 
   it('手动提交仍走邀请码登录并回跳 redirect', async () => {

@@ -3,10 +3,10 @@
 高频变化、与代码无关的运营信息集中于此（AGENTS.md 只指向本文件）。
 **Secret 绝不写入本文件**（密码/API key 通过私聊传递，只落在服务器环境）。
 
-## 当前上线状态（2026-08-21）
+## 当前上线状态（2026-09-03）
 
 - 服务器：阿里云 ECS 114.55.133.96（2核2GiB Ubuntu；Docker 三服务 frontend-vue nginx / backend / postgres，均 restart: unless-stopped；Caddy 反代 80/443；swap 2G）
-- 玩家入口：`https://sbai.xin/`（正式域名，备案+HTTPS 已上线，GAL_AUTH_COOKIE_SECURE=true）；备用 `http://114.55.133.96/`（页面可看但无法登录——Cookie 已要求 HTTPS）；`https://114.55.133.96.nip.io/`（本地网络对 nip.io SNI 有 GFW 干扰，HTTP 正常；服务器自测 HTTPS 200）
+- 玩家唯一入口：`https://sbai.xin/`（备案+HTTPS 已上线，`GAL_AUTH_COOKIE_SECURE=true`）；`http://114.55.133.96/`、旧 nip.io 与 www 入口只重定向到该正式地址，不再提供页面或 API。
 - 已部署 commit：287c5cd（账号配额+章节选择 2538f55 → 无序序章流程 d211442 → .dockerignore 构建修复 360efa5 → auth.cli usage 4bb5a79 → e2e 序章适配 4565fc5 → 文字速度基线 1.2x 5edf23a → 删睁眼选项 4e2ea77 → 序章背景修复 5dc3534 → AUTO/SKIP/SAVE/LOAD 控制条 25633e6 → 透明 chatgpt_happy 0ce6833 → 三人集合立绘原尺寸 2225458 → 自由对话点击/滚轮继续 287c5cd）
 - 玩法：标题「开始游戏」→ 章节选择（当前仅序章解锁）→ /story?story_id=prologue 无序探班（AI 停用）→ 汇合后选角色 → /game 对应角色后日谈（DeepSeek 真实自由聊天）；旧调查玩法经左上角「行动」按钮
 - 新增 galgame 基础功能：聊天框右下角 ▼ 左侧「自动/快进/保存/读取」控制条（AUTO 自动推进、SKIP 跳到选择点、SAVE/LOAD 打开系统面板）；文字速度基线 1.2x（设置默认倍率不变）；设置移除「睁眼转场」开关（转场仍默认开启）
@@ -29,5 +29,6 @@
 - 2026-08-21（三次部署）：新增展示账号 02（quota 100）、03（quota 200）；auth.cli 新增 usage 子命令（按账号监控用量）
 - 2026-08-21（四次部署）：e2e 适配序章新流程；文字速度基线 1.2x；设置移除睁眼转场开关；修复序章瞬间闪现 background1.png；新增 AUTO/SKIP/SAVE/LOAD 控制条
 - 2026-08-22（五次部署）：替换 chatgpt_happy 为透明背景版本；三人集合立绘恢复原尺寸同基线（取消 scale/offset_y）；自由对话新增点击任意位置/滚轮下滑「继续对话」（回应态可用），滚轮上滑打开历史
-- 2026-08-28（六次部署）：sbai.xin 备案通过并上线 HTTPS —— 云解析加 A 记录（@/www → 114.55.133.96），Caddyfile 加 sbai.xin/www.sbai.xin，Let's Encrypt 证书自动签发（有效期至 2026-11-26），GAL_AUTH_COOKIE_SECURE 改 true（纯 HTTP IP 入口不再支持登录）
+- 2026-08-28（六次部署）：sbai.xin 备案通过并上线 HTTPS —— 云解析加 A 记录（@/www → 114.55.133.96），Caddyfile 加 sbai.xin/www.sbai.xin，Let's Encrypt 证书自动签发（有效期至 2026-11-26），GAL_AUTH_COOKIE_SECURE 改 true（当时 HTTP IP 仍可加载页面，仅 Cookie 不落地；此缺口于 2026-09-03 关闭）
 - 2026-08-28（安全加固）：外部端口扫描+内部排查后 —— /srv/gal/.env 改 600；sshd 关闭 X11Forwarding/AllowTcpForwarding；安装启用 fail2ban（sshd jail）；前端 8080 改绑 127.0.0.1（docker-compose.yml 同步入库，外网 8080 已关闭）。待用户在控制台：安全组收紧 22 源 IP、删除 8080 放行、更换 root 密码
+- 2026-09-03（邀请码传输加固）：线上 Caddy 已将纯 HTTP IP、旧 nip.io 与 www 入口统一重定向到 `https://sbai.xin`；仓库 Compose/Cookie 生产默认改为 Secure，登录页源码在公网 HTTP 环境阻止邀请码提交。
