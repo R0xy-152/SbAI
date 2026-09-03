@@ -257,6 +257,18 @@ def test_feedback_analyze_annotate_precision(client, monkeypatch):
     assert precision["severity"]["precision"] == 0.0
 
 
+def test_ops_endpoints_bypass_session_auth_but_keep_token_gate(monkeypatch):
+    # docs/21 §5：会话认证豁免 + 仅 token 门禁——未登录可访问、无 token 仍拒绝
+    monkeypatch.setenv("GAL_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("GAL_OPS_TOKEN", TOKEN)
+    app = create_app()
+    with TestClient(app) as client:
+        assert client.get("/api/ops/funnel", headers=_headers()).status_code == 200
+        assert client.get("/api/ops/funnel").status_code == 401
+        # 玩家端点仍要求登录
+        assert client.get("/api/chat/history?session_id=x").status_code == 401
+
+
 def test_ops_page_served_without_token():
     app = create_app()
     with TestClient(app) as client:

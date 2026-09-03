@@ -250,7 +250,12 @@ def create_app() -> FastAPI:
     async def authenticate_request(request: Request, call_next):
         path = request.url.path
         public = path in {"/api/auth/login", "/api/health"} or request.method == "OPTIONS"
-        protected = path.startswith("/api/") or path.startswith("/frontend-deprecated")
+        # docs/21 §5：内部运营端点豁免会话认证，仅靠 GAL_OPS_TOKEN 门禁
+        #（未配置时 503、错误时 401），开发者无需先登录游戏即可用看板。
+        ops_endpoint = path.startswith("/api/ops/")
+        protected = not ops_endpoint and (
+            path.startswith("/api/") or path.startswith("/frontend-deprecated")
+        )
         if not protected or public:
             return await call_next(request)
         if app.state.auth_disabled:
