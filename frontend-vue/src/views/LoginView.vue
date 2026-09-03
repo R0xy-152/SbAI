@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -7,6 +7,15 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const inviteCode = ref('')
+
+// 档位 B（二维码直达）：`https://sbai.xin/login#invite=<邀请码>`。
+// 邀请码放片段（#）里不出浏览器：不进 nginx/Caddy 访问日志、不进 Referer。
+function inviteFromHash(): string | null {
+  const fragment = route.hash.replace(/^#/, '')
+  if (!fragment) return null
+  const query = fragment.includes('?') ? fragment.split('?')[1] : fragment
+  return new URLSearchParams(query).get('invite')
+}
 
 async function submit() {
   const code = inviteCode.value.trim()
@@ -19,6 +28,13 @@ async function submit() {
     // Store owns the user-facing error.
   }
 }
+
+onMounted(async () => {
+  const code = inviteFromHash()
+  if (!code) return
+  inviteCode.value = code
+  await submit()
+})
 </script>
 
 <template>
