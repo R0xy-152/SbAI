@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -24,6 +24,14 @@ from app.api.game import router as game_router
 from app.api.saves import router as saves_router
 from app.api.story import router as story_router
 from app.auth import AuthService, MemoryAuthRepository, PostgresAuthRepository, UserRecord
+from app.ops.dashboard import router as ops_router
+from app.ops.events import MemoryOpsRecorder, PostgresOpsRecorder
+from app.ops.feedback import (
+    FeedbackClassifier,
+    MemoryFeedbackStore,
+    PostgresFeedbackStore,
+)
+from app.ops.page import PAGE_HTML
 from app.characters.base import CharacterRuntime
 from app.characters.claude import ClaudeRuntime
 from app.characters.chatgpt import ChatGPTRuntime
@@ -38,7 +46,7 @@ from app.narrative.inquiry import Chapter1InquiryInterpreter
 from app.persistence.repository import JsonSessionRepository
 from app.providers.anthropic import AnthropicProvider
 from app.providers.base import LLMProvider, ProviderConfigError
-from app.providers.deepseek import DeepSeekProvider
+from app.providers.deepseek import DeepSeekProvider, DEEPSEEK_MODEL
 from app.providers.mock import MockProvider
 from app.save import JsonSaveRepository, PostgresSaveRepository, SaveSnapshotService
 from app.script.chapter1 import build_script_registry
@@ -201,12 +209,34 @@ def create_app() -> FastAPI:
         if auth_backend == "postgres"
         else MemoryAuthRepository()
     )
+    # docs/21 §3：运营事件/指标与反馈分析跟随 auth 后端走同一数据库；内存
+    # 实现供本地开发与测试，行为与 PG 一致。
+    ops_recorder = (
+        PostgresOpsRecorder(postgres_dsn)
+        if auth_backend == "postgres"
+        else MemoryOpsRecorder()
+    )
+    feedback_store = (
+        PostgresFeedbackStore(postgres_dsn)
+        if auth_backend == "postgres"
+        else MemoryFeedbackStore()
+    )
+    app.state.ops = ops_recorder
+    app.state.feedback_store = feedback_store
     auth_secret = os.environ.get("GAL_AUTH_SECRET")
     if not auth_secret:
         if auth_backend == "postgres":
             raise RuntimeError("GAL_AUTH_SECRET is required with PostgreSQL authentication")
         auth_secret = "local-development-only-change-me"
     app.state.auth_service = AuthService(auth_repository, auth_secret)
+    # docs/21 §6：反馈分类器（LLM 分类 + 人工抽检）；与角色回复共用
+    # DeepSeek 适配器，无 key 环境回落 mock（分类会记为 failed，不阻塞游戏）。
+    app.state.feedback_classifier = FeedbackClassifier(
+        deepseek_provider,
+        app.state.auth_service,
+        feedback_store,
+        model_name=DEEPSEEK_MODEL,
+    )
     app.state.auth_disabled = os.environ.get("GAL_AUTH_REQUIRED", "true").lower() in {
         "0", "false", "no"
     }
@@ -245,18 +275,28 @@ def create_app() -> FastAPI:
     # The orchestrator stores it as `_save_service` (constructor param name);
     # assigning the public name would create a phantom attribute it never reads.
     app.state.orchestrator._save_service = app.state.save_service
+    # docs/21 §4: bind the ops recorder the same way (orchestrator stores it
+    # as `_ops`, the constructor param name).
+    app.state.orchestrator._ops = ops_recorder
     app.include_router(auth_router)
     app.include_router(chat_router)
     app.include_router(developer_note_router)
     app.include_router(game_router)
     app.include_router(saves_router)
     app.include_router(story_router)
+    app.include_router(ops_router)
 
     # Liveness probe consumed by the Vue frontend (docs/13 Task 1: Vue 可请求
     # FastAPI health endpoint). Does not touch any game runtime state.
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok", "service": "gal-backend"}
+
+    # docs/21 §5：内部运营看板页面（数据端点另有 GAL_OPS_TOKEN 门禁，
+    # 页面本身不含任何数据）。
+    @app.get("/ops", include_in_schema=False)
+    def ops_page() -> HTMLResponse:
+        return HTMLResponse(PAGE_HTML)
 
     # T2review P0 修复：绝不再把 REPO_ROOT 挂到根 URL（仓库内 .env、会话
     # JSON 等敏感文件不可经静态路由暴露）。只对明确的素材/前端资源目录建立

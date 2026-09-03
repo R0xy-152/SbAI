@@ -25,6 +25,10 @@ class LLMProvider(ABC):
     (TV-07 Short-term Context) will extend this interface later.
     """
 
+    # docs/21 §4：真实 Provider 置 True 表示会填充 metrics 出参；运行时只对
+    # 支持者传 metrics 关键字，既有测试假 Provider（默认 False）不受影响。
+    supports_metrics: bool = False
+
     @abstractmethod
     def complete(
         self,
@@ -34,6 +38,7 @@ class LLMProvider(ABC):
         max_tokens: int = 256,
         response_format: dict | None = None,
         thinking: dict | None = None,
+        metrics: dict | None = None,
     ) -> str:
         """Return the assistant reply text; raise ProviderError on failure.
 
@@ -44,4 +49,9 @@ class LLMProvider(ABC):
         thinking is an optional provider-level hint for reasoning mode (for
         example {"type": "disabled"} to turn off a default-on chain-of-thought).
         The mock provider ignores it.
+
+        metrics is an optional caller-owned dict the provider fills with
+        latency/token usage (docs/21 §4). Callers that do not pass it keep the
+        original behaviour; a provider that cannot measure simply leaves it
+        untouched.
         """

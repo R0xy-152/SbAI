@@ -63,6 +63,9 @@ class CharacterRequest:
     # Immutable evidence explicitly shown to this character; the player
     # inventory is intentionally not exposed here.
     presented_evidence: list[dict] = field(default_factory=list)
+    # docs/21 §4：运营指标出参（调用方持有的 dict，Provider 累加延迟/token）。
+    # 不填保持原行为；测试辅助 runtime 不读取该字段，不受影响。
+    metrics: dict | None = None
 
 
 @dataclass
@@ -557,18 +560,25 @@ class GenerativeRuntime(CharacterRuntime):
         parts.append(f"Player 现在说：{request.player_message}")
         return "\n\n".join(parts)
 
-    def _call(self, user: str) -> str:
-        return self._provider.complete(
-            system=self._system_prompt(),
-            user=user,
-            # Thinking mode stays on (DeepSeek default) so the model reasons
-            # before answering — the reference template's "逻辑链拷打". The
-            # model's explicit reason is also captured in the structured
-            # output's `reasoning` field, and the `max_tokens` budget is raised
-            # so the reasoning budget does not eat into the reply.
-            max_tokens=2048,
-            response_format={"type": "json_object"},
-        )
+    def _call(self, user: str, metrics: dict | None = None) -> str:
+        # Thinking mode stays on (DeepSeek default) so the model reasons
+        # before answering — the reference template's "逻辑链拷打". The
+        # model's explicit reason is also captured in the structured
+        # output's `reasoning` field, and the `max_tokens` budget is raised
+        # so the reasoning budget does not eat into the reply.
+        kwargs: dict = {
+            "system": self._system_prompt(),
+            "user": user,
+            "max_tokens": 2048,
+            "response_format": {"type": "json_object"},
+        }
+        # docs/21 §4：运营指标出参（延迟/token 累加）。只对声明
+        # supports_metrics 的 Provider 传参，避免破坏既有测试假 Provider。
+        if metrics is not None and getattr(
+            self._provider, "supports_metrics", False
+        ):
+            kwargs["metrics"] = metrics
+        return self._provider.complete(**kwargs)
 
     def safe_fallback(self) -> CharacterResponse:
         return CharacterResponse(
@@ -577,8 +587,12 @@ class GenerativeRuntime(CharacterRuntime):
         )
 
     def respond(self, request: CharacterRequest) -> CharacterResponse:
+        # docs/21 §4：指标经 CharacterRequest.metrics 透传（respond 签名不变，
+        # 既有测试辅助 runtime 不受影响）；是否真正传给 Provider 由
+        # supports_metrics 能力决定（见 _call）。
+        metrics = request.metrics
         user = self._build_user_message(request)
-        raw = self._call(user)
+        raw = self._call(user, metrics=metrics)
         try:
             return parse_character_response(raw, self.character_id)
         except CharacterResponseValidationError as exc:
@@ -588,7 +602,7 @@ class GenerativeRuntime(CharacterRuntime):
                 f"{user}\n\n[系统提示] 你上一次的输出没有通过格式校验：{exc}。"
                 "请重新输出：只输出一个符合全部字段要求的 JSON 对象，不要有任何多余文字。"
             )
-        raw = self._call(repair_user)
+        raw = self._call(repair_user, metrics=metrics)
         try:
             return parse_character_response(raw, self.character_id)
         except CharacterResponseValidationError:

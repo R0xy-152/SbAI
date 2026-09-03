@@ -30,7 +30,9 @@ class MockProvider(LLMProvider):
         max_tokens: int = 256,
         response_format: dict | None = None,
         thinking: dict | None = None,
+        metrics: dict | None = None,
     ) -> str:
+        # metrics（docs/21 §4）本地无真实用量可测，忽略。
         if self._fail:
             raise ProviderError("mock provider failure (injected for tests)")
         if self._malformed:

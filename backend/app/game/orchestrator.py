@@ -41,6 +41,18 @@ from app.game.state.service import StateService
 from app.game.state.session import GameSession, SessionStore
 from app.game.scene import DEFAULT_SCENE, SceneRegistry
 from app.game.validation import ResponseRejected, validate_response
+from app.ops import (
+    EVENT_AI_CHAT_ENTER,
+    EVENT_AI_CHAT_TURN,
+    EVENT_PROLOGUE_CHOICE,
+    EVENT_PROLOGUE_COMPLETED,
+    EVENT_PROLOGUE_START,
+    EVENT_PROLOGUE_VISIT_CHOSEN,
+    EVENT_PROLOGUE_VISIT_COMPLETED,
+    EVENT_VALIDATION_REJECT,
+    ChatMetric,
+    OpsRecorder,
+)
 from app.game.consistency import SemanticConsistencyChecker
 from app.game.interjection import named_primary, pick_interjector
 from app.game.reflection import Reflector
@@ -172,6 +184,9 @@ class GameOrchestrator:
         # and that reflection is fed back next turn. None keeps the existing
         # behaviour (no extra LLM call per turn). Off by default.
         reflector: Reflector | None = None,
+        # 运营事件记录器（docs/21 §4，optional）：None 保持既有测试行为；
+        # 运行时由 main.py 注入实例。写失败绝不影响回合。
+        ops: OpsRecorder | None = None,
     ) -> None:
         self._sessions = sessions
         # Character Runtime Registry owns the runtime map and the default
@@ -217,6 +232,7 @@ class GameOrchestrator:
         self._prologue_runtime = prologue_runtime
         self._consistency_checker = consistency_checker
         self._reflector = reflector
+        self._ops = ops
         self._player_by_session: dict[str, str] = {}
         # T2review P1-3：per-session 锁——Turn 的 Provider 读取、状态提交、
         # 消息写入与持久化必须串行化，不允许交错。
@@ -280,6 +296,8 @@ class GameOrchestrator:
         # character is rejected Fail Closed — no current_character, no history,
         # no state change.
         self._assert_available(session.session_id, character_id)
+        if postlude_character is not None:
+            self._ops_enter_chat(session.session_id, postlude_character)
         session.current_character = character_id
 
         # TV-11: evaluate the narrative signal into a candidate event BEFORE
@@ -319,6 +337,9 @@ class GameOrchestrator:
         # docs/05 §31: the player-model notes this character formed about the
         # Player from its own player_* memories (owner-scoped, never others').
         player_notes = format_memories(player_memories)
+        # docs/21 §4：本回合的运营指标出参（延迟/token 累加）；scripted 或
+        # 失败路径下保持空 dict，不落 chat_metrics。
+        turn_metrics: dict = {}
         # Script layer (docs/03 §37): a turn at a scripted beat speaks its
         # authored line instead of the LLM. The state change that beat depends
         # on (the Narrative Event) still commits below, exactly as on an
@@ -391,6 +412,8 @@ class GameOrchestrator:
                     presented_evidence=self._presented_evidence_for(
                         session.session_id, character_id
                     ),
+                    # docs/21 §4：指标出参随请求透传，respond 签名不变。
+                    metrics=turn_metrics,
                 )
             )
         # Semantic Validation Gate (docs/04 §49-51): a well-formed but
@@ -414,6 +437,13 @@ class GameOrchestrator:
         except ResponseRejected as exc:
             logger.warning(
                 "character response rejected (%s); using safe fallback", exc
+            )
+            self._ops_record(
+                EVENT_VALIDATION_REJECT,
+                session_id=session.session_id,
+                user_id=self._player_by_session.get(session.session_id),
+                character_id=character_id,
+                payload={"gate": "deterministic", "reason": str(exc)},
             )
             response = runtime.safe_fallback()
             approved = False
@@ -448,8 +478,31 @@ class GameOrchestrator:
                     character_id,
                     verdict.reason,
                 )
+                self._ops_record(
+                    EVENT_VALIDATION_REJECT,
+                    session_id=session.session_id,
+                    user_id=self._player_by_session.get(session.session_id),
+                    character_id=character_id,
+                    payload={"gate": "consistency", "reason": verdict.reason},
+                )
                 response = runtime.safe_fallback()
                 approved = False
+        # docs/21 §4：AI 回合事件与指标。无论校验是否通过，模型调用与成本
+        # 都已发生（安全回落同样计成本）；claim 门（仅第一章路径）单独记
+        # validation_reject，不参与此处的 validation 字段。
+        if not scripted:
+            self._ops_record(
+                EVENT_AI_CHAT_TURN,
+                session_id=session.session_id,
+                user_id=self._player_by_session.get(session.session_id),
+                character_id=character_id,
+                payload={
+                    "provider": turn_metrics.get("model") or "unknown",
+                    "validation": "approved" if approved else "rejected",
+                    "scripted": False,
+                },
+            )
+            self._ops_record_chat_metric(session, character_id, turn_metrics)
         # The character output succeeded, so its memory proposals may pass the
         # Write Gate (docs/05 §34) and a selected event may commit atomically
         # (docs/03 §28-29). A rejected response proposes and commits nothing.
@@ -461,6 +514,13 @@ class GameOrchestrator:
             ):
                 approved = False
                 response = runtime.safe_fallback()
+                self._ops_record(
+                    EVENT_VALIDATION_REJECT,
+                    session_id=session.session_id,
+                    user_id=self._player_by_session.get(session.session_id),
+                    character_id=character_id,
+                    payload={"gate": "claim", "reason": "unauthorized claim ref"},
+                )
             else:
                 live_state = None
                 for definition in definitions:
@@ -1533,6 +1593,145 @@ class GameOrchestrator:
                 "auto save failed for session %s", session_id, exc_info=True
             )
 
+    # ---- 运营事件（docs/21 §4）—— 全部是事后记录副作用，绝不破坏回合 ----
+
+    def _ops_record(
+        self,
+        event_name: str,
+        *,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        character_id: str | None = None,
+        payload: dict | None = None,
+    ) -> None:
+        if self._ops is None:
+            return
+        try:
+            self._ops.record(
+                event_name,
+                session_id=session_id,
+                user_id=user_id,
+                character_id=character_id,
+                payload=payload,
+            )
+        except Exception:  # pragma: no cover - defensive side effect
+            logger.warning(
+                "ops event %s failed to record", event_name, exc_info=True
+            )
+
+    def _ops_enter_chat(self, session_id: str, character_id: str) -> None:
+        """docs/21 §2：每会话一次的 ai_chat_enter。"""
+        if self._ops is None:
+            return
+        try:
+            if self._ops.has_event(session_id, EVENT_AI_CHAT_ENTER):
+                return
+            self._ops.record(
+                EVENT_AI_CHAT_ENTER,
+                session_id=session_id,
+                character_id=character_id,
+                payload={"character_id": character_id},
+            )
+        except Exception:  # pragma: no cover - defensive side effect
+            logger.warning("ops ai_chat_enter failed to record", exc_info=True)
+
+    def _ops_record_chat_metric(
+        self,
+        session: GameSession,
+        character_id: str,
+        turn_metrics: dict,
+    ) -> None:
+        """docs/21 §3：把回合内累加的延迟/token 落 chat_metrics。"""
+        if self._ops is None or not turn_metrics:
+            return
+        try:
+            self._ops.record_chat_metric(
+                ChatMetric(
+                    session_id=session.session_id,
+                    user_id=self._player_by_session.get(session.session_id),
+                    character_id=character_id,
+                    provider=turn_metrics.get("model") or "unknown",
+                    latency_ms=float(turn_metrics.get("latency_ms", 0.0)),
+                    prompt_tokens=int(turn_metrics.get("prompt_tokens", 0)),
+                    completion_tokens=int(
+                        turn_metrics.get("completion_tokens", 0)
+                    ),
+                    cache_hit_tokens=int(
+                        turn_metrics.get("cache_hit_tokens", 0)
+                    ),
+                    cache_miss_tokens=int(
+                        turn_metrics.get("cache_miss_tokens", 0)
+                    ),
+                )
+            )
+        except Exception:  # pragma: no cover - defensive side effect
+            logger.warning("ops chat metric failed to record", exc_info=True)
+
+    def _ops_story_advance(
+        self,
+        session_id: str,
+        runtime: object,
+        before: dict | None,
+    ) -> None:
+        """docs/21 §2：prologue_start / prologue_visit_completed。"""
+        if self._ops is None or not isinstance(runtime, PrologueRuntime):
+            return
+        if before is None:
+            self._ops_record(
+                EVENT_PROLOGUE_START,
+                session_id=session_id,
+                payload={"story_id": PrologueRuntime.story_id},
+            )
+        after = runtime.snapshot(session_id)
+        if (
+            before is not None
+            and after is not None
+            and before.get("phase") == "branch"
+            and after.get("phase") != "branch"
+        ):
+            character_id = before.get("active_character_id")
+            if character_id:
+                self._ops_record(
+                    EVENT_PROLOGUE_VISIT_COMPLETED,
+                    session_id=session_id,
+                    character_id=character_id,
+                    payload={"character_id": character_id},
+                )
+
+    def _ops_story_choose(
+        self,
+        session_id: str,
+        runtime: object,
+        current: dict,
+        option_id: str,
+        label: str | None,
+    ) -> None:
+        """docs/21 §2：prologue_choice / visit_chosen / completed。"""
+        if self._ops is None or not isinstance(runtime, PrologueRuntime):
+            return
+        choice_id = current.get("choice_id")
+        self._ops_record(
+            EVENT_PROLOGUE_CHOICE,
+            session_id=session_id,
+            payload={"choice_id": choice_id, "option_id": option_id, "label": label},
+        )
+        if choice_id == "PROLOGUE_VISIT_CHARACTER":
+            before = runtime.snapshot(session_id)
+            visited = before.get("visited_character_ids", []) if before else []
+            self._ops_record(
+                EVENT_PROLOGUE_VISIT_CHOSEN,
+                session_id=session_id,
+                character_id=option_id,
+                payload={"character_id": option_id, "order": len(visited) + 1},
+            )
+        elif choice_id == "PROLOGUE_CHAT_CHARACTER":
+            self._ops_record(
+                EVENT_PROLOGUE_COMPLETED,
+                session_id=session_id,
+                character_id=option_id,
+                payload={"chat_character_id": option_id},
+            )
+
     def _assert_available(self, session_id: str, character_id: str) -> None:
         """Presence Gate (docs/03 §13.6): reject a not-yet-interactable character.
 
@@ -1776,7 +1975,9 @@ class GameOrchestrator:
         session = self._resolve_session(session_id)
         self._bind_player(session.session_id, player_id)
         runtime = self._story_runtime_for(story_id)
+        before = runtime.snapshot(session.session_id)
         node, scene_changed = runtime.advance(session.session_id)
+        self._ops_story_advance(session.session_id, runtime, before)
         self._record_story_node(session.session_id, node, chosen_label=None)
         self._persist_story_turn(
             session.session_id, player_id, autosave=scene_changed
@@ -1816,6 +2017,7 @@ class GameOrchestrator:
         if label is None:
             raise ValueError(f"unknown option {option_id!r}")
         node = runtime.choose(session.session_id, option_id)
+        self._ops_story_choose(session.session_id, runtime, current, option_id, label)
         self._record_story_node(session.session_id, node, chosen_label=label)
         self._persist_story_turn(session.session_id, player_id, autosave=True)
         return {

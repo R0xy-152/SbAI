@@ -1,0 +1,28 @@
+"""运营监控与反馈分析（docs/21）。"""
+
+from app.ops.events import (
+    EVENT_AI_CHAT_BLOCKED,
+    EVENT_AI_CHAT_ENTER,
+    EVENT_AI_CHAT_ERROR,
+    EVENT_AI_CHAT_TURN,
+    EVENT_PROLOGUE_CHOICE,
+    EVENT_PROLOGUE_COMPLETED,
+    EVENT_PROLOGUE_START,
+    EVENT_PROLOGUE_VISIT_CHOSEN,
+    EVENT_PROLOGUE_VISIT_COMPLETED,
+    EVENT_VALIDATION_REJECT,
+    ChatMetric,
+    OpsEvent,
+    OpsRecorder,
+    MemoryOpsRecorder,
+    PostgresOpsRecorder,
+)
+
+__all__ = [
+    "EVENT_AI_CHAT_BLOCKED", "EVENT_AI_CHAT_ENTER", "EVENT_AI_CHAT_ERROR",
+    "EVENT_AI_CHAT_TURN", "EVENT_PROLOGUE_CHOICE", "EVENT_PROLOGUE_COMPLETED",
+    "EVENT_PROLOGUE_START", "EVENT_PROLOGUE_VISIT_CHOSEN",
+    "EVENT_PROLOGUE_VISIT_COMPLETED", "EVENT_VALIDATION_REJECT",
+    "ChatMetric", "OpsEvent", "OpsRecorder", "MemoryOpsRecorder",
+    "PostgresOpsRecorder",
+]

@@ -15,11 +15,32 @@ from pydantic import BaseModel, Field
 from app.api.authz import bind_session, current_user_id, require_owned_session
 from app.auth import QuotaExhausted
 from app.game.orchestrator import CharacterUnavailable, GameOrchestrator
+from app.ops import EVENT_AI_CHAT_BLOCKED, EVENT_AI_CHAT_ERROR
 from app.providers.base import ProviderError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _ops_record(
+    request: Request,
+    event_name: str,
+    *,
+    session_id: str | None = None,
+    user_id: str | None = None,
+    payload: dict | None = None,
+) -> None:
+    """docs/21 §4：失败路径事件，事后记录副作用，绝不破坏错误语义。"""
+    recorder = getattr(request.app.state, "ops", None)
+    if recorder is None:
+        return
+    try:
+        recorder.record(
+            event_name, session_id=session_id, user_id=user_id, payload=payload
+        )
+    except Exception:  # pragma: no cover - defensive side effect
+        logger.warning("ops event %s failed to record", event_name, exc_info=True)
 
 
 class ChatRequest(BaseModel):
@@ -113,12 +134,26 @@ def chat(
         # to fabricate a reply. The player can retry.
         # 真机接入复盘：503 的根因必须落到日志，否则上游错误不可诊断。
         logger.warning("provider unavailable: %s", exc)
+        _ops_record(
+            request,
+            EVENT_AI_CHAT_ERROR,
+            session_id=payload.session_id,
+            user_id=user_id,
+            payload={"error_type": type(exc).__name__},
+        )
         if reserved:
             request.app.state.auth_service.refund_quota(user_id)
         raise HTTPException(status_code=503, detail="character provider unavailable") from exc
     except CharacterUnavailable as exc:
         # Presence Gate (docs/03 §13.6): the character is not interactable yet.
         # 403 (not 400) — the request is well-formed but not currently permitted.
+        _ops_record(
+            request,
+            EVENT_AI_CHAT_BLOCKED,
+            session_id=payload.session_id,
+            user_id=user_id,
+            payload={"reason": str(exc)},
+        )
         if reserved:
             request.app.state.auth_service.refund_quota(user_id)
         raise HTTPException(status_code=403, detail=str(exc)) from exc

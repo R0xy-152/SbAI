@@ -8,6 +8,7 @@ variable and must never be committed to the repo.
 from __future__ import annotations
 
 import os
+import time
 
 import httpx
 
@@ -19,6 +20,8 @@ ANTHROPIC_VERSION = "2023-06-01"
 
 
 class AnthropicProvider(LLMProvider):
+    supports_metrics = True  # docs/21 §4：complete() 尽力填充延迟/token 出参
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -43,7 +46,11 @@ class AnthropicProvider(LLMProvider):
         max_tokens: int = 256,
         response_format: dict | None = None,
         thinking: dict | None = None,
+        metrics: dict | None = None,
     ) -> str:
+        # metrics（docs/21 §4）：尽力填充延迟与 usage；生产未启用 Anthropic，
+        # 该路径当前只由显式 CLAUDE_PROVIDER=anthropic 配置触发。
+        started = time.perf_counter()
         if not self._api_key:
             raise ProviderConfigError("ANTHROPIC_API_KEY is not set")
 
@@ -90,4 +97,25 @@ class AnthropicProvider(LLMProvider):
         text = (first.get("text", "") if isinstance(first, dict) else "").strip()
         if not text:
             raise ProviderError("Anthropic response content is empty")
+        if metrics is not None:
+            usage = data.get("usage") or {}
+            metrics["latency_ms"] = metrics.get("latency_ms", 0.0) + (
+                time.perf_counter() - started
+            ) * 1000.0
+            metrics["prompt_tokens"] = metrics.get("prompt_tokens", 0) + int(
+                usage.get("input_tokens", 0) or 0
+            )
+            metrics["completion_tokens"] = metrics.get(
+                "completion_tokens", 0
+            ) + int(usage.get("output_tokens", 0) or 0)
+            metrics["cache_hit_tokens"] = metrics.get("cache_hit_tokens", 0) + int(
+                (usage.get("cache_read_input_tokens", 0) or 0)
+            )
+            metrics["cache_miss_tokens"] = metrics.get(
+                "cache_miss_tokens", 0
+            ) + max(0, int(usage.get("input_tokens", 0) or 0) - int(
+                usage.get("cache_read_input_tokens", 0) or 0
+            ))
+            metrics["model"] = ANTHROPIC_MODEL
+            metrics["calls"] = metrics.get("calls", 0) + 1
         return text

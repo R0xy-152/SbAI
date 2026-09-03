@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 class DeepSeekProvider(LLMProvider):
+    supports_metrics = True  # docs/21 §4：complete() 填充延迟/token 出参
+
     def __init__(
         self,
         api_key: str | None = None,
@@ -51,7 +53,11 @@ class DeepSeekProvider(LLMProvider):
         max_tokens: int = 256,
         response_format: dict | None = None,
         thinking: dict | None = None,
+        metrics: dict | None = None,
     ) -> str:
+        # metrics（docs/21 §4）：调用方持有的 dict，累加本回合全部调用
+        # （含修复重试与 thinking 降级重试）的延迟与 usage；失败时不写。
+        started = time.perf_counter()
         if not self._api_key:
             raise ProviderConfigError("DEEPSEEK_API_KEY is not set")
 
@@ -131,6 +137,21 @@ class DeepSeekProvider(LLMProvider):
                 usage.get("prompt_cache_hit_tokens", 0),
                 usage.get("prompt_cache_miss_tokens", 0),
             )
+            if metrics is not None:
+                # docs/21 §4：多次调用累加（parse 在重试路径会被再次调用）。
+                metrics["prompt_tokens"] = metrics.get("prompt_tokens", 0) + int(
+                    usage.get("prompt_tokens", 0) or 0
+                )
+                metrics["completion_tokens"] = metrics.get(
+                    "completion_tokens", 0
+                ) + int(usage.get("completion_tokens", 0) or 0)
+                metrics["cache_hit_tokens"] = metrics.get(
+                    "cache_hit_tokens", 0
+                ) + int(usage.get("prompt_cache_hit_tokens", 0) or 0)
+                metrics["cache_miss_tokens"] = metrics.get(
+                    "cache_miss_tokens", 0
+                ) + int(usage.get("prompt_cache_miss_tokens", 0) or 0)
+                metrics["model"] = DEEPSEEK_MODEL
             choices = data.get("choices") or []
             if not choices:
                 raise ProviderError("DeepSeek response contains no choices")
@@ -151,6 +172,11 @@ class DeepSeekProvider(LLMProvider):
             fallback = dict(payload)
             fallback["thinking"] = {"type": "disabled"}
             content = parse(post(fallback))
+        if metrics is not None:
+            metrics["latency_ms"] = metrics.get("latency_ms", 0.0) + (
+                time.perf_counter() - started
+            ) * 1000.0
+            metrics["calls"] = metrics.get("calls", 0) + 1
         if not content:
             raise ProviderError("DeepSeek response content is empty")
         return content
