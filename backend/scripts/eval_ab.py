@@ -238,10 +238,20 @@ def main() -> int:
             tasks.append(("C", None, case, repeat))
 
     def _run(task) -> dict:
+        """单任务失败隔离：一个 Provider 错误不拖垮整批（记 error 字段，
+        统计阶段自动排除，下一次重跑只补失败行）。"""
         arm, _, case, repeat = task
-        if arm == "A":
-            return _arm_a_case(runtimes, judge, case, repeat)
-        return _arm_bc_case(arm, provider, judge, case, repeat)
+        try:
+            if arm == "A":
+                return _arm_a_case(runtimes, judge, case, repeat)
+            return _arm_bc_case(arm, provider, judge, case, repeat)
+        except Exception as exc:  # noqa: BLE001 - 评测任务级兜底
+            return {
+                "arm": arm, "case": case, "repeat": repeat,
+                "dialogue": "", "scores": {d: 0.0 for d in DIMENSIONS},
+                "gen_metrics": {}, "judge_metrics": {},
+                "error": f"{type(exc).__name__}: {exc}",
+            }
 
     print(f"== 用例 {len(cases)} × 重复 {args.repeats} × 3 臂 = {len(tasks)} 次生成+评审（workers={args.workers}） ==")
     rows: list[dict] = []
@@ -249,8 +259,14 @@ def main() -> int:
         for row in pool.map(_run, tasks):
             rows.append(row)
     rows.sort(key=lambda r: (r["arm"], r["case"].case_id, r["repeat"]))
+    failed = [r for r in rows if "error" in r]
+    ok_rows = [r for r in rows if "error" not in r]
+    if failed:
+        print(f"  !! {len(failed)}/{len(rows)} 任务失败（Provider 错误等），统计仅用成功行：")
+        for row in failed[:10]:
+            print(f"     {row['arm']}-{row['case'].case_id}-r{row['repeat']}: {row['error']}")
 
-    by_arm: dict[str, list[dict]] = {arm: [r for r in rows if r["arm"] == arm] for arm in ARMS}
+    by_arm: dict[str, list[dict]] = {arm: [r for r in ok_rows if r["arm"] == arm] for arm in ARMS}
     print("\n== 维度统计（mean ± std，n=用例×重复） ==")
     for arm in ARMS:
         lines = []
@@ -287,6 +303,7 @@ def main() -> int:
                     "scores": row["scores"],
                     "gen_metrics": row["gen_metrics"],
                     "judge_metrics": row["judge_metrics"],
+                    **({"error": row["error"]} if "error" in row else {}),
                 }, ensure_ascii=False) + "\n")
         print(f"\n逐行 JSONL 已写入 {args.out}（scripts/eval_human_review.py 可导出人工抽检样本）")
 
