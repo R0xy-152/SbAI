@@ -26,6 +26,8 @@ import json
 import os
 import statistics
 import sys
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -237,21 +239,35 @@ def main() -> int:
             tasks.append(("B", None, case, repeat))
             tasks.append(("C", None, case, repeat))
 
+    _progress_lock = threading.Lock()
+    _progress = {"done": 0, "started_at": time.monotonic()}
+
     def _run(task) -> dict:
         """单任务失败隔离：一个 Provider 错误不拖垮整批（记 error 字段，
         统计阶段自动排除，下一次重跑只补失败行）。"""
         arm, _, case, repeat = task
         try:
             if arm == "A":
-                return _arm_a_case(runtimes, judge, case, repeat)
-            return _arm_bc_case(arm, provider, judge, case, repeat)
+                result = _arm_a_case(runtimes, judge, case, repeat)
+            else:
+                result = _arm_bc_case(arm, provider, judge, case, repeat)
         except Exception as exc:  # noqa: BLE001 - 评测任务级兜底
-            return {
+            result = {
                 "arm": arm, "case": case, "repeat": repeat,
                 "dialogue": "", "scores": {d: 0.0 for d in DIMENSIONS},
                 "gen_metrics": {}, "judge_metrics": {},
                 "error": f"{type(exc).__name__}: {exc}",
             }
+        with _progress_lock:
+            _progress["done"] += 1
+            done = _progress["done"]
+            elapsed = time.monotonic() - _progress["started_at"]
+        if done % 24 == 0 or done == len(tasks):
+            print(
+                f"  [progress] {done}/{len(tasks)} 任务完成 "
+                f"（已用 {elapsed / 60:.1f} min）"
+            )
+        return result
 
     print(f"== 用例 {len(cases)} × 重复 {args.repeats} × 3 臂 = {len(tasks)} 次生成+评审（workers={args.workers}） ==")
     rows: list[dict] = []
