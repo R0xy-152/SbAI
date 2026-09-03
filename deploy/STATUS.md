@@ -7,7 +7,7 @@
 
 - 服务器：阿里云 ECS 114.55.133.96（2核2GiB Ubuntu；Docker 三服务 frontend-vue nginx / backend / postgres，均 restart: unless-stopped；Caddy 反代 80/443；swap 2G）
 - 玩家唯一入口：`https://sbai.xin/`（备案+HTTPS 已上线，`GAL_AUTH_COOKIE_SECURE=true`）；`http://114.55.133.96/`、旧 nip.io 与 www 入口只重定向到该正式地址，不再提供页面或 API。
-- 已部署 commit：4e85c86（线上从 287c5cd 一次跳到 4e85c86，含：AI 对话人机感改造(角色人格/记忆/推理回灌/关系阶段/LLM-as-judge) + save schema v1→v2 迁移 + 序章「对开发者的话」收集/导出 + 二维码直达登录 + player 画像召回修复(#3) + 邀请码 HTTPS 传输加固；镜像构建走阿里云 pip 源，Dockerfile 已回滚干净）
+- 已部署 commit：f0d4c4a（镜像构建）+ 仓库 HEAD 同步（9085c0a nginx /ops 转发、cde713f compose 环境转发）；含 4e85c86 全部内容（AI 对话人机感改造 + save v2 迁移 + 对开发者的话 + 二维码登录 + 画像召回修复 + HTTPS 加固）**及新增**：运营监控与反馈分析闭环（docs/21——事件埋点/漏斗看板/AI 指标/反馈分类+人工抽检，内部入口 https://sbai.xin/ops，GAL_OPS_TOKEN 门禁）
 - 玩法：标题「开始游戏」→ 章节选择（当前仅序章解锁）→ /story?story_id=prologue 无序探班（AI 停用）→ 汇合后选角色 → /game 对应角色后日谈（DeepSeek 真实自由聊天）；旧调查玩法经左上角「行动」按钮
 - 新增 galgame 基础功能：聊天框右下角 ▼ 左侧「自动/快进/保存/读取」控制条（AUTO 自动推进、SKIP 跳到选择点、SAVE/LOAD 打开系统面板）；文字速度基线 1.2x（设置默认倍率不变）；设置移除「睁眼转场」开关（转场仍默认开启）
 - 账号功能（docs/18）：已启用（GAL_AUTH_REQUIRED=true，仅服务器 .env 含 GAL_AUTH_SECRET）；展示账号 01（quota 100）/ 02（quota 100）/ 03（quota 200），邀请码明文不落库；存量匿名存档已清空，新玩家需邀请码登录
@@ -24,6 +24,7 @@
 
 ## 变更记录
 
+- 2026-09-04（八次部署）：上线运营监控与反馈分析闭环（docs/21，P1 中间部署——为 10-20 人体验收集真实数据）。内容：序章漏斗/角色偏好/AI 成功率·延迟·成本/校验拦截埋点 + /ops 看板（GAL_OPS_TOKEN 门禁，仅内部）+ 留言分类 Agent（DeepSeek 分类 + 人工抽检 Precision）。验证：health 200、公网 /ops 与 /api/ops/* 200、无 token 401、PG 事件写入/读取/清理 OK、后端测试 582 passed。注意：GAL_OPS_TOKEN 与 GAL_OPS_PRICE_* 已加进 compose 转发，.env 含 GAL_OPS_TOKEN。
 - 2026-08-21：AI 玩法新开局删除前置剧情；常驻背景替换为用户教室图；DeepSeek key 接入，真实 AI 回复生效
 - 2026-08-21（二次部署）：账号配额+章节选择、无序序章流程上线；账号功能首次切换（删 18 条匿名存档）；修复 .dockerignore 导致 backend 构建失败的 bug（docs/story/Prologue.md 放行）
 - 2026-08-21（三次部署）：新增展示账号 02（quota 100）、03（quota 200）；auth.cli 新增 usage 子命令（按账号监控用量）

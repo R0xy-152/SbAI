@@ -60,7 +60,7 @@ PostgreSQL（存档 JSONB）+ JSON 会话文件
 - **事实账本 + 一致性校验**：每个角色「知道什么」由 Knowledge Ledger 记账；生成回复经 SemanticConsistencyChecker 校验，Provider 故障时 fail-open 不卡死回合。
 - **自我反思回灌**：角色对上一回合的自我反思注入下一轮上下文（默认关，可配置）。
 - **LLM-as-judge 回归评测**：8 个固定回归用例 × 4 维度（人设一致性 / 反复读 / 事实不泄漏 / 反模板腔），随 DeepSeek 真机跑分（见「评测」节）。
-- **工程纪律**：docs-first、558 后端测试、77 前端单测、Conventional Commits、validation-results 证据链、Docker 生产部署（备案 + HTTPS）。
+- **工程纪律**：docs-first、581 后端测试、77 前端单测、Conventional Commits、validation-results 证据链、Docker 生产部署（备案 + HTTPS）。
 
 ## 快速开始（Docker）
 
@@ -126,12 +126,12 @@ npm run typecheck  # vue-tsc
 - **项目边界/冻结设定**：`docs/MVP/00 — Project Scope.md`
 - **架构/运行时**：`docs/MVP/02` `03` `04` `05`
 - **第一章内容**：`docs/09` `10` `11` `12 — 第一章叙事内容分配表.md`
-- **落地方案**：`docs/13`（前端迁移+存档）、`docs/17`（快速上线固定剧本）、`docs/18`（邀请码账号）、`docs/19`（序章）
+- **落地方案**：`docs/13`（前端迁移+存档）、`docs/17`（快速上线固定剧本）、`docs/18`（邀请码账号）、`docs/19`（序章）、`docs/21`（运营监控与反馈分析：事件埋点/漏斗看板/AI 指标/反馈分类+人工抽检，内部入口 `/ops`）
 - **架构图**：`docs/architecture/`（系统架构等，HTML 可交互图表）
 
 ## 测试与验证
 
-- 后端：`backend && python -m pytest -q`（558 passed, 12 skipped，GAL_PROVIDER=mock）
+- 后端：`backend && python -m pytest -q`（581 passed, 12 skipped，GAL_PROVIDER=mock）
 - 前端单元：`frontend-vue && npm run test:unit`（77 passed）
 - 前端 e2e：`frontend-vue && npm run test:e2e`（Playwright，macOS 需调整 `playwright.config.ts` 的 Python 路径）
 
