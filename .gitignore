@@ -19,3 +19,11 @@ frontend-vue/dist/
 
 # Deployment transfer bundle (repo snapshot for server sync) - never commit
 gal-new.bundle
+
+# macOS Finder metadata
+.DS_Store
+
+# 邀请码台账 / 二维码 / 导出产物（明文 Secret 与玩家留言，不入库，docs/20）
+invite-codes.md
+deploy/invite-qr/
+developer-notes.xlsx

@@ -95,6 +95,25 @@ export async function createOpening(sessionId: string | null): Promise<OpeningRe
   return data
 }
 
+/** 序章「对开发者的话」提交（docs/20）。message 留空 = 跳过。 */
+export interface DeveloperNoteResponse {
+  session_id: string
+  stored: boolean
+  character_id: string
+  acknowledgement: string
+}
+
+export async function submitDeveloperNote(
+  sessionId: string,
+  message: string,
+): Promise<DeveloperNoteResponse> {
+  const { data } = await http.post<DeveloperNoteResponse>('/developer-note', {
+    session_id: sessionId,
+    message,
+  })
+  return data
+}
+
 /** 玩家输入 → 一轮角色回应（docs/13 §27 Task 4：Player Input / Streaming /
  * Response / Presentation Directive）。默认不传 character_id：玩家发言是公共
  * 对话（后端 heard_by = 全体在场角色），回应者由后端 SpeakerSelector 权威决定。
@@ -158,6 +177,10 @@ export async function fetchGameState(sessionId: string): Promise<{
   options: GameOption[]
   /** 序章结尾后锁定的自由聊天对象；其余玩法省略。 */
   chat_character_id?: string | null
+  /** docs/20：进入自由聊天前是否仍需收集「对开发者的话」。 */
+  developer_note_pending?: boolean
+  /** docs/20：所选角色按性格预置的问句（确定性文案，0 延迟）。 */
+  developer_note_question?: string | null
 }> {
   const { data } = await http.get('/game/state', { params: { session_id: sessionId } })
   return data

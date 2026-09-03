@@ -53,6 +53,12 @@ export interface LoadResult {
     hotspots: Record<string, string>
     /** docs/14 T2：Load 恢复后同样对账当前合法选项（D3）。 */
     options: GameOption[]
+    /** 序章结尾后锁定的自由聊天对象；其余玩法省略。 */
+    chat_character_id?: string | null
+    /** docs/20：进入自由聊天前是否仍需收集「对开发者的话」。 */
+    developer_note_pending?: boolean
+    /** docs/20：所选角色按性格预置的问句（确定性文案，0 延迟）。 */
+    developer_note_question?: string | null
   }
   history: {
     session_id: string

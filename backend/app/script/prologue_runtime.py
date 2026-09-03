@@ -44,6 +44,9 @@ class PrologueCursor:
     visited_character_ids: list[str] = field(default_factory=list)
     active_character_id: str | None = None
     chat_character_id: str | None = None
+    # docs/20：进入自由聊天前是否仍需收集「对开发者的话」。仅在 chat_choice
+    # 选中角色时置 True，收集（或跳过）后置 False，刷新/读档不重复询问。
+    developer_note_pending: bool = False
 
 
 class PrologueRuntime:
@@ -70,6 +73,27 @@ class PrologueRuntime:
     def chat_character(self, session_id: str) -> str | None:
         cursor = self._cursors.get(session_id)
         return cursor.chat_character_id if cursor and cursor.phase == "finished" else None
+
+    def developer_note_pending(self, session_id: str) -> bool:
+        """是否仍需在自由聊天前收集「对开发者的话」（docs/20）。"""
+        cursor = self._cursors.get(session_id)
+        return bool(
+            cursor
+            and cursor.phase == "finished"
+            and cursor.developer_note_pending
+        )
+
+    def collect_developer_note(self, session_id: str) -> str | None:
+        """标记「对开发者的话」已收集（或已跳过），返回聊天角色 id。
+
+        幂等：已收集时返回 None；未开始自由聊天时抛错。"""
+        cursor = self._cursors.get(session_id)
+        if cursor is None or cursor.phase != "finished":
+            raise ValueError("prologue free chat has not started")
+        if not cursor.developer_note_pending:
+            return None
+        cursor.developer_note_pending = False
+        return cursor.chat_character_id
 
     def current(self, session_id: str) -> dict:
         return self._view(self._cursors[session_id])
@@ -112,6 +136,7 @@ class PrologueRuntime:
             cursor.chat_character_id = option_id
             cursor.active_character_id = None
             cursor.line_index = 0
+            cursor.developer_note_pending = True
             return self._view(cursor)
         raise ValueError("current node is not a choice")
 
@@ -226,6 +251,7 @@ class PrologueRuntime:
                 visited_character_ids=list(data.get("visited_character_ids", [])),
                 active_character_id=data.get("active_character_id"),
                 chat_character_id=data.get("chat_character_id"),
+                developer_note_pending=bool(data.get("developer_note_pending", False)),
             )
         except (KeyError, TypeError) as exc:
             raise PrologueContentError("invalid prologue cursor snapshot") from exc
@@ -264,4 +290,6 @@ class PrologueRuntime:
             raise PrologueContentError("invalid finished prologue snapshot")
         if cursor.phase != "finished" and cursor.chat_character_id is not None:
             raise PrologueContentError("invalid early chat character snapshot")
+        if cursor.developer_note_pending and cursor.phase != "finished":
+            raise PrologueContentError("developer note pending outside finished phase")
         self._cursors[session_id] = cursor

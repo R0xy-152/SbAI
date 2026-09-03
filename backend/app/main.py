@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.auth import router as auth_router
 from app.api.chat import router as chat_router
+from app.api.developer_note import router as developer_note_router
 from app.api.game import router as game_router
 from app.api.saves import router as saves_router
 from app.api.story import router as story_router
@@ -230,6 +231,7 @@ def create_app() -> FastAPI:
     app.state.orchestrator._save_service = app.state.save_service
     app.include_router(auth_router)
     app.include_router(chat_router)
+    app.include_router(developer_note_router)
     app.include_router(game_router)
     app.include_router(saves_router)
     app.include_router(story_router)

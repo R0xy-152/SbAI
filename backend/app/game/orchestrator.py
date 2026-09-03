@@ -56,6 +56,7 @@ from app.script.service import ScriptService
 from app.script.story_runtime import StoryRuntime
 from app.script.prologue_content import PROLOGUE_CHARACTERS, PROLOGUE_ID
 from app.script.prologue_runtime import PrologueRuntime
+from app.script.developer_note import developer_note_question
 
 logger = logging.getLogger(__name__)
 
@@ -889,6 +890,14 @@ class GameOrchestrator:
                 "options": [],
                 "evidence_presentation": {"unlocked": False, "character_ids": []},
                 "chat_character_id": postlude_character,
+                # docs/20：序章自由聊天前的「对开发者的话」问句（确定性文案，
+                # 0 延迟）。pending 由 PrologueRuntime 权威维护，前端只消费。
+                "developer_note_pending": (
+                    self._prologue_runtime.developer_note_pending(session_id)
+                    if self._prologue_runtime is not None
+                    else False
+                ),
+                "developer_note_question": developer_note_question(postlude_character),
                 "presentation_state": {
                     "scene": "prologue_aftertalk",
                     "background_effect": None,
@@ -1259,6 +1268,38 @@ class GameOrchestrator:
             return None
         character_id = self._prologue_runtime.chat_character(session_id)
         return character_id if character_id in PROLOGUE_CHARACTERS else None
+
+    def developer_note_character(
+        self, session_id: str, *, player_id: str | None = None
+    ) -> str:
+        """授权并解析序章自由聊天前的「对开发者的话」目标角色（只读，不改状态）。
+
+        fail closed：非序章自由聊天会话、或留言已收集时抛错。返回聊天角色 id。
+        """
+        session = self._resolve_session(session_id)
+        self._bind_player(session.session_id, player_id)
+        if self._prologue_runtime is None:
+            raise ValueError("prologue story mode is not wired")
+        character_id = self._prologue_runtime.chat_character(session.session_id)
+        if character_id is None:
+            raise ValueError("prologue free chat has not started")
+        if not self._prologue_runtime.developer_note_pending(session.session_id):
+            raise ValueError("developer note was already collected")
+        return character_id
+
+    def complete_developer_note(self, session_id: str) -> None:
+        """在留言落库成功后清除一次性 pending 标记并持久化（幂等）。
+
+        与 developer_note_character 分离：由 API 层先落库、再调用本方法清除，
+        避免 DB 写失败时 pending 已被置 False 导致留言丢失且不可重试
+        （code review：Spec c）。
+        """
+        if self._prologue_runtime is None:
+            return
+        if self._prologue_runtime.developer_note_pending(session_id):
+            self._prologue_runtime.collect_developer_note(session_id)
+            if self._repository is not None:
+                self._repository.save(self._snapshot(session_id))
 
     def _restore_session(self, persisted: PersistedSession) -> GameSession:
         """Bring a persisted snapshot back into this process (docs/02 §21).

@@ -34,6 +34,7 @@ import {
   sendInvestigationAction,
   startRecovery,
   submitDeduction,
+  submitDeveloperNote,
   submitPrivateInterviewChallenge,
 } from '../api/game'
 import type { ChatResponse, GameOption, PresentationAction } from '../api/game'
@@ -167,6 +168,24 @@ async function reconcileStage() {
     if (state.chat_character_id) {
       routedCharacter.value = state.chat_character_id
       prologueChatLocked.value = true
+      // docs/20：留言态 —— 后端权威下发 pending + 问句，前端只消费展示
+      if (state.developer_note_pending && state.developer_note_question) {
+        developerNote.value = {
+          pending: true,
+          question: state.developer_note_question,
+        }
+        lineQueue.value = [
+          {
+            speaker: state.chat_character_id,
+            text: state.developer_note_question,
+            emotion: null,
+          },
+        ]
+        lineIndex = 0
+        playNextLine()
+      } else {
+        developerNote.value.pending = false
+      }
       return
     }
     prologueChatLocked.value = false
@@ -198,12 +217,45 @@ function playNextLine(): boolean {
   return true
 }
 
+// docs/20：提交「对开发者的话」（留言态第一条输入）；message 留空 = 跳过。
+async function submitDeveloperNoteFlow(message: string) {
+  if (!sessionId.value || busy.value) return
+  busy.value = true
+  error.value = null
+  const epoch = viewEpoch
+  presentation.state.dialogue.text = ''
+  setInputMode(false)
+  try {
+    const data = await submitDeveloperNote(sessionId.value, message)
+    if (epoch !== viewEpoch) return
+    developerNote.value = { pending: false, question: null }
+    feedback.value = data.acknowledgement
+    setInputMode(true)
+    await reconcileStage()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e)
+    setInputMode(true)
+  } finally {
+    busy.value = false
+  }
+}
+
+function skipDeveloperNote() {
+  if (busy.value || llmBusy.value) return
+  void submitDeveloperNoteFlow('')
+}
+
 // 玩家发送
 async function onPlayerMessage(text?: unknown) {
   if (typeof text !== 'string' || !text.trim() || busy.value) return
   // D2 一次性推理模式：下一条消息提交推理端点而非对话（判定仍走后端）
   if (pendingDeduction.value) {
     await submitPlayerDeduction(text.trim())
+    return
+  }
+  // docs/20：留言态 —— 第一条输入提交「对开发者的话」而非正常对话
+  if (developerNote.value.pending) {
+    await submitDeveloperNoteFlow(text.trim())
     return
   }
   busy.value = true
@@ -356,6 +408,12 @@ const routedCharacter = ref<string | null>(
   typeof route.query.character === 'string' ? route.query.character : null,
 )
 const prologueChatLocked = ref(false)
+
+// docs/20：序章自由聊天前的「对开发者的话」留言态（pending/question 成对出现，打包为一个对象）。
+const developerNote = ref<{ pending: boolean; question: string | null }>({
+  pending: false,
+  question: null,
+})
 
 // D2 一次性推理模式：非空时下一条主输入框消息提交到 /api/game/deduction
 const pendingDeduction = ref<GameOption | null>(null)
@@ -737,18 +795,39 @@ function applyLoadedSession(result: LoadResult) {
   prologueChatLocked.value = Boolean(routedCharacter.value)
   pendingDeduction.value = null
   activePanel.value = null
+  // docs/20：读档恢复留言态（问句由后端 state 权威下发）
+  if (result.state?.developer_note_pending && result.state?.developer_note_question) {
+    developerNote.value = {
+      pending: true,
+      question: result.state.developer_note_question,
+    }
+  } else {
+    developerNote.value.pending = false
+  }
   // 恢复最后一句角色台词（画面回到对话流，docs/13 §19.2 restore order 末端）
   const messages = result.history?.messages ?? []
-  const lastCharacter = [...messages]
-    .reverse()
-    .find((m) => m.role === 'character' && m.content)
-  if (lastCharacter && lastCharacter.character_id) {
-    setSpeakerLine(lastCharacter.character_id, lastCharacter.content)
-    // status 'streaming' 即 responding：勿再 setInputMode(false)（会覆盖为
-    // thinking 使恢复的最后一句台词永远不打字）
-    presentation.state.status = 'streaming'
+  if (developerNote.value.pending && developerNote.value.question) {
+    lineQueue.value = [
+      {
+        speaker: routedCharacter.value ?? 'system',
+        text: developerNote.value.question,
+        emotion: null,
+      },
+    ]
+    lineIndex = 0
+    playNextLine()
   } else {
-    setInputMode(true)
+    const lastCharacter = [...messages]
+      .reverse()
+      .find((m) => m.role === 'character' && m.content)
+    if (lastCharacter && lastCharacter.character_id) {
+      setSpeakerLine(lastCharacter.character_id, lastCharacter.content)
+      // status 'streaming' 即 responding：勿再 setInputMode(false)（会覆盖为
+      // thinking 使恢复的最后一句台词永远不打字）
+      presentation.state.status = 'streaming'
+    } else {
+      setInputMode(true)
+    }
   }
   game.pendingLoad = null
 }
@@ -826,6 +905,11 @@ onMounted(async () => {
     try {
       await reconcileStage()
       if (epoch !== viewEpoch) return
+      // docs/20：留言态已由 reconcileStage 播放问句，跳过历史恢复避免覆盖
+      if (developerNote.value.pending) {
+        armEyeOpen()
+        return
+      }
       // 恢复最后一句角色台词（docs/13 §27：Session restore 后画面回到对话流）
       const history = await fetchHistory(stored)
       const lastCharacter = [...history.messages]
@@ -883,10 +967,23 @@ onUnmounted(() => {
     <!-- 对话框（底部）+ 状态行（routeLabel / feedback，docs/16 P8 取代气泡条） -->
     <div class="absolute inset-x-0 bottom-0 z-10 flex flex-col">
       <div
-        v-if="routeLabel || feedback"
+        v-if="routeLabel || feedback || developerNote.pending"
         class="flex w-full flex-col items-center gap-1 pb-1"
       >
         <div v-if="routeLabel" class="px-4 text-xs text-[#a9e8ff]">{{ routeLabel }}</div>
+        <div
+          v-if="developerNote.pending"
+          class="flex items-center gap-2 px-4 text-xs text-[#a9e8ff]"
+        >
+          <span>本条将转交给开发者（留空即跳过）</span>
+          <button
+            class="rounded-full border border-white/15 bg-black/40 px-2 py-0.5 text-[#d7effa]/85 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            :disabled="busy || llmBusy"
+            @click="skipDeveloperNote"
+          >
+            跳过
+          </button>
+        </div>
         <div v-if="feedback" class="max-w-[560px] px-4 text-xs text-[#a9e8ff]/80">{{ feedback }}</div>
       </div>
       <GameDialog
