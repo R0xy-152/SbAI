@@ -4,7 +4,7 @@
 
 一款 AI-native 的 Galgame：玩家作为「游戏制作人」，在制作现场与四位 AI 娘（**DeepSeek**、**ChatGPT**、**Claude**、**豆包**）互动，通过自然语言对话推进剧情、收集线索、进行推理，最终揭开隐藏的真相。前端只负责表现，所有剧情、状态与角色行为由后端确定性叙事运行时权威决定。
 
-**在线体验**：<https://sbai.xin/>（序章固定剧本 + AI 后日谈自由聊天）
+**在线体验**：<https://sbai.xin/>（序章固定剧本 + AI 后日谈自由聊天）。线上仅配置 **DeepSeek 真机**（无 Anthropic/OpenAI key，ChatGPT/Claude/豆包 角色后日谈由 DeepSeek 扮演；无 key 环境自动回落 mock）。
 
 ## 当前阶段
 
@@ -56,11 +56,11 @@ PostgreSQL（存档 JSONB）+ JSON 会话文件
 - **LLM 不可信是设计前提**：所有生成内容走 Structured Response → Schema/Character/Narrative 三层校验 → Present，LLM 不能直接改 Game State / 前端 / 数据库。
 - **确定性叙事运行时**：Signal → Event → Requirements → Commit，主线事件 once + 幂等；关键事实首次披露、剧情推进、Reveal 全部由后端确定性控制，AI 只负责语言表达（docs/MVP/03）。
 - **角色信息隔离**：DeepSeek「看不见」是权限边界——视觉场景信息在 Context 层就被拦截，不是 prompt 请求（docs/04）。
-- **记忆系统**：确定性检索 + 轻量语义召回 + 衰减/强化；玩家画像（player_notes）与剧情记忆（memory_context）分区（docs/MVP/05）。
+- **记忆系统**：确定性检索 + 轻量语义召回 + 衰减/强化；玩家画像（player_notes）与剧情记忆（memory_context）分区（docs/MVP/05）。当前口径：**检索层就绪，生产写入机制待验证**（见「评测」节）。
 - **事实账本 + 一致性校验**：每个角色「知道什么」由 Knowledge Ledger 记账；生成回复经 SemanticConsistencyChecker 校验，Provider 故障时 fail-open 不卡死回合。
 - **自我反思回灌**：角色对上一回合的自我反思注入下一轮上下文（默认关，可配置）。
 - **LLM-as-judge 回归评测**：8 个固定回归用例 × 4 维度（人设一致性 / 反复读 / 事实不泄漏 / 反模板腔），随 DeepSeek 真机跑分（见「评测」节）。
-- **工程纪律**：docs-first、556 后端测试、77 前端单测、Conventional Commits、validation-results 证据链、Docker 生产部署（备案 + HTTPS）。
+- **工程纪律**：docs-first、558 后端测试、77 前端单测、Conventional Commits、validation-results 证据链、Docker 生产部署（备案 + HTTPS）。
 
 ## 快速开始（Docker）
 
@@ -131,7 +131,7 @@ npm run typecheck  # vue-tsc
 
 ## 测试与验证
 
-- 后端：`backend && python -m pytest -q`（556 passed, 12 skipped，GAL_PROVIDER=mock）
+- 后端：`backend && python -m pytest -q`（558 passed, 12 skipped，GAL_PROVIDER=mock）
 - 前端单元：`frontend-vue && npm run test:unit`（77 passed）
 - 前端 e2e：`frontend-vue && npm run test:e2e`（Playwright，macOS 需调整 `playwright.config.ts` 的 Python 路径）
 
@@ -158,6 +158,8 @@ npm run typecheck  # vue-tsc
 **一致性校验器红队**（3 条越界注入 + 3 条干净对照，2026-09-03 真机）：越界拦截 **3/3**，干净回复误伤 **0/3**。
 
 **记忆召回实验**（确定性，2026-09-03）：20 轮干扰对话后，一般记忆语义召回命中 **10/10** vs 纯窗口 **5/10**；真机端到端引用命中 **3/4**。
+
+**记忆写入真实数据复验**（2026-09-03）：126 条真实玩家消息回放仅 **4 条**记忆提案（提案率 **3.2%**）；few-shot 提示词引导后仍为 **3.2%**（逐存档一致，提示词路线关闭）。详见 `validation-results/eval-memory-recall-realdata/`、`validation-results/memory-write-fewshot/`。
 
 系统管线 A/B 对比（裸运行时 / 记忆画像管线 / 反思回灌）与红队详情见 `validation-results/eval-live-deepseek/`、`validation-results/eval-ab/`。
 
