@@ -7,7 +7,7 @@
 
 - 服务器：阿里云 ECS 114.55.133.96（2核2GiB Ubuntu；Docker 三服务 frontend-vue nginx / backend / postgres，均 restart: unless-stopped；Caddy 反代 80/443；swap 2G）
 - 玩家唯一入口：`https://sbai.xin/`（备案+HTTPS 已上线，`GAL_AUTH_COOKIE_SECURE=true`）；`http://114.55.133.96/`、旧 nip.io 与 www 入口只重定向到该正式地址，不再提供页面或 API。
-- 已部署 commit：287c5cd（账号配额+章节选择 2538f55 → 无序序章流程 d211442 → .dockerignore 构建修复 360efa5 → auth.cli usage 4bb5a79 → e2e 序章适配 4565fc5 → 文字速度基线 1.2x 5edf23a → 删睁眼选项 4e2ea77 → 序章背景修复 5dc3534 → AUTO/SKIP/SAVE/LOAD 控制条 25633e6 → 透明 chatgpt_happy 0ce6833 → 三人集合立绘原尺寸 2225458 → 自由对话点击/滚轮继续 287c5cd）
+- 已部署 commit：4e85c86（线上从 287c5cd 一次跳到 4e85c86，含：AI 对话人机感改造(角色人格/记忆/推理回灌/关系阶段/LLM-as-judge) + save schema v1→v2 迁移 + 序章「对开发者的话」收集/导出 + 二维码直达登录 + player 画像召回修复(#3) + 邀请码 HTTPS 传输加固；镜像构建走阿里云 pip 源，Dockerfile 已回滚干净）
 - 玩法：标题「开始游戏」→ 章节选择（当前仅序章解锁）→ /story?story_id=prologue 无序探班（AI 停用）→ 汇合后选角色 → /game 对应角色后日谈（DeepSeek 真实自由聊天）；旧调查玩法经左上角「行动」按钮
 - 新增 galgame 基础功能：聊天框右下角 ▼ 左侧「自动/快进/保存/读取」控制条（AUTO 自动推进、SKIP 跳到选择点、SAVE/LOAD 打开系统面板）；文字速度基线 1.2x（设置默认倍率不变）；设置移除「睁眼转场」开关（转场仍默认开启）
 - 账号功能（docs/18）：已启用（GAL_AUTH_REQUIRED=true，仅服务器 .env 含 GAL_AUTH_SECRET）；展示账号 01（quota 100）/ 02（quota 100）/ 03（quota 200），邀请码明文不落库；存量匿名存档已清空，新玩家需邀请码登录
@@ -32,3 +32,4 @@
 - 2026-08-28（六次部署）：sbai.xin 备案通过并上线 HTTPS —— 云解析加 A 记录（@/www → 114.55.133.96），Caddyfile 加 sbai.xin/www.sbai.xin，Let's Encrypt 证书自动签发（有效期至 2026-11-26），GAL_AUTH_COOKIE_SECURE 改 true（当时 HTTP IP 仍可加载页面，仅 Cookie 不落地；此缺口于 2026-09-03 关闭）
 - 2026-08-28（安全加固）：外部端口扫描+内部排查后 —— /srv/gal/.env 改 600；sshd 关闭 X11Forwarding/AllowTcpForwarding；安装启用 fail2ban（sshd jail）；前端 8080 改绑 127.0.0.1（docker-compose.yml 同步入库，外网 8080 已关闭）。待用户在控制台：安全组收紧 22 源 IP、删除 8080 放行、更换 root 密码
 - 2026-09-03（邀请码传输加固）：线上 Caddy 已将纯 HTTP IP、旧 nip.io 与 www 入口统一重定向到 `https://sbai.xin`；仓库 Compose/Cookie 生产默认改为 Secure，登录页源码在公网 HTTP 环境阻止邀请码提交。
+- 2026-09-03（七次部署）：整包上线到 4e85c86 —— AI 对话人机感（角色人格/记忆/推理/关系/评测）与序章 AI 后日谈真实模型链路、save v2 自动迁移、对开发者的话收集、二维码登录、player 画像修复、HTTPS 传输加固前端源码；验证：health 200 / HTTPS 200 / HTTP 301 跳转 / 账号 CLI 正常 / backend 无错误日志。
