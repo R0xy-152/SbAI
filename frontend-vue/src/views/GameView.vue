@@ -38,7 +38,7 @@ import {
   submitPrivateInterviewChallenge,
 } from '../api/game'
 import type { ChatResponse, GameOption, PresentationAction } from '../api/game'
-import type { LoadResult } from '../api/saves'
+import { saveTargetRoute, type LoadResult } from '../api/saves'
 import GameBackground from '../components/game/standard/GameBackground.vue'
 import GameRolesStage from '../components/game/standard/GameRolesStage.vue'
 import GameDialog from '../components/game/standard/GameDialog.vue'
@@ -790,6 +790,16 @@ async function onLoadFromGame(saveId: string) {
 // 返回 initial GameViewState；此处就地渲染，不重新走 Opening。
 function applyLoadedSession(result: LoadResult) {
   invalidateView()  // Load 切换会话：作废一切在途响应
+  const target = saveTargetRoute(
+    result.story_cursor,
+    result.story_finished,
+    result.experience_id,
+  )
+  if (target !== '/game') {
+    game.pendingLoad = result
+    void router.push(target)
+    return
+  }
   sessionId.value = result.session_id
   localStorage.setItem(SESSION_KEY, result.session_id)
   const view = result.state?.presentation_state

@@ -12,6 +12,7 @@ interface ChapterEntry {
 
 // docs/15 §4.4.1：这里只描述入口状态，不承载或推断任何剧情内容。
 const chapters: ChapterEntry[] = [
+  { id: 'trial-v1', title: '试玩版', mark: '◈', unlocked: true },
   { id: 'prologue', title: '序章', mark: '✦', unlocked: true },
   { id: 'chapter-1', title: '第一章', mark: '✧', unlocked: false },
   { id: 'chapter-2', title: '第二章', mark: '◇', unlocked: false },
@@ -34,7 +35,7 @@ async function openChapter(chapter: ChapterEntry) {
     localStorage.removeItem('gal_session_id')
     game.sessionId = null
     game.pendingLoad = null
-    await router.push('/story?story_id=prologue')
+    await router.push(chapter.id === 'trial-v1' ? '/trial' : '/story?story_id=prologue')
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {

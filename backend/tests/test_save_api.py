@@ -36,14 +36,17 @@ def _app(tmp_path, monkeypatch):
     return app
 
 
-def _opened_session(client: TestClient) -> str:
+def _opened_session(client: TestClient, player_id: str | None = None) -> str:
     """A session that has passed the opening (so it is saveable)."""
-    opened = client.post("/api/chat/opening", json={}).json()
+    opened = client.post(
+        "/api/chat/opening",
+        json={"player_id": player_id} if player_id is not None else {},
+    ).json()
     return opened["session_id"]
 
 
-def _session_with_evidence(client: TestClient) -> str:
-    session_id = _opened_session(client)
+def _session_with_evidence(client: TestClient, player_id: str | None = None) -> str:
+    session_id = _opened_session(client, player_id)
     client.post(
         "/api/game/action",
         json={"session_id": session_id, "action": INSPECT_HOTSPOT, "hotspot_id": CH1_NOTE_01},
@@ -94,10 +97,10 @@ def test_manual_save_list_and_load_roundtrip(tmp_path, monkeypatch):
 def test_auto_save_overwrites_single_slot(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch)
     with TestClient(app) as client:
-        session_id = _opened_session(client)
-        first = client.post("/api/saves/auto", json={"player_id": "p1", "session_id": session_id}).json()
-        session_id2 = _opened_session(client)
-        second = client.post("/api/saves/auto", json={"player_id": "p1", "session_id": session_id2}).json()
+        session_id = _opened_session(client, "p1")
+        first = client.get("/api/saves", params={"player_id": "p1"}).json()["auto"]
+        session_id2 = _opened_session(client, "p1")
+        second = client.get("/api/saves", params={"player_id": "p1"}).json()["auto"]
 
         listing = client.get("/api/saves", params={"player_id": "p1"}).json()
         assert listing["auto"] is not None
@@ -134,6 +137,15 @@ def test_save_list_is_player_scoped(tmp_path, monkeypatch):
         assert client.get("/api/saves", params={"player_id": "p3"}).json()["manual"][0] is None
 
 
+def test_auth_disabled_vue_client_can_list_saves_without_legacy_player_id(tmp_path, monkeypatch):
+    """The current Vue client relies on the middleware's deterministic local user."""
+    app = _app(tmp_path, monkeypatch)
+    with TestClient(app) as client:
+        response = client.get("/api/saves")
+        assert response.status_code == 200
+        assert response.json() == {"auto": None, "manual": [None] * 6}
+
+
 # ── docs/13 Task 8: Auto Save 是 Narrative commit 后的 side effect ─────────
 
 def _auto_meta(client: TestClient, player_id: str) -> dict | None:
@@ -159,7 +171,7 @@ def test_claude_appeared_auto_saves_after_0317(tmp_path, monkeypatch):
     overwrites the AUTO slot with the same session."""
     app = _app(tmp_path, monkeypatch)
     with TestClient(app) as client:
-        session_id = _session_with_evidence(client)  # EV01 + chapter started
+        session_id = _session_with_evidence(client, "p1")  # EV01 + chapter started
         client.post(
             "/api/chat",
             json={"session_id": session_id, "message": "你好", "player_id": "p1"},

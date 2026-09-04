@@ -53,7 +53,9 @@ async function onContinue() {
     const result = await saves.load(saves.mostRecent.id)
     game.pendingLoad = result
     localStorage.removeItem('gal_session_id')
-    await router.push(saveTargetRoute(result.story_cursor, result.story_finished))
+    await router.push(
+      saveTargetRoute(result.story_cursor, result.story_finished, result.experience_id),
+    )
   } catch (e) {
     continueError.value = e instanceof Error ? e.message : String(e)
   } finally {

@@ -17,11 +17,12 @@ describe('ChapterSelectView', () => {
     pushMock.mockReset()
   })
 
-  it('按视觉稿顺序显示六章，且仅序章解锁', () => {
+  it('试玩版独立置顶，保留并冻结原章节入口', () => {
     const wrapper = mount(ChapterSelectView)
     const cards = wrapper.findAll('button.chapter-card')
 
     expect(cards.map((card) => card.find('.chapter-name').text())).toEqual([
+      '试玩版',
       '序章',
       '第一章',
       '第二章',
@@ -30,13 +31,14 @@ describe('ChapterSelectView', () => {
       '终章',
     ])
     expect(cards[0].attributes('disabled')).toBeUndefined()
-    for (const card of cards.slice(1)) {
+    expect(cards[1].attributes('disabled')).toBeUndefined()
+    for (const card of cards.slice(2)) {
       expect(card.attributes('disabled')).toBeDefined()
       expect(card.text()).toContain('未开发')
     }
   })
 
-  it('进入序章时清理旧会话并进入固定剧本', async () => {
+  it('进入试玩版时清理旧会话并进入独立体验', async () => {
     localStorage.setItem('gal_session_id', 'old-session')
     const game = useGameStore()
     game.sessionId = 'old-session'
@@ -46,6 +48,12 @@ describe('ChapterSelectView', () => {
 
     expect(localStorage.getItem('gal_session_id')).toBeNull()
     expect(game.sessionId).toBeNull()
+    expect(pushMock).toHaveBeenCalledWith('/trial')
+  })
+
+  it('仍可进入原序章', async () => {
+    const wrapper = mount(ChapterSelectView)
+    await wrapper.findAll('button.chapter-card')[1].trigger('click')
     expect(pushMock).toHaveBeenCalledWith('/story?story_id=prologue')
   })
 

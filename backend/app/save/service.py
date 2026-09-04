@@ -36,11 +36,12 @@ from app.save.repository import (
     SaveRepository,
     new_save_id,
 )
+from app.trial.runtime import TrialRuntime
 
 # docs/13 §16.2: the snapshot schema version, saved from the first version.
 # A structural change to the snapshot must bump this and add a Migration;
 # silently changing JSON structure is forbidden.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 OLDEST_SUPPORTED_SCHEMA_VERSION = 1
 
 CHAPTER_ID = "ch1"
@@ -115,6 +116,9 @@ def _migrate_snapshot(snapshot: dict, schema_version: int) -> dict:
                 }
         migrated["character_states"] = migrated_states
         migrated["schema_version"] = 2
+    if schema_version <= 2:
+        migrated.setdefault("trial_state", None)
+        migrated["schema_version"] = 3
     return migrated
 
 
@@ -231,6 +235,8 @@ class SaveSnapshotService:
         snapshot = self.capture(orchestrator, session_id)
         story_cursor = snapshot.get("story_cursor") or {}
         is_prologue = story_cursor.get("story_id") == "prologue"
+        trial_state = snapshot.get("trial_state")
+        is_trial = isinstance(trial_state, dict)
         save = GameSave(
             # Overwriting a slot keeps its id and created_at (stable identity
             # across overwrites, docs/13 §16.1); updated_at always moves.
@@ -242,9 +248,13 @@ class SaveSnapshotService:
             source_session_id=session_id,
             schema_version=SCHEMA_VERSION,
             snapshot=snapshot,
-            chapter_id="prologue" if is_prologue else CHAPTER_ID,
+            chapter_id=(
+                "trial_v1" if is_trial else "prologue" if is_prologue else CHAPTER_ID
+            ),
             phase=(
-                story_cursor.get("phase")
+                trial_state.get("phase_id")
+                if is_trial
+                else story_cursor.get("phase")
                 if is_prologue
                 else snapshot.get("narrative", {}).get("chapter1", {}).get("phase")
             ),
@@ -338,6 +348,16 @@ class SaveSnapshotService:
                 or message.get("role") not in {"player", "character"}
             ):
                 raise SaveLoadError("invalid message record")
+        trial_state = snapshot.get("trial_state")
+        if trial_state is not None:
+            if snapshot.get("story_cursor") is not None:
+                raise SaveLoadError(
+                    "snapshot cannot activate story and trial experiences together"
+                )
+            try:
+                TrialRuntime.validate_snapshot(trial_state)
+            except ValueError as exc:
+                raise SaveLoadError(str(exc)) from exc
 
     def load_save(
         self, orchestrator: GameOrchestrator, player_id: str, save_id: str
@@ -353,9 +373,11 @@ class SaveSnapshotService:
         # 故事进度摘要：前端据此路由（故事存档 → /story；已完结/旧玩法存档
         # → /game），不改变 GameViewState 契约（docs/17 结局后自由聊天）。
         progress = orchestrator.story_progress(new_session_id)
+        trial_progress = orchestrator.trial_progress(new_session_id)
         return {
             "session_id": new_session_id,
             **progress,
+            **trial_progress,
             **orchestrator.gameview_state(new_session_id),
         }
 

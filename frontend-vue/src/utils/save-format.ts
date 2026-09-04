@@ -15,6 +15,18 @@ const PHASE_NAMES: Record<string, string> = {
   aftertalk: '序章',
   chat_choice: '交流选择',
   finished: '自由交流',
+  trial_opening_warm: '深夜对话',
+  trial_opening_input: '等待回应',
+  trial_opening_anomaly: '异常',
+  trial_shatter: '玻璃拼合',
+  trial_origin_remains: '残存意识',
+  trial_service_stopped: '服务停止',
+  trial_deepseek_intro: '单人审问',
+  trial_deepseek_reasoning: '失忆推理',
+  trial_group_intro: '全员集合',
+  trial_group_reasoning: '最终推理',
+  trial_fragment_02_handoff_a: '线路 A',
+  trial_fragment_02_handoff_b: '线路 B',
 }
 
 export function phaseName(phase: string | null | undefined): string {
@@ -29,6 +41,8 @@ export function chapterPhaseLabel(save: GameSaveInfo): string {
       ? '第一章'
       : save.chapter_id === 'prologue'
         ? '序章'
+        : save.chapter_id === 'trial_v1'
+          ? '试玩版'
         : save.chapter_id ?? ''
   const phase = phaseName(save.phase)
   return [chapter, phase].filter(Boolean).join(' · ')

@@ -443,7 +443,11 @@ function applyLoadedSession(result: LoadResult) {
   localStorage.setItem(SESSION_KEY, result.session_id)
   showChoice.value = false
   showEnding.value = false
-  const target = saveTargetRoute(result.story_cursor, result.story_finished)
+  const target = saveTargetRoute(
+    result.story_cursor,
+    result.story_finished,
+    result.experience_id,
+  )
   const currentTarget = storyId.value === 'prologue' ? '/story?story_id=prologue' : '/story'
   if (target !== currentTarget) {
     game.pendingLoad = result

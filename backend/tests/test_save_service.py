@@ -257,7 +257,7 @@ def test_v1_snapshot_is_migrated_to_current_character_state_shape(tmp_path):
 
     loaded = service.load_save(orchestrator, "p1", saved.id)
     migrated = service.capture(orchestrator, loaded["session_id"])
-    assert migrated["schema_version"] == SCHEMA_VERSION == 2
+    assert migrated["schema_version"] == SCHEMA_VERSION == 3
     assert migrated["character_states"]["deepseek"] == {
         "mood": {"positive": 0.5, "excitement": 0.2},
         "last_reasoning": "",
@@ -620,6 +620,16 @@ def test_load_rejects_tampered_snapshot(tmp_path):
     ]
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     with pytest.raises(SaveLoadError, match="unknown ids"):
+        service.load_save(orchestrator, "p1", save.id)
+
+    data["snapshot"]["narrative"]["chapter1"]["available_characters"] = []
+    data["snapshot"]["story_cursor"] = {"node_index": 1}
+    data["snapshot"]["trial_state"] = {
+        "experience_id": "trial_v1",
+        "phase_id": "opening_warm_chat",
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    with pytest.raises(SaveLoadError, match="cannot activate story and trial"):
         service.load_save(orchestrator, "p1", save.id)
 
 

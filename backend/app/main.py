@@ -23,6 +23,7 @@ from app.api.developer_note import router as developer_note_router
 from app.api.game import router as game_router
 from app.api.saves import router as saves_router
 from app.api.story import router as story_router
+from app.api.trial import router as trial_router
 from app.auth import AuthService, MemoryAuthRepository, PostgresAuthRepository, UserRecord
 from app.ops.dashboard import router as ops_router
 from app.ops.events import MemoryOpsRecorder, PostgresOpsRecorder
@@ -56,6 +57,7 @@ from app.script.service import ScriptService
 from app.script.story_runtime import StoryRuntime
 from app.script.prologue_runtime import PrologueRuntime
 from app.game.speaker_selector import SpeakerSelector
+from app.trial.runtime import TrialRuntime
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -179,6 +181,7 @@ def create_app() -> FastAPI:
         # docs/19：序章与既有第一章故事 Runtime 并行；story_id=prologue
         # 才会进入无序探班流程，旧 story_cursor 继续由 StoryRuntime 恢复。
         prologue_runtime=PrologueRuntime(),
+        trial_runtime=TrialRuntime(),
         # Auto Save (docs/13 §21, Task 8): the orchestrator fires the
         # checkpoint side effect after narrative commits, using the player_id
         # the API layer forwards. Wired below once the save service exists.
@@ -289,6 +292,7 @@ def create_app() -> FastAPI:
     app.include_router(game_router)
     app.include_router(saves_router)
     app.include_router(story_router)
+    app.include_router(trial_router)
     app.include_router(ops_router)
 
     # Liveness probe consumed by the Vue frontend (docs/13 Task 1: Vue 可请求

@@ -38,6 +38,10 @@ export interface SaveListResponse {
 /** Load 结果（docs/13 §20.3）：new_session_id + initial GameViewState。 */
 export interface LoadResult {
   session_id: string
+  /** 非章节故事体验的稳定标识；当前仅试玩版使用。 */
+  experience_id?: 'trial_v1' | null
+  /** 试玩版是否已抵达当前版本交接点。 */
+  trial_finished?: boolean
   /** 故事游标快照；null = 该存档从未进入故事模式（旧玩法存档）。 */
   story_cursor: StoryCursor | null
   /** 故事是否已走到结局（结局后为自由聊天态，应进 /game）。 */
@@ -70,12 +74,14 @@ export interface LoadResult {
 import type { GameOption, PresentationStateView } from './game'
 
 /** 存档目标路由：故事未完结 → /story（继续剧本）；已完结 / 旧玩法 → /game（自由聊天）。 */
-export type SaveTargetRoute = '/story' | '/story?story_id=prologue' | '/game'
+export type SaveTargetRoute = '/trial' | '/story' | '/story?story_id=prologue' | '/game'
 
 export function saveTargetRoute(
   storyCursor: StoryCursor | null,
   storyFinished: boolean,
+  experienceId?: string | null,
 ): SaveTargetRoute {
+  if (experienceId === 'trial_v1') return '/trial'
   if (storyCursor && !storyFinished) {
     return storyCursor.story_id === 'prologue' ? '/story?story_id=prologue' : '/story'
   }

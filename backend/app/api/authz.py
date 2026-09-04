@@ -7,7 +7,11 @@ def current_user_id(request: Request, legacy_player_id: str | None = None) -> st
     # Legacy player_id is accepted only when authentication is explicitly off
     # (isolated old tests/local fixtures). Production always ignores it.
     if request.app.state.auth_disabled:
-        return legacy_player_id
+        # The current Vue client no longer sends the legacy player_id.  The
+        # auth-disabled middleware still installs a deterministic local user,
+        # so local Save/Auto-Save must fall back to it instead of returning
+        # ``None`` (which every SaveRepository correctly rejects).
+        return legacy_player_id or request.state.user.id
     return request.state.user.id
 
 

@@ -5,12 +5,13 @@
 
 ## 1. 项目定位与当前阶段
 
-《完蛋，我被AI娘包围了》—— AI-native Galgame / 对话式悬疑解谜游戏；玩家唯一主动交互是与角色自然语言对话。
+《完蛋，我被AI娘包围了》—— AI-native Galgame / 对话式悬疑解谜游戏；核心语义输入是自然语言对话与 Evidence 推理。
 
 - TV-01~TV-17 技术验证全部完成（记录见 `validation-results/TV-*/result.md`）；docs/13 前端迁移+存档 Task 0-9 全部完成（`validation-results/docs13-task*/result.md`）。
 - docs/17 快速上线已部署：固定剧本故事模式（/story，AI 停用）+ 结局后 DeepSeek 自由聊天（/game 复用）+ 场景演出接线 + 旧调查玩法正式入口（「行动」按钮）。
 - 2026-08-21：「序章」新开局进入 `docs/story/Prologue.md` 固定剧本；三名角色探班顺序由玩家从剩余角色中反复选择，全部访问后汇合并选择一名角色进入 AI 后日谈自由聊天。序章常驻背景为 `backgroud/background_prologue.png`。标题「开始游戏」先进入章节选择，当前仅序章解锁。
-- **当前边界：不写剧情**——只在现有框架下测试、修补、完善；任何新内容先与用户确认。
+- 2026-09-04：在 `codex/trial-demo` 开发独立 `trial_v1` 试玩版（方案见 `docs/23-核心玩法闭环试玩版落地方案.md`）。原“Player + DeepSeek 被绑”开场遗弃但保留为前期实验；现役试玩开场改为原初 AI 深夜对话。原初 AI 的玩家可见名称必须遮蔽。
+- **当前边界：不自行补写剧情**——允许实现已确认的试玩版 Runtime、交互与明确标注的 Fixture；正式对白、Evidence 答案与分支内容先与用户确认。
 
 ## 2. 文档真相源（Docs-first）
 
@@ -20,6 +21,7 @@
 - 运行时：`docs/MVP/02`（架构）`03`（Narrative）`04`（Character）`05`（Memory）
 - 第一章内容：`docs/09`（落地备忘录）`10`（调查内容真相源）`11`（调查落地）`12 — 第一章叙事内容分配表.md`
 - 当前阶段方案：`docs/13-...落地方案.md`、`docs/17-快速上线固定剧本落地方案.md`（已上线）
+- 试玩版：`docs/23-核心玩法闭环试玩版落地方案.md`（`trial_v1` 范围、交互、状态与验收）
 - 注意：`docs/abandon/` 是废弃文档；顶层 `docs/12` ≠ `docs/abandon/12`。
 
 ## 3. 硬规则（不可协商）
@@ -32,7 +34,7 @@
 - 剧情推进必须经 Narrative Runtime（Signal→Event→Requirements→Commit；猜中真相≠Fact Reveal；主线 Event 默认 once+幂等）。
 - DeepSeek「看不见」是权限边界：视觉 Scene 信息不得进她的 Context。
 - API Key / Secret 只在 Backend 环境，绝不进前端、仓库、提交记录。
-- 当前阶段禁止引入：pgvector/RAG、Redis、Kafka、K8s、微服务、Live2D、Voice、高级特效。
+- 当前阶段禁止引入：pgvector/RAG、Redis、Kafka、K8s、微服务、Live2D、Voice。`trial_v1` 允许在硬件能力与减少动态效果设置约束下实现玻璃破裂、碎片拼合与文字多体运动；剧情状态仍由 Backend 权威提交。
 
 ## 4. 架构现状速览
 

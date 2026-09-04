@@ -25,7 +25,9 @@ async function onLoad(saveId: string) {
     game.pendingLoad = result
     localStorage.removeItem('gal_session_id')
     // 故事未完结 → /story；已完结 / 旧玩法 → /game（docs/17）
-    await router.push(saveTargetRoute(result.story_cursor, result.story_finished))
+    await router.push(
+      saveTargetRoute(result.story_cursor, result.story_finished, result.experience_id),
+    )
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e)
   } finally {

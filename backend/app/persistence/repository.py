@@ -52,6 +52,9 @@ class PersistedSession:
     # 快速上线固定剧本游标（story_runtime.py，临时组件）：{"node_index": int}。
     # None = 故事模式尚未开始（含旧快照），恢复后从头开始。
     story_cursor: dict | None = None
+    # docs/23：独立试玩版状态。与 story_cursor / NarrativeState.chapter1
+    # 隔离；旧快照缺失时为 None。
+    trial_state: dict | None = None
 
 
 class SessionRepository(ABC):
@@ -142,6 +145,7 @@ def _session_to_dict(session: PersistedSession) -> dict:
             for owner, state in session.character_states.items()
         },
         "story_cursor": session.story_cursor,
+        "trial_state": session.trial_state,
     }
 
 
@@ -180,6 +184,8 @@ def _session_from_dict(data: dict) -> PersistedSession:
         # Backward compatible: snapshots written before the story mode existed
         # lack this key, so an absent value means "story not started".
         story_cursor=data.get("story_cursor"),
+        # Backward compatible: snapshots before trial_v1 have no trial state.
+        trial_state=data.get("trial_state"),
     )
 
 

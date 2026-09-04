@@ -6,6 +6,7 @@ import StoryView from '../../views/StoryView.vue'
 import LoadView from '../../views/LoadView.vue'
 import SettingsView from '../../views/SettingsView.vue'
 import LoginView from '../../views/LoginView.vue'
+import TrialView from '../../views/TrialView.vue'
 import { useAuthStore } from '../../stores/auth'
 
 // docs/13 §6：Title / Game / Load / Settings 四个 View。
@@ -20,6 +21,7 @@ export const router = createRouter({
     { path: '/chapters', name: 'chapters', component: ChapterSelectView },
     { path: '/game', name: 'game', component: GameView },
     { path: '/story', name: 'story', component: StoryView },
+    { path: '/trial', name: 'trial', component: TrialView },
     { path: '/load', name: 'load', component: LoadView },
     { path: '/settings', name: 'settings', component: SettingsView },
   ],

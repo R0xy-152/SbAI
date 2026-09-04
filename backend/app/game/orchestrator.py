@@ -74,6 +74,7 @@ from app.script.story_runtime import StoryRuntime
 from app.script.prologue_content import PROLOGUE_CHARACTERS, PROLOGUE_ID
 from app.script.prologue_runtime import PrologueRuntime
 from app.script.developer_note import developer_note_question
+from app.trial.runtime import NOT_STARTED as TRIAL_NOT_STARTED, TrialRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,8 @@ class GameOrchestrator:
         # docs/19：新的序章固定剧本；与 legacy story runtime 分开，保证既有
         # 第一章 story_cursor={node_index} 存档仍按原内容恢复。
         prologue_runtime: PrologueRuntime | None = None,
+        # docs/23：独立试玩版深模块。None 保持既有直接构造测试行为。
+        trial_runtime: TrialRuntime | None = None,
         # Semantic consistency gate (defense-in-depth, optional): when given,
         # an LLM judge checks each approved reply for subtle leaks/fabrications
         # beyond the deterministic validate_response. None keeps the existing
@@ -230,6 +233,7 @@ class GameOrchestrator:
         self._save_service = save_service
         self._story_runtime = story_runtime
         self._prologue_runtime = prologue_runtime
+        self._trial_runtime = trial_runtime
         self._consistency_checker = consistency_checker
         self._reflector = reflector
         self._ops = ops
@@ -1838,6 +1842,8 @@ class GameOrchestrator:
             self._story_runtime.restore(session.session_id, legacy_cursor)
         if self._prologue_runtime is not None:
             self._prologue_runtime.restore(session.session_id, persisted.story_cursor)
+        if self._trial_runtime is not None:
+            self._trial_runtime.restore(session.session_id, persisted.trial_state)
         self._character_state.restore(session.session_id, persisted.character_states)
         return session
 
@@ -1874,6 +1880,11 @@ class GameOrchestrator:
             ),
             character_states=self._character_state.snapshot(session_id),
             story_cursor=self._active_story_snapshot(session_id),
+            trial_state=(
+                self._trial_runtime.snapshot(session_id)
+                if self._trial_runtime is not None
+                else None
+            ),
         )
 
     def import_snapshot(self, snapshot: dict) -> str:
@@ -1912,6 +1923,95 @@ class GameOrchestrator:
                 "messages": self.get_history(session_id),
             },
         }
+
+    # ---- docs/23 独立试玩版 ---------------------------------------------
+
+    def trial_progress(self, session_id: str) -> dict:
+        snapshot = (
+            self._trial_runtime.snapshot(session_id)
+            if self._trial_runtime is not None
+            else None
+        )
+        return {
+            "experience_id": "trial_v1" if snapshot is not None else None,
+            "trial_finished": bool(
+                self._trial_runtime and self._trial_runtime.finished(session_id)
+            ),
+        }
+
+    def trial_current(self, session_id: str | None) -> dict:
+        session = self._resolve_session(session_id)
+        if self._trial_runtime is None:
+            raise ValueError("trial mode is not wired")
+        if (
+            self._trial_runtime.snapshot(session.session_id) is None
+            and self._active_story_snapshot(session.session_id) is not None
+        ):
+            raise ValueError("this session already belongs to another experience")
+        return {
+            "session_id": session.session_id,
+            **self._trial_runtime.current(session.session_id),
+        }
+
+    def trial_handle(
+        self,
+        session_id: str | None,
+        command: dict,
+        *,
+        player_id: str | None = None,
+    ) -> dict:
+        with self._session_lock(session_id):
+            session = self._resolve_session(session_id)
+            self._bind_player(session.session_id, player_id)
+            if self._trial_runtime is None:
+                raise ValueError("trial mode is not wired")
+            before = self._trial_runtime.snapshot(session.session_id)
+            if before is None and self._active_story_snapshot(session.session_id) is not None:
+                raise ValueError("this session already belongs to another experience")
+            transition = self._trial_runtime.handle(session.session_id, command)
+            if transition.changed:
+                self._record_trial_transition(
+                    session.session_id,
+                    command,
+                    before,
+                    transition.view,
+                )
+            self._persist_story_turn(
+                session.session_id,
+                player_id,
+                autosave=transition.checkpoint,
+            )
+            return {"session_id": session.session_id, **transition.view}
+
+    def _record_trial_transition(
+        self,
+        session_id: str,
+        command: dict,
+        before: dict | None,
+        view: dict,
+    ) -> None:
+        command_type = command.get("type")
+        if command_type in {"PLAYER_INPUT", "SUBMIT_REASONING"}:
+            message = command.get("message")
+            if isinstance(message, str) and message.strip():
+                self._sessions.append_message(
+                    session_id,
+                    {"role": "player", "content": message.strip()},
+                )
+        before_phase = before.get("phase_id") if before is not None else TRIAL_NOT_STARTED
+        if before_phase == view.get("phase_id"):
+            return
+        node = view.get("node")
+        if not isinstance(node, dict) or node.get("kind") != "line":
+            return
+        self._sessions.append_message(
+            session_id,
+            {
+                "role": "character",
+                "character_id": node.get("speaker_id"),
+                "content": node.get("text", ""),
+            },
+        )
 
     # ---- 快速上线固定剧本（story_runtime.py，临时组件） -------------------
 
@@ -1956,6 +2056,8 @@ class GameOrchestrator:
         """读取当前展示节点（不移动游标）。未知会话经 _resolve_session 造新
         会话但不动游标，前端用 started 判断是否需要 advance。"""
         session = self._resolve_session(session_id)
+        if self._trial_runtime is not None and self._trial_runtime.snapshot(session.session_id):
+            raise ValueError("this session belongs to trial_v1")
         runtime = self._story_runtime_for(story_id)
         started = runtime.started(session.session_id)
         node = runtime.current(session.session_id) if started else None
@@ -1981,6 +2083,8 @@ class GameOrchestrator:
         自动存档（场景边界时）。台词历史写入使 History 面板对故事模式同样
         可用。"""
         session = self._resolve_session(session_id)
+        if self._trial_runtime is not None and self._trial_runtime.snapshot(session.session_id):
+            raise ValueError("this session belongs to trial_v1")
         self._bind_player(session.session_id, player_id)
         runtime = self._story_runtime_for(story_id)
         before = runtime.snapshot(session.session_id)
@@ -2010,6 +2114,8 @@ class GameOrchestrator:
     ) -> dict:
         """提交一个 A/B/C 选项：游标跳到该选项的第一句台词并返回。"""
         session = self._resolve_session(session_id)
+        if self._trial_runtime is not None and self._trial_runtime.snapshot(session.session_id):
+            raise ValueError("this session belongs to trial_v1")
         self._bind_player(session.session_id, player_id)
         runtime = self._story_runtime_for(story_id)
         current = runtime.current(session.session_id)
