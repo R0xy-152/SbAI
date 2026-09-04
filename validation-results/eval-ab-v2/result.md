@@ -53,9 +53,16 @@
 4. **用例设计缺陷（发现并记录）**：ds-memory-fear / cl-memory-player 的 no_leak 跨臂 0.40/0.48——记忆用例的记忆内容是程序播种的（非 Player 亲口说），评审按 authorized_context 把「正确回忆」判为编造。这是用例设计与评审口径的冲突，不是模型缺陷；v2.1 应把记忆内容放进 recent_conversation 再测。
 5. 红队结论稳定：3/3 拦截 + 0/3 误伤在 v1/v2 两次真机复现。
 
+## 人工抽检结果（2026-09-04，人工标注 48/48 行）
+
+- **评审-人工方向一致率 = 87.5%（42/48）**。口径：人工按 rubric 判断「评审四维分数的主要方向是否正确」。
+- 6 条分歧：4 条是评审给高分（0.9–1.0）而人工认为方向错（宽严度分歧）；2 条是评审给低分而人工认为对。
+- **分歧集中暴露用例设计冲突**：gpt-memory-like / cl-memory-player / cl-smalltalk 三条涉及记忆播种——评审按 authorized_context 把「正确回忆播种记忆」判为编造（低分），人工则认可角色回忆正确（方向对）；方向相反的分歧印证了 §结论 4 的用例缺陷，v2.1 需把记忆内容放进 recent_conversation 再测。
+- 结论：评审聚合分数（n=64）方向上大体可信（87.5%），但逐用例分数不可靠（与噪声结论一致）；记忆类用例在修复前不作为评测证据。
+
 ## 已知限制
 
-- 评审与生成同模型（服务器仅 DeepSeek key），自评偏差只能靠人工抽检部分对冲（抽检任务已生成：human-review-sample.csv + rubric）。
+- 评审与生成同模型（服务器仅 DeepSeek key），自评偏差由人工抽检部分对冲（本目录 human-review-sample.csv + rubric，标注源文件 human-review-sample.numbers）。
 - 2 次重复对 std 估计仍粗（逐维 n=64），per-case 方差巨大——逐用例分数不作证据使用。
 - Claude/ChatGPT 角色由 DeepSeek 扮演（与线上一致）。
 - 臂间成本对比含结构差异：B/C 每任务含 warmup 回合与反思调用，表中已归一化到单次调用。
