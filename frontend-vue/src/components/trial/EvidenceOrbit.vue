@@ -25,6 +25,7 @@ const emit = defineEmits<{
 
 const root = ref<HTMLElement | null>(null)
 const bodies = ref<OrbitBody[]>([])
+const trails = ref<Record<string, Array<{ x: number; y: number }>>>({})
 const quality = new AdaptivePhysicsQuality()
 const qualityLabel = computed(() =>
   quality.quality === 'high' ? '高精度' : quality.quality === 'balanced' ? '平衡' : '节能',
@@ -33,7 +34,9 @@ const qualityLabel = computed(() =>
 let frameId = 0
 let lastFrame = 0
 let accumulator = 0
+let trailAccumulator = 0
 let resizeObserver: ResizeObserver | null = null
+let previousBounds = { width: 1, height: 1 }
 
 interface DragState {
   pointerId: number
@@ -61,9 +64,19 @@ function syncBodies() {
   const visibleIds = visibleEvidence.value.map((item) => item.evidence_id)
   const existing = new Map(bodies.value.map((body) => [body.id, body]))
   const created = createOrbitBodies(visibleIds, area, props.seed)
-  bodies.value = visibleIds.map(
-    (id, index) => existing.get(id) ?? created[index],
-  )
+  const scaleX = area.width / Math.max(1, previousBounds.width)
+  const scaleY = area.height / Math.max(1, previousBounds.height)
+  bodies.value = visibleIds.map((id, index) => {
+    const body = existing.get(id)
+    if (!body) return created[index]
+    return {
+      ...body,
+      x: Math.max(body.radius, Math.min(area.width - body.radius, body.x * scaleX)),
+      y: Math.max(body.radius, Math.min(area.height - body.radius, body.y * scaleY)),
+    }
+  })
+  trails.value = Object.fromEntries(visibleIds.map((id) => [id, []]))
+  previousBounds = area
 }
 
 function bodyFor(id: string): OrbitBody | undefined {
@@ -75,6 +88,19 @@ function transformOf(id: string): string {
   return body ? `translate3d(${body.x}px, ${body.y}px, 0) translate(-50%, -50%)` : ''
 }
 
+function trailPoints(id: string): string {
+  return (trails.value[id] ?? []).map((point) => `${point.x},${point.y}`).join(' ')
+}
+
+function recordTrails() {
+  const limit = quality.quality === 'high' ? 32 : quality.quality === 'balanced' ? 24 : 14
+  const next = { ...trails.value }
+  for (const body of bodies.value) {
+    next[body.id] = [...(next[body.id] ?? []), { x: body.x, y: body.y }].slice(-limit)
+  }
+  trails.value = next
+}
+
 function tick(timestamp: number) {
   if (!lastFrame) lastFrame = timestamp
   const elapsed = Math.min(50, timestamp - lastFrame)
@@ -82,6 +108,7 @@ function tick(timestamp: number) {
   quality.recordFrame(elapsed)
   accumulator += elapsed
   if (accumulator >= quality.targetFrameMs) {
+    const simulatedMs = accumulator
     bodies.value = stepOrbitBodies(
       bodies.value,
       bounds(),
@@ -90,6 +117,11 @@ function tick(timestamp: number) {
       quality.substeps,
     )
     accumulator = 0
+    trailAccumulator += simulatedMs
+    if (trailAccumulator >= 85) {
+      recordTrails()
+      trailAccumulator = 0
+    }
   }
   frameId = requestAnimationFrame(tick)
 }
@@ -166,6 +198,14 @@ onBeforeUnmount(() => {
 <template>
   <section ref="root" class="evidence-orbit" data-testid="evidence-orbit">
     <div class="orbit-grid" aria-hidden="true"></div>
+    <svg class="orbit-trails" aria-hidden="true">
+      <polyline
+        v-for="(item, index) in visibleEvidence"
+        :key="`trail-${item.evidence_id}`"
+        :points="trailPoints(item.evidence_id)"
+        :style="{ '--trail-index': index }"
+      />
+    </svg>
     <div class="orbit-status">
       <span>文字天体场</span>
       <small>等质量 · {{ qualityLabel }}</small>
@@ -212,6 +252,24 @@ onBeforeUnmount(() => {
     linear-gradient(90deg, rgba(104, 210, 244, 0.12) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(circle, black, transparent 79%);
+}
+
+.orbit-trails {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.orbit-trails polyline {
+  fill: none;
+  stroke: hsl(calc(188deg + var(--trail-index) * 8deg) 80% 67% / 0.22);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .orbit-status {
@@ -275,5 +333,6 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .evidence-body { box-shadow: 0 0 8px rgba(64, 196, 235, 0.16); }
+  .orbit-trails { display: none; }
 }
 </style>

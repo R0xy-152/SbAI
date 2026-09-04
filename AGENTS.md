@@ -34,7 +34,7 @@
 - 剧情推进必须经 Narrative Runtime（Signal→Event→Requirements→Commit；猜中真相≠Fact Reveal；主线 Event 默认 once+幂等）。
 - DeepSeek「看不见」是权限边界：视觉 Scene 信息不得进她的 Context。
 - API Key / Secret 只在 Backend 环境，绝不进前端、仓库、提交记录。
-- 当前阶段禁止引入：pgvector/RAG、Redis、Kafka、K8s、微服务、Live2D、Voice。`trial_v1` 允许在硬件能力与减少动态效果设置约束下实现玻璃破裂、碎片拼合与文字多体运动；剧情状态仍由 Backend 权威提交。
+- 当前阶段禁止引入：pgvector/RAG、Redis、Kafka、K8s、微服务、Voice。经 2026-09-04 Scope Change，`trial_v1` 仅允许在开局表现层受控验证/接入单角色、单 Canvas 的 Live2D，并必须有静态图回退、发布许可审查和明确资源释放；Live2D 不得成为剧情状态源，其视觉信息不得进入任何角色 Context。`trial_v1` 同时允许在硬件能力与减少动态效果设置约束下实现玻璃破裂、碎片拼合与文字多体运动；剧情状态仍由 Backend 权威提交。
 
 ## 4. 架构现状速览
 

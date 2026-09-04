@@ -14,10 +14,10 @@
 | 命令 / 用例 | 结果 |
 |---|---|
 | `backend/.venv/bin/python -m pytest -q` | PASS：595 passed，12 skipped |
-| `npm run test` | PASS：84 tests；typecheck 与 production build 通过 |
+| `npm run test` | PASS：86 tests；typecheck 与 production build 通过 |
 | TrialRuntime 定向测试 | PASS：命名遮蔽、四片容差、戒指幂等、首次 Gate、最终无死路、双线路、Snapshot Restore |
 | Trial HTTP / Save 集成测试 | PASS：认证关闭兼容、检查点 AUTO、`chapter_id=trial_v1`、Load 返回 `/trial` 所需标识 |
-| 文字物理测试 | PASS：seed 确定性、等质量两体动量对称、90 秒五体安全间距、自适应降档/恢复 |
+| 文字物理测试 | PASS：seed 确定性、等质量两体动量对称、成对切向互绕、高速预测避让、10 组 seed × 60 秒五体真实包围体无穿透、自适应降档/恢复 |
 | 碎片物理测试 | PASS：四片在高精度子步下由弹簧/阻尼收敛并锁定 |
 
 ## 真实浏览器全流程
@@ -44,6 +44,17 @@
 - `validation-results/docs23-trial-implementation/evidence/04-service-stopped.png`
 - `validation-results/docs23-trial-implementation/evidence/05-evidence-orbit.png`
 - `validation-results/docs23-trial-implementation/evidence/06-fragment-handoff.png`
+- `validation-results/docs23-trial-implementation/evidence/07-orbit-braiding.png`
+
+## 2026-09-04 文字天体优化复验
+
+- 碰撞代理半径由 54px 修正为 64px，覆盖 7.2rem × 3rem 胶囊按钮的真实外接范围；
+- 加入接触前最近接距离预测、对称侧向避让和中距离成对切向轨道力，所有成对力保持等大反向；
+- 页面加入低开销短轨迹，真实浏览器可见连续弧线、绕行与多体交织；减少动态效果模式隐藏轨迹；
+- Microsoft Edge（Chromium）1192×681 真实 DOM 连续采样 10 秒、200 个时点、每时点 10 对天体：矩形重叠 0 次，最近中心距 167.36px；
+- 本次直接 Vite 验证仅有既存 `favicon.ico` 404，不影响玩法；此前完整试玩流程重启验证为 0 errors / 0 warnings。
+
+Live2D Scope Change 同日获批并写入 `AGENTS.md`、最高优先级 Scope 与 docs/23 §18。当前只完成素材/工程准入定义，未下载 SDK、未加入依赖，也未声称完成 Live2D 验证。
 
 ## 限制
 

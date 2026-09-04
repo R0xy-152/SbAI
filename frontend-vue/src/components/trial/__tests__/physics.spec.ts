@@ -12,6 +12,11 @@ const isolatedConfig: OrbitPhysicsConfig = {
   softening: 20,
   repulsion: 0,
   avoidancePadding: 0,
+  predictionHorizon: 0,
+  predictionStrength: 0,
+  braidStrength: 0,
+  braidTargetSpeed: 0,
+  braidRange: 0,
   centerStrength: 0,
   edgeStrength: 0,
   damping: 0,
@@ -25,7 +30,7 @@ describe('试玩版文字天体物理', () => {
     const second = createOrbitBodies(['a', 'b', 'c', 'd'], { width: 900, height: 600 }, 2049)
 
     expect(first).toEqual(second)
-    expect(new Set(first.map((body) => body.radius))).toEqual(new Set([54]))
+    expect(new Set(first.map((body) => body.radius))).toEqual(new Set([64]))
   })
 
   it('两体只受相互引力时保持等大反向动量变化', () => {
@@ -46,27 +51,77 @@ describe('试玩版文字天体物理', () => {
     expect(stepped.every((body) => Number.isFinite(body.x) && Number.isFinite(body.y))).toBe(true)
   })
 
-  it('默认五体系统长时间运行仍保持文字包围体的安全间距', () => {
-    let bodies = createOrbitBodies(
-      ['a', 'b', 'c', 'd', 'e'],
-      { width: 960, height: 540 },
-      31704,
+  it('成对切向力从静止态形成互绕趋势且不产生系统净动量', () => {
+    const braidedConfig: OrbitPhysicsConfig = {
+      ...isolatedConfig,
+      gravity: 0,
+      braidStrength: 40,
+      braidTargetSpeed: 80,
+      braidRange: 500,
+    }
+    const stepped = stepOrbitBodies(
+      [
+        { id: 'left', x: 180, y: 200, vx: 0, vy: 0, radius: 64 },
+        { id: 'right', x: 420, y: 200, vx: 0, vy: 0, radius: 64 },
+      ],
+      { width: 600, height: 400 },
+      1 / 30,
+      braidedConfig,
+      4,
     )
-    let minimumDistance = Number.POSITIVE_INFINITY
-    for (let frame = 0; frame < 60 * 90; frame += 1) {
+
+    expect(Math.abs(stepped[0].vy)).toBeGreaterThan(0)
+    expect(stepped[0].vy + stepped[1].vy).toBeCloseTo(0, 8)
+  })
+
+  it('高速迎面接近时在接触前平滑侧让且不穿透', () => {
+    let bodies = [
+      { id: 'approach-left', x: 260, y: 270, vx: 115, vy: 0, radius: 64 },
+      { id: 'approach-right', x: 700, y: 270, vx: -115, vy: 0, radius: 64 },
+    ]
+    let minimumClearance = Number.POSITIVE_INFINITY
+    let maximumVerticalSeparation = 0
+    for (let frame = 0; frame < 60 * 5; frame += 1) {
       bodies = stepOrbitBodies(bodies, { width: 960, height: 540 }, 1 / 60, undefined, 4)
-      for (let i = 0; i < bodies.length; i += 1) {
-        for (let j = i + 1; j < bodies.length; j += 1) {
-          minimumDistance = Math.min(
-            minimumDistance,
-            Math.hypot(bodies[i].x - bodies[j].x, bodies[i].y - bodies[j].y),
-          )
-        }
-      }
+      minimumClearance = Math.min(
+        minimumClearance,
+        Math.hypot(bodies[0].x - bodies[1].x, bodies[0].y - bodies[1].y)
+          - bodies[0].radius - bodies[1].radius,
+      )
+      maximumVerticalSeparation = Math.max(
+        maximumVerticalSeparation,
+        Math.abs(bodies[0].y - bodies[1].y),
+      )
     }
 
-    expect(minimumDistance).toBeGreaterThanOrEqual(108)
-    expect(bodies.every((body) => Number.isFinite(body.x) && Number.isFinite(body.y))).toBe(true)
+    expect(minimumClearance).toBeGreaterThanOrEqual(0)
+    expect(maximumVerticalSeparation).toBeGreaterThan(24)
+  })
+
+  it('默认五体系统在多组 seed 长时间运行仍不穿透真实文字包围体', () => {
+    for (const seed of [7, 29, 113, 809, 2049, 8191, 19081, 31704, 65537, 104729]) {
+      let bodies = createOrbitBodies(
+        ['a', 'b', 'c', 'd', 'e'],
+        { width: 960, height: 540 },
+        seed,
+      )
+      let minimumClearance = Number.POSITIVE_INFINITY
+      for (let frame = 0; frame < 60 * 60; frame += 1) {
+        bodies = stepOrbitBodies(bodies, { width: 960, height: 540 }, 1 / 60, undefined, 4)
+        for (let i = 0; i < bodies.length; i += 1) {
+          for (let j = i + 1; j < bodies.length; j += 1) {
+            minimumClearance = Math.min(
+              minimumClearance,
+              Math.hypot(bodies[i].x - bodies[j].x, bodies[i].y - bodies[j].y)
+                - bodies[i].radius - bodies[j].radius,
+            )
+          }
+        }
+      }
+
+      expect(minimumClearance, `seed=${seed}`).toBeGreaterThanOrEqual(0)
+      expect(bodies.every((body) => Number.isFinite(body.x) && Number.isFinite(body.y))).toBe(true)
+    }
   })
 
   it('连续慢帧会逐级降档，低档稳定快帧允许恢复到平衡档', () => {

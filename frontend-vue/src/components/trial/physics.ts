@@ -18,6 +18,11 @@ export interface OrbitPhysicsConfig {
   softening: number
   repulsion: number
   avoidancePadding: number
+  predictionHorizon: number
+  predictionStrength: number
+  braidStrength: number
+  braidTargetSpeed: number
+  braidRange: number
   centerStrength: number
   edgeStrength: number
   damping: number
@@ -26,10 +31,15 @@ export interface OrbitPhysicsConfig {
 }
 
 export const DEFAULT_ORBIT_CONFIG: OrbitPhysicsConfig = {
-  gravity: 360_000,
-  softening: 42,
-  repulsion: 2_200,
-  avoidancePadding: 42,
+  gravity: 440_000,
+  softening: 48,
+  repulsion: 2_600,
+  avoidancePadding: 56,
+  predictionHorizon: 0.8,
+  predictionStrength: 520,
+  braidStrength: 34,
+  braidTargetSpeed: 82,
+  braidRange: 390,
   centerStrength: 0.012,
   edgeStrength: 4.8,
   damping: 0.045,
@@ -54,27 +64,44 @@ function seededRandom(seed: number): () => number {
   }
 }
 
+function stablePairSpin(firstId: string, secondId: string): -1 | 1 {
+  const key = [firstId, secondId].sort().join('|')
+  let hash = 2_166_136_261
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index)
+    hash = Math.imul(hash, 16_777_619)
+  }
+  return (hash >>> 0) % 2 === 0 ? 1 : -1
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value))
+}
+
 export function createOrbitBodies(
   ids: string[],
   bounds: OrbitBounds,
   seed: number,
-  radius = 54,
+  radius = 64,
 ): OrbitBody[] {
   const random = seededRandom(seed)
   const centerX = bounds.width / 2
   const centerY = bounds.height / 2
-  const baseRadius = Math.min(bounds.width, bounds.height) * 0.28
+  const baseRadius = Math.min(bounds.width, bounds.height) * 0.34
+  const phase = random() * Math.PI * 2
+  const direction = random() < 0.5 ? -1 : 1
   return ids.map((id, index) => {
-    const angle = (index / Math.max(1, ids.length)) * Math.PI * 2 + random() * 0.7
-    const radial = baseRadius * (0.72 + random() * 0.5)
-    const tangentialSpeed = 42 + random() * 42
-    const direction = index % 3 === 0 ? -1 : 1
+    const angle = phase
+      + (index / Math.max(1, ids.length)) * Math.PI * 2
+      + (random() - 0.5) * 0.16
+    const radial = baseRadius * (0.92 + random() * 0.16)
+    const tangentialSpeed = 44 + random() * 34
     return {
       id,
       x: centerX + Math.cos(angle) * radial,
       y: centerY + Math.sin(angle) * radial * 0.7,
-      vx: -Math.sin(angle) * tangentialSpeed * direction + (random() - 0.5) * 18,
-      vy: Math.cos(angle) * tangentialSpeed * direction + (random() - 0.5) * 18,
+      vx: -Math.sin(angle) * tangentialSpeed * direction + (random() - 0.5) * 12,
+      vy: Math.cos(angle) * tangentialSpeed * direction + (random() - 0.5) * 12,
       radius,
     }
   })
@@ -103,6 +130,8 @@ export function stepOrbitBodies(
         const distance = Math.sqrt(Math.max(distanceSquared, 0.0001))
         const normalX = distanceSquared < 0.0001 ? (i + j) % 2 === 0 ? 1 : -1 : dx / distance
         const normalY = distanceSquared < 0.0001 ? 0 : dy / distance
+        const tangentX = -normalY
+        const tangentY = normalX
         const softened = Math.pow(distanceSquared + config.softening ** 2, 1.5)
         const attraction = config.gravity / softened
         let forceX = dx * attraction
@@ -117,6 +146,58 @@ export function stepOrbitBodies(
           const repulsion = config.repulsion * weight
           forceX -= normalX * repulsion
           forceY -= normalY * repulsion
+        }
+
+        const relativeVx = bodies[j].vx - bodies[i].vx
+        const relativeVy = bodies[j].vy - bodies[i].vy
+        const relativeTangentialSpeed = relativeVx * tangentX + relativeVy * tangentY
+        const angularMomentum = dx * relativeVy - dy * relativeVx
+        const spin = Math.abs(angularMomentum) > distance * 2
+          ? angularMomentum < 0 ? -1 : 1
+          : stablePairSpin(bodies[i].id, bodies[j].id)
+
+        // A symmetric tangential steering force maintains pairwise angular
+        // momentum in the middle distance. Near-contact motion is left to the
+        // safety barrier, so paths braid without introducing a fixed hub.
+        const braidStart = contactDistance + config.avoidancePadding * 0.75
+        const braidBand = smoothstep(braidStart, braidStart + 72, distance)
+          * (1 - smoothstep(config.braidRange * 0.76, config.braidRange, distance))
+        const braidError = spin * config.braidTargetSpeed - relativeTangentialSpeed
+        const braidSideForce = clamp(
+          braidError * 0.22,
+          -config.braidStrength,
+          config.braidStrength,
+        ) * braidBand
+        forceX -= tangentX * braidSideForce
+        forceY -= tangentY * braidSideForce
+
+        // Look ahead for the closest approach and begin a continuous sidestep
+        // before the visible text capsules touch. The equal/opposite pair force
+        // preserves the equal-mass model and avoids a rigid collision response.
+        const relativeSpeedSquared = relativeVx ** 2 + relativeVy ** 2
+        const approachRate = -(dx * relativeVx + dy * relativeVy) / distance
+        if (
+          config.predictionHorizon > 0
+          && config.predictionStrength > 0
+          && relativeSpeedSquared > 0.001
+          && approachRate > 0
+          && distance > contactDistance
+        ) {
+          const closestTime = clamp(
+            -(dx * relativeVx + dy * relativeVy) / relativeSpeedSquared,
+            0,
+            config.predictionHorizon,
+          )
+          const closestX = dx + relativeVx * closestTime
+          const closestY = dy + relativeVy * closestTime
+          const closestDistance = Math.hypot(closestX, closestY)
+          const collisionRisk = 1 - smoothstep(contactDistance, avoidanceDistance, closestDistance)
+          const urgency = 0.35 + 0.65 * (1 - closestTime / config.predictionHorizon)
+          const approachWeight = smoothstep(4, 42, approachRate)
+          const predictionSideForce = spin * config.predictionStrength
+            * collisionRisk * urgency * approachWeight * 0.5
+          forceX -= tangentX * predictionSideForce
+          forceY -= tangentY * predictionSideForce
         }
         acceleration[i].x += forceX
         acceleration[i].y += forceY
