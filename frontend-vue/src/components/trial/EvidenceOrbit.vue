@@ -26,6 +26,7 @@ const emit = defineEmits<{
 const root = ref<HTMLElement | null>(null)
 const bodies = ref<OrbitBody[]>([])
 const trails = ref<Record<string, Array<{ x: number; y: number }>>>({})
+const draggingId = ref<string | null>(null)
 const quality = new AdaptivePhysicsQuality()
 const qualityLabel = computed(() =>
   quality.quality === 'high' ? '高精度' : quality.quality === 'balanced' ? '平衡' : '节能',
@@ -96,6 +97,7 @@ function recordTrails() {
   const limit = quality.quality === 'high' ? 32 : quality.quality === 'balanced' ? 24 : 14
   const next = { ...trails.value }
   for (const body of bodies.value) {
+    if (body.dragged) continue
     next[body.id] = [...(next[body.id] ?? []), { x: body.x, y: body.y }].slice(-limit)
   }
   trails.value = next
@@ -131,6 +133,8 @@ function onPointerDown(event: PointerEvent, evidenceId: string) {
   if (!body) return
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   body.dragged = true
+  draggingId.value = evidenceId
+  trails.value = { ...trails.value, [evidenceId]: [] }
   drag = {
     pointerId: event.pointerId,
     evidenceId,
@@ -151,8 +155,11 @@ function onPointerMove(event: PointerEvent) {
   const dx = event.clientX - drag.lastX
   const dy = event.clientY - drag.lastY
   const dt = Math.max(8, event.timeStamp - drag.lastTime) / 1000
-  body.x = Math.max(30, Math.min(rect.width - 30, body.x + dx))
-  body.y = Math.max(30, Math.min(rect.height - 30, body.y + dy))
+  // Pointer capture keeps delivering movement outside the physics field. Let
+  // the visual body follow the pointer into the sibling reasoning tray; the
+  // simulation boundary is restored only after release.
+  body.x += dx
+  body.y += dy
   body.vx = dx / dt
   body.vy = dy / dt
   body.dragged = true
@@ -165,7 +172,16 @@ function onPointerMove(event: PointerEvent) {
 function onPointerUp(event: PointerEvent) {
   if (!drag || drag.pointerId !== event.pointerId) return
   const body = bodyFor(drag.evidenceId)
-  if (body) body.dragged = false
+  if (body) {
+    body.dragged = false
+    const rect = root.value?.getBoundingClientRect()
+    if (rect) {
+      body.x = Math.max(body.radius, Math.min(rect.width - body.radius, body.x))
+      body.y = Math.max(body.radius, Math.min(rect.height - body.radius, body.y))
+      body.vx *= 0.25
+      body.vy *= 0.25
+    }
+  }
   if (drag.moved) {
     emit('drop', {
       evidenceId: drag.evidenceId,
@@ -175,6 +191,7 @@ function onPointerUp(event: PointerEvent) {
   } else {
     emit('inspect', drag.evidenceId)
   }
+  draggingId.value = null
   drag = null
 }
 
@@ -196,7 +213,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section ref="root" class="evidence-orbit" data-testid="evidence-orbit">
+  <section
+    ref="root"
+    class="evidence-orbit"
+    :class="{ 'evidence-orbit--dragging': draggingId }"
+    data-testid="evidence-orbit"
+  >
     <div class="orbit-grid" aria-hidden="true"></div>
     <svg class="orbit-trails" aria-hidden="true">
       <polyline
@@ -214,6 +236,7 @@ onBeforeUnmount(() => {
       v-for="item in visibleEvidence"
       :key="item.evidence_id"
       class="evidence-body"
+      :class="{ 'evidence-body--dragging': draggingId === item.evidence_id }"
       :style="{ transform: transformOf(item.evidence_id) }"
       type="button"
       :aria-label="`${item.title}：点击查看，拖动选择`"
@@ -241,6 +264,10 @@ onBeforeUnmount(() => {
     rgba(1, 7, 13, 0.78);
   box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.52);
   touch-action: none;
+}
+.evidence-orbit--dragging {
+  z-index: 20;
+  overflow: visible;
 }
 
 .orbit-grid {
@@ -322,6 +349,14 @@ onBeforeUnmount(() => {
   outline: none;
 }
 .evidence-body:active { cursor: grabbing; }
+.evidence-body--dragging {
+  z-index: 30;
+  cursor: grabbing;
+  filter: brightness(1.16);
+  box-shadow:
+    0 0 0 1px rgba(144, 234, 255, 0.35),
+    0 0 34px rgba(83, 218, 255, 0.62);
+}
 
 .orbit-empty {
   position: absolute;

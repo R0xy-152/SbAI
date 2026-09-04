@@ -14,7 +14,7 @@
 | 命令 / 用例 | 结果 |
 |---|---|
 | `backend/.venv/bin/python -m pytest -q` | PASS：595 passed，12 skipped |
-| `npm run test` | PASS：86 tests；typecheck 与 production build 通过 |
+| `npm run test` | PASS：87 tests；typecheck 与 production build 通过 |
 | TrialRuntime 定向测试 | PASS：命名遮蔽、四片容差、戒指幂等、首次 Gate、最终无死路、双线路、Snapshot Restore |
 | Trial HTTP / Save 集成测试 | PASS：认证关闭兼容、检查点 AUTO、`chapter_id=trial_v1`、Load 返回 `/trial` 所需标识 |
 | 文字物理测试 | PASS：seed 确定性、等质量两体动量对称、成对切向互绕、高速预测避让、10 组 seed × 60 秒五体真实包围体无穿透、自适应降档/恢复 |
@@ -45,6 +45,7 @@
 - `validation-results/docs23-trial-implementation/evidence/05-evidence-orbit.png`
 - `validation-results/docs23-trial-implementation/evidence/06-fragment-handoff.png`
 - `validation-results/docs23-trial-implementation/evidence/07-orbit-braiding.png`
+- `validation-results/docs23-trial-implementation/evidence/08-drag-layer.png`
 
 ## 2026-09-04 文字天体优化复验
 
@@ -55,6 +56,14 @@
 - 本次直接 Vite 验证仅有既存 `favicon.ico` 404，不影响玩法；此前完整试玩流程重启验证为 0 errors / 0 warnings。
 
 Live2D Scope Change 同日获批并写入 `AGENTS.md`、最高优先级 Scope 与 docs/23 §18。当前只完成素材/工程准入定义，未下载 SDK、未加入依赖，也未声称完成 Live2D 验证。
+
+## 2026-09-04 证据跨 UI 拖拽修复
+
+- 原因：拖动坐标被夹在物理场 `width - 30px`，同时物理场 `overflow: hidden`，且拖动物没有高于推理槽的独立层级；
+- 修复：Pointer Capture 期间允许证据跟随指针越过物理场，拖动态临时放开裁切并提升层级，释放后恢复场内约束；
+- 同步清空/暂停该证据的轨迹采样，避免跨 UI 时产生一条贯穿页面的长轨迹；
+- 新增组件回归测试，验证拖动中可越界、存在顶层拖动态、释放后清理状态并发出准确落点；
+- Microsoft Edge（Chromium）真实浏览器断言：修复前 `enteredTray=false / topIsEvidence=false`，修复后均为 `true`；拖动过程中证据视觉本体位于推理槽上方，Console 0 errors / 0 warnings。
 
 ## 限制
 
