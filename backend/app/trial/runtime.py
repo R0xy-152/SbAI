@@ -1,4 +1,15 @@
-"""Deterministic trial_v1 state machine behind one small command interface."""
+"""Deterministic trial_v1 state machine behind one small command interface.
+
+Runtime and content are fully separated (docs/23 §10.2, docs/24): every line,
+scene, evidence, deduction rule, route mapping, transition target, literal and
+checkpoint lives in app.trial.content, which is fail-closed validated at
+import.  This module only executes that validated table; swapping the real
+script means editing content, never this file.
+
+External contract (unchanged): TrialState snapshot/restore shape, the four
+bounded commands, idempotency by command_id, checkpoint-on-enter semantics and
+the TrialView shape consumed by frontend-vue/src/api/trial.ts.
+"""
 
 from __future__ import annotations
 
@@ -7,57 +18,33 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from app.trial.content import (
-    FIXTURE_LINES,
-    TRIAL_EVIDENCE,
-    TRIAL_EVIDENCE_BY_ID,
+    CHECKPOINT_PHASE_IDS,
+    DEDUCTIONS_BY_ID,
+    EVIDENCE,
+    EVIDENCE_IDS,
+    NOT_STARTED,
+    PHASES_BY_ID,
+    PHASE_IDS,
+    ROUTES_BY_ID,
+    ROUTE_IDS,
+    SCENES_BY_ID,
+    TERMINAL_PHASE_IDS,
+    TOKEN_IDS,
+    TRIAL_CONTENT,
     TRIAL_ID,
-    TRIAL_SCENES,
 )
 
-NOT_STARTED = "not_started"
-OPENING_WARM_CHAT = "opening_warm_chat"
-OPENING_INPUT = "opening_input"
-OPENING_ANOMALY = "opening_anomaly"
-OPENING_SHATTER = "opening_shatter"
-OPENING_REMAINS = "opening_origin_ai_remains"
-OPENING_SERVICE_STOPPED = "opening_service_stopped"
-FRAGMENT_01_DEEPSEEK_INTRO = "fragment_01_deepseek_intro"
-FRAGMENT_01_FIRST_REASONING = "fragment_01_first_reasoning"
-FRAGMENT_01_GROUP_INTRO = "fragment_01_group_intro"
-FRAGMENT_01_GROUP_REASONING = "fragment_01_group_reasoning"
-FRAGMENT_02_HANDOFF_A = "fragment_02_handoff_a"
-FRAGMENT_02_HANDOFF_B = "fragment_02_handoff_b"
+# Mechanical validation tolerances (not authored content; docs/24 §5.2).
+SHARD_POSITION_TOLERANCE = 0.035
+SHARD_ROTATION_TOLERANCE = 4.0
 
-TRIAL_PHASES = frozenset(
-    {
-        NOT_STARTED,
-        OPENING_WARM_CHAT,
-        OPENING_INPUT,
-        OPENING_ANOMALY,
-        OPENING_SHATTER,
-        OPENING_REMAINS,
-        OPENING_SERVICE_STOPPED,
-        FRAGMENT_01_DEEPSEEK_INTRO,
-        FRAGMENT_01_FIRST_REASONING,
-        FRAGMENT_01_GROUP_INTRO,
-        FRAGMENT_01_GROUP_REASONING,
-        FRAGMENT_02_HANDOFF_A,
-        FRAGMENT_02_HANDOFF_B,
-    }
+# Events whose names come from content; collected once so late duplicate
+# COMPLETE_SHATTER / PLAYER_INPUT requests stay silent no-ops (as before).
+SHATTER_EVENTS: tuple[str, ...] = tuple(
+    event
+    for phase in PHASES_BY_ID.values()
+    for event in (phase.get("shatter_events") or ())
 )
-
-CHECKPOINT_PHASES = frozenset(
-    {
-        OPENING_ANOMALY,
-        OPENING_REMAINS,
-        OPENING_SERVICE_STOPPED,
-        FRAGMENT_01_GROUP_INTRO,
-        FRAGMENT_02_HANDOFF_A,
-        FRAGMENT_02_HANDOFF_B,
-    }
-)
-
-SHARD_IDS = ("SHARD_NW", "SHARD_NE", "SHARD_SE", "SHARD_SW")
 
 
 @dataclass
@@ -100,10 +87,7 @@ class TrialRuntime:
 
     def finished(self, session_id: str) -> bool:
         state = self._states.get(session_id)
-        return state is not None and state.phase_id in {
-            FRAGMENT_02_HANDOFF_A,
-            FRAGMENT_02_HANDOFF_B,
-        }
+        return state is not None and state.phase_id in TERMINAL_PHASE_IDS
 
     def current(self, session_id: str) -> dict:
         state = self._states.get(session_id, TrialState())
@@ -137,7 +121,7 @@ class TrialRuntime:
 
         state.last_command_id = command_id
         changed = before_phase != state.phase_id or command_type == "SUBMIT_REASONING"
-        checkpoint = before_phase != state.phase_id and state.phase_id in CHECKPOINT_PHASES
+        checkpoint = before_phase != state.phase_id and state.phase_id in CHECKPOINT_PHASE_IDS
         return TrialTransition(self._view(state), changed=changed, checkpoint=checkpoint)
 
     def snapshot(self, session_id: str) -> dict | None:
@@ -170,65 +154,65 @@ class TrialRuntime:
         if snapshot.get("experience_id") != TRIAL_ID:
             raise ValueError("unknown trial experience_id")
         phase = snapshot.get("phase_id")
-        if phase not in TRIAL_PHASES or phase == NOT_STARTED:
+        if phase not in PHASE_IDS or phase == NOT_STARTED:
             raise ValueError(f"unknown trial phase: {phase!r}")
         evidence_ids = snapshot.get("final_evidence_ids", [])
         if not isinstance(evidence_ids, list) or any(
-            evidence_id not in TRIAL_EVIDENCE_BY_ID for evidence_id in evidence_ids
+            evidence_id not in EVIDENCE_IDS for evidence_id in evidence_ids
         ):
             raise ValueError("trial_state contains unknown evidence ids")
         tokens = set(snapshot.get("acquired_story_tokens", []))
-        if not tokens.issubset({"RING"}):
+        if not tokens.issubset(TOKEN_IDS):
             raise ValueError("trial_state contains unknown story tokens")
         route_id = snapshot.get("route_id")
-        if route_id not in {None, "fragment_02_a", "fragment_02_b"}:
+        if route_id not in {None, *ROUTE_IDS}:
             raise ValueError("trial_state contains unknown route")
         if phase.endswith("handoff_a") and route_id != "fragment_02_a":
             raise ValueError("trial handoff A requires route A")
         if phase.endswith("handoff_b") and route_id != "fragment_02_b":
             raise ValueError("trial handoff B requires route B")
 
+    # ── command handlers ───────────────────────────────────────────────
+
     def _advance(self, state: TrialState) -> None:
-        transitions = {
-            NOT_STARTED: OPENING_WARM_CHAT,
-            OPENING_WARM_CHAT: OPENING_INPUT,
-            OPENING_ANOMALY: OPENING_SHATTER,
-            OPENING_REMAINS: OPENING_SERVICE_STOPPED,
-            OPENING_SERVICE_STOPPED: FRAGMENT_01_DEEPSEEK_INTRO,
-            FRAGMENT_01_DEEPSEEK_INTRO: FRAGMENT_01_FIRST_REASONING,
-            FRAGMENT_01_GROUP_INTRO: FRAGMENT_01_GROUP_REASONING,
-        }
-        next_phase = transitions.get(state.phase_id)
-        if next_phase is None:
+        row = PHASES_BY_ID[state.phase_id]
+        target = row.get("advance_to")
+        if target is None:
             raise ValueError(f"ADVANCE is not allowed during {state.phase_id}")
-        if next_phase == OPENING_SERVICE_STOPPED:
-            state.acquired_story_tokens.add("RING")
-            state.completed_events.add("RING_ACQUIRED")
-        state.phase_id = next_phase
+        self._enter(state, target)
         state.last_outcome = None
 
     def _player_input(self, state: TrialState, message: Any) -> None:
-        if state.phase_id != OPENING_INPUT:
+        row = PHASES_BY_ID[state.phase_id]
+        target = row.get("player_input_to")
+        if target is None:
             raise ValueError(f"PLAYER_INPUT is not allowed during {state.phase_id}")
         if not isinstance(message, str) or not message.strip():
             raise ValueError("player input must not be empty")
         if len(message) > 2000:
             raise ValueError("player input is too long")
-        state.completed_events.add("OPENING_INPUT_COMPLETED")
-        state.phase_id = OPENING_ANOMALY
+        answer = row.get("player_input_answer")
+        if answer is not None and message.strip() != answer:
+            raise ValueError("密码不正确，再看看纸上的字。")
+        for event in row.get("player_input_events") or ():
+            state.completed_events.add(event)
+        self._enter(state, target)
         state.last_outcome = "ACCEPTED"
 
     def _complete_shatter(self, state: TrialState, shards: Any) -> None:
-        if "SHATTER_SOLVED" in state.completed_events:
+        if any(event in state.completed_events for event in SHATTER_EVENTS):
             return
-        if state.phase_id != OPENING_SHATTER:
+        row = PHASES_BY_ID[state.phase_id]
+        target = row.get("shatter_to")
+        if target is None:
             raise ValueError(f"COMPLETE_SHATTER is not allowed during {state.phase_id}")
-        if not isinstance(shards, list) or len(shards) != len(SHARD_IDS):
-            raise ValueError("exactly four shard poses are required")
+        shard_ids = tuple(row["interaction"].get("shard_ids", ()))
+        if not isinstance(shards, list) or len(shards) != len(shard_ids):
+            raise ValueError(f"exactly {len(shard_ids)} shard poses are required")
         by_id = {pose.get("shard_id"): pose for pose in shards if isinstance(pose, dict)}
-        if set(by_id) != set(SHARD_IDS):
-            raise ValueError("shard poses must contain the four unique shard ids")
-        for shard_id in SHARD_IDS:
+        if set(by_id) != set(shard_ids):
+            raise ValueError("shard poses must contain the unique shard ids")
+        for shard_id in shard_ids:
             pose = by_id[shard_id]
             try:
                 x = float(pose["x"])
@@ -236,10 +220,15 @@ class TrialRuntime:
                 rotation = float(pose["rotation"])
             except (KeyError, TypeError, ValueError) as exc:
                 raise ValueError("invalid shard pose") from exc
-            if abs(x) > 0.035 or abs(y) > 0.035 or abs(rotation) > 4.0:
+            if (
+                abs(x) > SHARD_POSITION_TOLERANCE
+                or abs(y) > SHARD_POSITION_TOLERANCE
+                or abs(rotation) > SHARD_ROTATION_TOLERANCE
+            ):
                 raise ValueError(f"shard {shard_id} is outside the snap tolerance")
-        state.completed_events.add("SHATTER_SOLVED")
-        state.phase_id = OPENING_REMAINS
+        for event in row.get("shatter_events") or ():
+            state.completed_events.add(event)
+        self._enter(state, target)
         state.last_outcome = "ACCEPTED"
 
     def _submit_reasoning(
@@ -257,141 +246,123 @@ class TrialRuntime:
             raise ValueError("at least one evidence id is required")
         if len(evidence_ids) != len(set(evidence_ids)):
             raise ValueError("evidence ids must be unique")
-        if any(evidence_id not in TRIAL_EVIDENCE_BY_ID for evidence_id in evidence_ids):
+        if any(evidence_id not in EVIDENCE_IDS for evidence_id in evidence_ids):
             raise ValueError("unknown or unauthorized trial evidence")
 
         normalized = message.lower().replace(" ", "")
-        if state.phase_id == FRAGMENT_01_FIRST_REASONING:
-            if deduction_id != "TRIAL_DEDUCTION_DEEPSEEK_MEMORY":
-                raise ValueError("unexpected deduction id")
-            if len(evidence_ids) > 2:
-                raise ValueError("first deduction accepts at most two evidence items")
-            accepted = "TRIAL_EV_MEMORY_GAP" in evidence_ids and any(
-                term in normalized for term in ("失忆", "记忆断层", "记不起来", "忘记")
-            )
-            state.first_deduction_attempts.append(
-                {"evidence_ids": list(evidence_ids), "outcome": "ACCEPTED" if accepted else "NO_MATCH"}
-            )
-            if accepted:
-                state.deepseek_truth_revealed = True
-                state.completed_events.add("DEEPSEEK_MEMORY_TRUTH_REVEALED")
-                state.phase_id = FRAGMENT_01_GROUP_INTRO
-                state.last_outcome = "ACCEPTED"
-            else:
-                state.last_outcome = "NO_MATCH"
+        row = PHASES_BY_ID[state.phase_id]
+        # Terminal handoffs accept (and ignore) late submissions (no dead end).
+        if row["interaction"].get("kind") == "complete":
             return
+        if row.get("deduction_id") is None:
+            raise ValueError(f"SUBMIT_REASONING is not allowed during {state.phase_id}")
+        if deduction_id != row["deduction_id"]:
+            raise ValueError("unexpected deduction id")
+        config = DEDUCTIONS_BY_ID[row["deduction_id"]]
+        if len(evidence_ids) > config["evidence_max"]:
+            raise ValueError(
+                f"{row['deduction_id']} accepts at most "
+                f"{config['evidence_max']} evidence items"
+            )
 
-        if state.phase_id == FRAGMENT_01_GROUP_REASONING:
-            if deduction_id != "TRIAL_DEDUCTION_GROUP_TRUTH":
-                raise ValueError("unexpected deduction id")
-            if len(evidence_ids) > 3:
-                raise ValueError("group deduction accepts at most three evidence items")
-            correct_pair = {
-                "TRIAL_EV_MEMORY_GAP",
-                "TRIAL_EV_DIALOGUE_FRAGMENT",
-            }.issubset(set(evidence_ids))
-            semantic_match = any(
-                term in normalized for term in ("真相", "身份", "异常", "记忆")
+        selected = set(evidence_ids)
+        # docs/25 §3：否定/矛盾短语命中即拒绝（「我不认为她失忆了」不得按
+        # 关键词误通过）；text_keywords_none 为内容表可选字段。
+        accepted = (
+            set(config["evidence_gate_required"]).issubset(selected)
+            and any(
+                term in normalized
+                for term in config["text_keywords_any"]
             )
-            outcome = "ACCEPTED" if correct_pair and semantic_match else "NO_MATCH"
-            route_id = (
-                "fragment_02_b"
-                if "TRIAL_EV_IDENTITY_NOISE" in evidence_ids
-                else "fragment_02_a"
+            and not any(
+                term in normalized
+                for term in config.get("text_keywords_none", ())
             )
+        )
+        outcome = (
+            config["accept"]["outcome"] if accepted else config["reject"]["outcome"]
+        )
+        if config.get("records_attempts"):
+            state.first_deduction_attempts.append(
+                {"evidence_ids": list(evidence_ids), "outcome": outcome}
+            )
+
+        if config.get("final"):
+            # Every final submission commits: reasoning correctness and route
+            # are separate results; the evidence alone decides the route.
             state.final_evidence_ids = list(evidence_ids)
             state.final_reasoning_outcome = outcome
-            state.route_id = route_id
-            state.completed_events.add("FRAGMENT_01_ROUTE_COMMITTED")
-            state.phase_id = (
-                FRAGMENT_02_HANDOFF_B if route_id == "fragment_02_b" else FRAGMENT_02_HANDOFF_A
-            )
             state.last_outcome = outcome
+            route_id = self._resolve_route(config["route"], selected)
+            state.route_id = route_id
+            for event in config.get("commit_events", ()):
+                state.completed_events.add(event)
+            self._enter(state, ROUTES_BY_ID[route_id]["phase_id"])
             return
 
-        if state.phase_id in {FRAGMENT_02_HANDOFF_A, FRAGMENT_02_HANDOFF_B}:
-            return
-        raise ValueError(f"SUBMIT_REASONING is not allowed during {state.phase_id}")
+        if accepted:
+            accept = config["accept"]
+            flag = accept.get("flag")
+            if flag is not None:
+                setattr(state, flag, True)
+            for event in accept.get("events", ()):
+                state.completed_events.add(event)
+            self._enter(state, accept["next_phase"])
+        state.last_outcome = outcome
+
+    @staticmethod
+    def _resolve_route(rule: dict[str, Any], selected: set[str]) -> str:
+        for route_id, required in rule.get("by_evidence", {}).items():
+            if set(required).issubset(selected):
+                return route_id
+        return rule["default"]
+
+    @staticmethod
+    def _enter(state: TrialState, phase_id: str) -> None:
+        destination = PHASES_BY_ID[phase_id]
+        state.phase_id = phase_id
+        on_enter = destination.get("on_enter")
+        if on_enter is not None:
+            for event in on_enter.get("events", ()):
+                state.completed_events.add(event)
+            for token in on_enter.get("tokens", ()):
+                state.acquired_story_tokens.add(token)
+
+    # ── view ───────────────────────────────────────────────────────────
 
     def _view(self, state: TrialState) -> dict:
-        phase = state.phase_id
+        row = PHASES_BY_ID[state.phase_id]
+        interaction = deepcopy(row["interaction"])
+        if interaction["kind"] == "evidence_orbit":
+            config = DEDUCTIONS_BY_ID[interaction["deduction_id"]]
+            interaction.update(
+                {
+                    "selection_min": config["evidence_min"],
+                    "selection_max": config["evidence_max"],
+                    "allow_retry": config["allow_retry"],
+                    "seed": config["orbit_seed"],
+                }
+            )
         node = None
-        interaction: dict[str, Any]
-        evidence: list[dict] = []
-
-        if phase == NOT_STARTED:
-            interaction = {"kind": "advance", "label": "开始试玩"}
-        elif phase == OPENING_INPUT:
-            node = self._line(phase)
-            interaction = {"kind": "text_input", "label": "发送"}
-        elif phase == OPENING_SHATTER:
-            node = self._line(phase)
-            interaction = {
-                "kind": "shatter_puzzle",
-                "puzzle_id": "TRIAL_SHATTER_01",
-                "shard_ids": list(SHARD_IDS),
-            }
-        elif phase == OPENING_SERVICE_STOPPED:
-            interaction = {
-                "kind": "service_stop_modal",
-                "message": "AI 停止服务",
-                "label": "继续",
-            }
-        elif phase in {FRAGMENT_01_FIRST_REASONING, FRAGMENT_01_GROUP_REASONING}:
-            node = self._line(phase)
-            first = phase == FRAGMENT_01_FIRST_REASONING
-            evidence = [dict(item) for item in TRIAL_EVIDENCE]
-            interaction = {
-                "kind": "evidence_orbit",
-                "deduction_id": (
-                    "TRIAL_DEDUCTION_DEEPSEEK_MEMORY"
-                    if first
-                    else "TRIAL_DEDUCTION_GROUP_TRUTH"
-                ),
-                "selection_min": 1,
-                "selection_max": 2 if first else 3,
-                "allow_retry": first,
-            }
-        elif phase in {FRAGMENT_02_HANDOFF_A, FRAGMENT_02_HANDOFF_B}:
-            node = self._line(phase)
-            interaction = {"kind": "complete", "label": "片段 1 完成"}
-        else:
-            node = self._line(phase)
-            interaction = {"kind": "advance", "label": "继续"}
-
-        scene = self._scene_for(phase)
+        line_id = row.get("line_id")
+        if line_id is not None:
+            node = {"kind": "line", **TRIAL_CONTENT["lines"][line_id]}
         return {
             "experience_id": TRIAL_ID,
-            "started": phase != NOT_STARTED,
-            "finished": phase in {FRAGMENT_02_HANDOFF_A, FRAGMENT_02_HANDOFF_B},
-            "phase_id": phase,
+            "started": state.phase_id != NOT_STARTED,
+            "finished": state.phase_id in TERMINAL_PHASE_IDS,
+            "phase_id": state.phase_id,
             "node": node,
-            "scene": scene,
+            "scene": deepcopy(SCENES_BY_ID[row["scene_id"]]),
             "interaction": interaction,
-            "authorized_evidence": evidence,
+            "authorized_evidence": (
+                [dict(item) for item in EVIDENCE]
+                if interaction["kind"] == "evidence_orbit"
+                else []
+            ),
             "story_tokens": sorted(state.acquired_story_tokens),
             "outcome": state.last_outcome,
             "reasoning_outcome": state.final_reasoning_outcome,
             "route_id": state.route_id,
-            "fixture_content": True,
-        }
-
-    @staticmethod
-    def _line(phase: str) -> dict:
-        line = FIXTURE_LINES.get(phase)
-        if line is None:
-            raise ValueError(f"trial phase has no fixture line: {phase}")
-        return {"kind": "line", **line}
-
-    @staticmethod
-    def _scene_for(phase: str) -> dict:
-        if phase.startswith("opening") or phase == NOT_STARTED:
-            scene = TRIAL_SCENES["opening"]
-        elif phase in {FRAGMENT_01_DEEPSEEK_INTRO, FRAGMENT_01_FIRST_REASONING}:
-            scene = TRIAL_SCENES["fragment_01_deepseek"]
-        else:
-            scene = TRIAL_SCENES["fragment_01_group"]
-        return {
-            **scene,
-            "characters": [dict(character) for character in scene["characters"]],
+            "fixture_content": bool(TRIAL_CONTENT["fixture_content"]),
         }

@@ -18,6 +18,9 @@ export interface TrialCharacter {
 export interface TrialScene {
   scene_id: string
   background: string
+  video?: string
+  poster?: string
+  music?: string
   fixture_art: boolean
   characters: TrialCharacter[]
 }
@@ -32,6 +35,7 @@ export type TrialInteraction =
   | { kind: 'advance'; label: string }
   | { kind: 'text_input'; label: string }
   | { kind: 'shatter_puzzle'; puzzle_id: string; shard_ids: string[] }
+  | { kind: 'paper_rubbing'; label: string; answer: string }
   | { kind: 'service_stop_modal'; message: string; label: string }
   | {
       kind: 'evidence_orbit'
@@ -39,6 +43,7 @@ export type TrialInteraction =
       selection_min: number
       selection_max: number
       allow_retry: boolean
+      seed: number
     }
   | { kind: 'complete'; label: string }
 

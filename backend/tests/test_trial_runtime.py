@@ -36,17 +36,24 @@ def _solved_shards() -> list[dict]:
 
 
 def _advance_to_first_reasoning(runtime: TrialRuntime, session_id: str = "s") -> None:
-    runtime.handle(session_id, _command("ADVANCE", 1))
-    runtime.handle(session_id, _command("ADVANCE", 2))
-    runtime.handle(session_id, _command("PLAYER_INPUT", 3, message="晚安"))
-    runtime.handle(session_id, _command("ADVANCE", 4))
+    runtime.handle(session_id, _command("ADVANCE", 1))  # not_started → warm_chat
+    runtime.handle(session_id, _command("ADVANCE", 2))  # warm_chat → input
+    runtime.handle(session_id, _command("PLAYER_INPUT", 3, message="晚安"))  # input → anomaly
+    runtime.handle(session_id, _command("ADVANCE", 4))  # anomaly → shatter
     runtime.handle(
         session_id,
-        _command("COMPLETE_SHATTER", 5, shards=_solved_shards()),
+        _command("COMPLETE_SHATTER", 5, shards=_solved_shards()),  # shatter → remains
     )
-    runtime.handle(session_id, _command("ADVANCE", 6))
-    runtime.handle(session_id, _command("ADVANCE", 7))
-    runtime.handle(session_id, _command("ADVANCE", 8))
+    runtime.handle(session_id, _command("ADVANCE", 6))  # remains → service_stopped
+    # 密室废案：醒来 → 遇 DeepSeek → 拓印(ADVANCE) → 输密码 → 开门 → 见 Claude/ChatGPT
+    runtime.handle(session_id, _command("ADVANCE", 7))  # service_stopped → locked_room_wake
+    runtime.handle(session_id, _command("ADVANCE", 8))  # wake → deepseek
+    runtime.handle(session_id, _command("ADVANCE", 9))  # deepseek → paper (rubbing)
+    runtime.handle(session_id, _command("ADVANCE", 10))  # paper → password
+    runtime.handle(session_id, _command("PLAYER_INPUT", 11, message="03:17"))  # password → door
+    runtime.handle(session_id, _command("ADVANCE", 12))  # door → meet
+    runtime.handle(session_id, _command("ADVANCE", 13))  # meet → deepseek_intro
+    runtime.handle(session_id, _command("ADVANCE", 14))  # deepseek_intro → first_reasoning
 
 
 def test_trial_flow_redacts_origin_ai_and_commits_ring_once():
@@ -133,6 +140,57 @@ def test_first_deduction_gates_group_but_final_submission_never_dead_ends():
     assert final.checkpoint
 
 
+def test_first_deduction_rejects_negation_and_accepts_equivalent_phrasings():
+    """docs/25 §3：否定句式不得按关键词误通过；文档等价表达必须能通过。"""
+    runtime = TrialRuntime()
+    _advance_to_first_reasoning(runtime)
+
+    negated = runtime.handle(
+        "s",
+        _command(
+            "SUBMIT_REASONING",
+            9,
+            deduction_id="TRIAL_DEDUCTION_DEEPSEEK_MEMORY",
+            evidence_ids=["TRIAL_EV_MEMORY_GAP"],
+            message="我不认为她失忆了",
+        ),
+    )
+    assert negated.view["outcome"] == "NO_MATCH"
+    assert negated.view["phase_id"] == "fragment_01_first_reasoning"
+
+    equivalent = runtime.handle(
+        "s",
+        _command(
+            "SUBMIT_REASONING",
+            10,
+            deduction_id="TRIAL_DEDUCTION_DEEPSEEK_MEMORY",
+            evidence_ids=["TRIAL_EV_MEMORY_GAP"],
+            message="那晚你想不起来",
+        ),
+    )
+    assert equivalent.view["outcome"] == "ACCEPTED"
+    assert equivalent.view["phase_id"] == "fragment_01_group_intro"
+
+
+def test_first_deduction_rejects_negation_phrasings():
+    runtime = TrialRuntime()
+    _advance_to_first_reasoning(runtime)
+    messages = ("她没有失忆，是装的", "并不存在失忆这回事", "她并没有忘记那晚")
+    for index, message in enumerate(messages):
+        outcome = runtime.handle(
+            "s",
+            _command(
+                "SUBMIT_REASONING",
+                20 + index,
+                deduction_id="TRIAL_DEDUCTION_DEEPSEEK_MEMORY",
+                evidence_ids=["TRIAL_EV_MEMORY_GAP"],
+                message=message,
+            ),
+        )
+        assert outcome.view["outcome"] == "NO_MATCH"
+        assert outcome.view["phase_id"] == "fragment_01_first_reasoning"
+
+
 def test_snapshot_restore_preserves_authoritative_route():
     source = TrialRuntime()
     _advance_to_first_reasoning(source)
@@ -197,3 +255,51 @@ def test_orchestrator_restores_trial_without_touching_story_cursor(tmp_path):
         "story_cursor": None,
         "story_finished": False,
     }
+
+
+def _advance_to_locked_room_password(runtime: TrialRuntime, session_id: str = "s") -> None:
+    runtime.handle(session_id, _command("ADVANCE", 1))  # not_started → warm_chat
+    runtime.handle(session_id, _command("ADVANCE", 2))  # warm_chat → input
+    runtime.handle(session_id, _command("PLAYER_INPUT", 3, message="晚安"))  # input → anomaly
+    runtime.handle(session_id, _command("ADVANCE", 4))  # anomaly → shatter
+    runtime.handle(
+        session_id,
+        _command("COMPLETE_SHATTER", 5, shards=_solved_shards()),  # shatter → remains
+    )
+    runtime.handle(session_id, _command("ADVANCE", 6))  # remains → service_stopped
+    runtime.handle(session_id, _command("ADVANCE", 7))  # service_stopped → locked_room_wake
+    runtime.handle(session_id, _command("ADVANCE", 8))  # wake → deepseek
+    runtime.handle(session_id, _command("ADVANCE", 9))  # deepseek → paper (rubbing)
+    runtime.handle(session_id, _command("ADVANCE", 10))  # paper → password
+
+
+def test_locked_room_paper_reveals_password_and_gates_door():
+    runtime = TrialRuntime()
+    _advance_to_locked_room_password(runtime)
+    paper = runtime.current("s")
+    assert paper["interaction"]["kind"] == "text_input"
+    assert paper["interaction"].get("answer") is None
+    assert paper["node"]["speaker_label"] == "DeepSeek"
+
+    with pytest.raises(ValueError, match="密码不正确"):
+        runtime.handle("s", _command("PLAYER_INPUT", 20, message="0000"))
+
+    unlocked = runtime.handle("s", _command("PLAYER_INPUT", 21, message="03:17"))
+    assert unlocked.view["phase_id"] == "locked_room_door_open"
+
+
+def test_locked_room_rubbing_phase_exposes_answer():
+    runtime = TrialRuntime()
+    runtime.handle("s", _command("ADVANCE", 1))
+    runtime.handle("s", _command("ADVANCE", 2))
+    runtime.handle("s", _command("PLAYER_INPUT", 3, message="晚安"))
+    runtime.handle("s", _command("ADVANCE", 4))
+    runtime.handle("s", _command("COMPLETE_SHATTER", 5, shards=_solved_shards()))
+    runtime.handle("s", _command("ADVANCE", 6))
+    runtime.handle("s", _command("ADVANCE", 7))
+    runtime.handle("s", _command("ADVANCE", 8))
+    runtime.handle("s", _command("ADVANCE", 9))
+    rubbing = runtime.current("s")
+    assert rubbing["phase_id"] == "locked_room_paper"
+    assert rubbing["interaction"]["kind"] == "paper_rubbing"
+    assert rubbing["interaction"]["answer"] == "03:17"

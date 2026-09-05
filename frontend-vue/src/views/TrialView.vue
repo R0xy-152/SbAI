@@ -16,7 +16,12 @@ import EvidenceOrbit from '../components/trial/EvidenceOrbit.vue'
 import ReasoningTray from '../components/trial/ReasoningTray.vue'
 import ServiceStoppedModal from '../components/trial/ServiceStoppedModal.vue'
 import ShatterPuzzle from '../components/trial/ShatterPuzzle.vue'
+import PaperRubbing from '../components/trial/PaperRubbing.vue'
 import TrialSceneSnapshot from '../components/trial/TrialSceneSnapshot.vue'
+import { getFrozenFrame } from '../components/trial/mediaFrame'
+import GameDialog from '../components/game/standard/GameDialog.vue'
+import { usePresentationStore } from '../stores/presentation'
+import { setDialogueLine } from '../adapters/presentation-adapter'
 
 interface ReasoningTrayHandle {
   containsPoint(clientX: number, clientY: number): boolean
@@ -24,6 +29,7 @@ interface ReasoningTrayHandle {
 
 const router = useRouter()
 const game = useGameStore()
+const presentation = usePresentationStore()
 const trial = ref<TrialView | null>(null)
 const sessionId = ref<string | null>(null)
 const busy = ref(false)
@@ -32,9 +38,24 @@ const playerInput = ref('')
 const selectedIds = ref<string[]>([])
 const inspectedEvidence = ref<TrialEvidence | null>(null)
 const reasoningTray = ref<ReasoningTrayHandle | null>(null)
+const dialogRef = ref<{ triggerAdvance: () => void } | null>(null)
+
+// 后端 400 会带 detail（如「密码不正确…」）；优先取 detail，避免只显示 axios 通用报错。
+function errorText(reason: unknown): string {
+  if (reason && typeof reason === 'object' && 'response' in reason) {
+    const detail = (reason as { response?: { data?: { detail?: unknown } } }).response?.data?.detail
+    if (typeof detail === 'string' && detail) return detail
+  }
+  return reason instanceof Error ? reason.message : String(reason)
+}
 
 const interaction = computed<TrialInteraction | null>(() => trial.value?.interaction ?? null)
 const isOrbit = computed(() => interaction.value?.kind === 'evidence_orbit')
+// 碎裂后的开场阶段（残存意识→停止服务）用冻结帧，避免视频从头循环（docs/27 §7.1）
+const postBreakFrozen = computed(() => {
+  const phase = trial.value?.phase_id
+  return phase === 'opening_origin_ai_remains' || phase === 'opening_service_stopped' ? getFrozenFrame() : null
+})
 const phaseLabel = computed(() => {
   const labels: Record<string, string> = {
     not_started: '准备进入',
@@ -44,6 +65,12 @@ const phaseLabel = computed(() => {
     opening_shatter: '重组连接',
     opening_origin_ai_remains: '残存意识',
     opening_service_stopped: '服务停止',
+    locked_room_wake: '密室醒来',
+    locked_room_deepseek: '遇见 DeepSeek',
+    locked_room_paper: '拓印密码',
+    locked_room_password: '输入密码',
+    locked_room_door_open: '大门打开',
+    locked_room_meet: '门外来客',
     fragment_01_deepseek_intro: '单人审问',
     fragment_01_first_reasoning: '失忆推理',
     fragment_01_group_intro: '全员集合',
@@ -108,7 +135,7 @@ async function loadCurrent() {
         // Surface the original error when both attempts fail.
       }
     }
-    error.value = firstError instanceof Error ? firstError.message : String(firstError)
+    error.value = errorText(firstError)
   } finally {
     busy.value = false
   }
@@ -121,7 +148,7 @@ async function send(command: Parameters<typeof sendTrialCommand>[1]) {
   try {
     rememberView(await sendTrialCommand(sessionId.value, command))
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : String(reason)
+    error.value = errorText(reason)
   } finally {
     busy.value = false
   }
@@ -133,12 +160,59 @@ async function advance() {
   await send({ type: 'ADVANCE', command_id: newTrialCommandId() })
 }
 
+// 全屏继续热区：台词推进拍点击画面任意处继续（等效点 ▼），
+// 但真正的交互控件（按钮/链接/输入框/弹窗）不吞掉点击，保持各自行为。
+function onViewClick(event: MouseEvent) {
+  if (busy.value) return
+  if (interaction.value?.kind !== 'advance' || !trial.value?.node) return
+  const target = event.target as HTMLElement | null
+  if (!target) return
+  if (target.closest('button, a, input, select, [role="button"], [role="dialog"], [role="alertdialog"]')) {
+    return
+  }
+  dialogRef.value?.triggerAdvance()
+}
+
 async function submitPlayerInput() {
   const message = playerInput.value.trim()
   if (!message) return
   playerInput.value = ''
   await send({ type: 'PLAYER_INPUT', command_id: newTrialCommandId(), message })
 }
+
+function onPlayerContinued(text?: string) {
+  // GameDialog 在「推进」路径会先 emit 无参 'player-continued'；仅带文本的才是玩家输入
+  if (!text) return
+  playerInput.value = text
+  submitPlayerInput()
+}
+
+// 序章同款 GameDialog：把试玩节点喂进 presentation store（名称=遮蔽 label）
+watch(
+  () => trial.value?.node,
+  (node) => {
+    if (!node) return
+    const id = node.speaker_id
+    setDialogueLine(presentation.state, id, node.text)
+    presentation.state.dialogue.speakerName = node.speaker_label
+    presentation.state.characters[id].emotion = ''
+    presentation.state.status = 'streaming'
+  },
+  { immediate: true },
+)
+
+// text_input 阶段：GameDialog 进入可输入态（currentStatus → 'input'）
+watch(
+  () => interaction.value?.kind,
+  (kind) => {
+    if (kind === 'text_input') {
+      presentation.state.status = 'idle'
+      presentation.state.dialogue.mode = 'script'
+      presentation.state.dialogue.speakerName = '你'
+      presentation.state.dialogue.text = ''
+    }
+  },
+)
 
 async function completeShatter(poses: TrialShardPose[]) {
   await send({
@@ -203,12 +277,12 @@ onMounted(loadCurrent)
 </script>
 
 <template>
-  <main class="trial-view">
+  <main class="trial-view" @click="onViewClick">
     <template v-if="trial">
       <TrialSceneSnapshot
         v-if="interaction?.kind !== 'shatter_puzzle'"
         :scene="trial.scene"
-        :node="trial.node"
+        :frozen="postBreakFrozen"
       />
 
       <header class="trial-toolbar">
@@ -223,16 +297,21 @@ onMounted(loadCurrent)
       <ShatterPuzzle
         v-if="interaction?.kind === 'shatter_puzzle'"
         :scene="trial.scene"
-        :node="trial.node"
         :shard-ids="interaction.shard_ids"
         @complete="completeShatter"
+      />
+
+      <PaperRubbing
+        v-if="interaction?.kind === 'paper_rubbing'"
+        :answer="interaction.answer"
+        @complete="advance"
       />
 
       <section v-if="isOrbit && interaction?.kind === 'evidence_orbit'" class="reasoning-workspace">
         <EvidenceOrbit
           :evidence="trial.authorized_evidence"
           :selected-ids="selectedIds"
-          :seed="interaction.deduction_id === 'TRIAL_DEDUCTION_GROUP_TRUTH' ? 2049 : 31704"
+          :seed="interaction.seed"
           @inspect="inspectEvidence"
           @drop="handleEvidenceDrop"
         />
@@ -247,27 +326,21 @@ onMounted(loadCurrent)
         />
       </section>
 
-      <form
-        v-if="interaction?.kind === 'text_input'"
-        class="trial-input"
-        @submit.prevent="submitPlayerInput"
+      <!-- 序章同款对话框（底部）：仅在推进有台词 / 输入时显示 -->
+      <div
+        v-if="(interaction?.kind === 'advance' && trial.node) || interaction?.kind === 'text_input'"
+        class="absolute inset-x-0 bottom-0 z-10 flex flex-col"
       >
-        <label for="trial-player-input">回应</label>
-        <textarea
-          id="trial-player-input"
-          v-model="playerInput"
-          rows="3"
-          maxlength="2000"
-          autofocus
-          placeholder="输入你的话……"
-        ></textarea>
-        <button type="submit" :disabled="busy || !playerInput.trim()">
-          {{ busy ? '发送中…' : interaction.label }}
-        </button>
-      </form>
+        <GameDialog
+          ref="dialogRef"
+          class="mx-auto"
+          @dialog-proceed="advance"
+          @player-continued="onPlayerContinued"
+        />
+      </div>
 
       <button
-        v-if="interaction?.kind === 'advance'"
+        v-if="interaction?.kind === 'advance' && !trial.node"
         class="trial-advance"
         type="button"
         :disabled="busy"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { TrialLine, TrialScene, TrialShardPose } from '../../api/trial'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+import type { TrialScene, TrialShardPose } from '../../api/trial'
 import { AdaptivePhysicsQuality } from './performance'
 import {
   allShardsSolved,
@@ -9,10 +9,10 @@ import {
   type ShardBody,
 } from './shard-physics'
 import TrialSceneSnapshot from './TrialSceneSnapshot.vue'
+import { getFrozenFrame } from './mediaFrame'
 
 const props = defineProps<{
   scene: TrialScene
-  node: TrialLine | null
   shardIds: string[]
 }>()
 
@@ -25,6 +25,8 @@ const bodies = ref<ShardBody[]>([])
 const quality = new AdaptivePhysicsQuality()
 const completed = ref(false)
 const nearby = ref(new Set<string>())
+// 碎裂源：视频场景用「异常时冻结的当前帧」（避免四片各自挂不同步视频）；静态场景为 null
+const frozenFrame = ref<string | null>(null)
 
 const masks = [
   'polygon(0 0,52% 0,48% 18%,53% 34%,50% 50%,31% 53%,18% 48%,0 52%)',
@@ -33,10 +35,6 @@ const masks = [
   'polygon(49% 100%,0 100%,0 52%,18% 48%,31% 53%,50% 50%,47% 68%,52% 83%)',
 ]
 const origins = ['25% 25%', '75% 25%', '75% 75%', '25% 75%']
-
-const qualityLabel = computed(() =>
-  quality.quality === 'high' ? '高精度' : quality.quality === 'balanced' ? '平衡' : '节能',
-)
 
 let frameId = 0
 let lastFrame = 0
@@ -75,7 +73,7 @@ function tick(timestamp: number) {
     frameAccumulator = 0
     nearby.value = new Set(
       bodies.value
-        .filter((body) => !body.snapped && Math.hypot(body.x, body.y) < 115)
+        .filter((body) => !body.snapped && Math.hypot(body.x, body.y) < body.snapRadius)
         .map((body) => body.id),
     )
     if (!completed.value && allShardsSolved(bodies.value)) {
@@ -141,7 +139,7 @@ function onPointerUp(event: PointerEvent) {
   const body = bodyById(drag.shardId)
   if (body) {
     body.dragging = false
-    if (Math.hypot(body.x, body.y) < 110) {
+    if (Math.hypot(body.x, body.y) < body.snapRadius * 0.9) {
       body.vx *= 0.18
       body.vy *= 0.18
       body.angularVelocity *= 0.3
@@ -158,7 +156,7 @@ function onShardKeydown(event: KeyboardEvent, shardId: string) {
   else if (event.key === 'ArrowRight') body.x += step
   else if (event.key === 'ArrowUp') body.y -= step
   else if (event.key === 'ArrowDown') body.y += step
-  else if (event.key === 'Enter' && Math.hypot(body.x, body.y) < 120) {
+  else if (event.key === 'Enter' && Math.hypot(body.x, body.y) < body.snapRadius) {
     body.x = 0
     body.y = 0
     body.rotation = 0
@@ -171,6 +169,7 @@ function onShardKeydown(event: KeyboardEvent, shardId: string) {
 }
 
 onMounted(() => {
+  if (props.scene.video) frozenFrame.value = getFrozenFrame()
   initialize()
   if (root.value && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(initialize)
@@ -188,7 +187,7 @@ onBeforeUnmount(() => {
 <template>
   <div ref="root" class="shatter-puzzle" data-testid="shatter-puzzle">
     <div class="shatter-target" aria-hidden="true">
-      <TrialSceneSnapshot :scene="scene" :node="node" />
+      <TrialSceneSnapshot :scene="scene" :frozen="frozenFrame" />
     </div>
     <div
       v-for="(body, index) in bodies"
@@ -212,13 +211,12 @@ onBeforeUnmount(() => {
       @pointercancel="onPointerUp"
       @keydown="onShardKeydown($event, body.id)"
     >
-      <TrialSceneSnapshot :scene="scene" :node="node" />
+      <TrialSceneSnapshot :scene="scene" :frozen="frozenFrame" />
       <div class="glass-sheen" aria-hidden="true"></div>
     </div>
     <div class="shatter-instruction" aria-live="polite">
       <strong>重组画面</strong>
       <span>拖动四块碎片靠近原位，进入光圈后会按真实惯性与弹簧力归位</span>
-      <small>物理精度：{{ qualityLabel }}</small>
     </div>
   </div>
 </template>

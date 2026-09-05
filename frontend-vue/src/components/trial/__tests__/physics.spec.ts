@@ -149,6 +149,7 @@ describe('试玩版玻璃碎片归位物理', () => {
       inertia: 1,
       dragging: false,
       snapped: false,
+      snapRadius: 150,
     }))
 
     for (let index = 0; index < 600 && !allShardsSolved(bodies); index += 1) {

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { TrialLine, TrialScene } from '../../api/trial'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { TrialScene } from '../../api/trial'
+import { setFrozenFrame } from './mediaFrame'
 
 const props = defineProps<{
   scene: TrialScene
-  node: TrialLine | null
+  // 冻结帧（dataURL）：非空则以冻结图代替实时视频（用作碎裂源，避免四片各自挂不同步视频）
+  frozen?: string | null
 }>()
 
 const assetByCharacter: Record<string, string> = {
@@ -29,14 +31,132 @@ const characters = computed(() =>
     left: slotLeft[character.slot],
   })),
 )
+
+// 开场特写：视频 + 音乐同时起播（docs/27 §7.1/§7.2）。视频 muted 自动播放；
+// 音乐若被自动播放策略拦截，则等首次交互再播，保证与视频「同时出场」。
+const hasMedia = computed(() => Boolean(props.scene.video))
+const videoEl = ref<HTMLVideoElement | null>(null)
+const audioEl = ref<HTMLAudioElement | null>(null)
+
+let resumePointer: (() => void) | null = null
+let resumeKey: (() => void) | null = null
+
+function clearResumeListeners() {
+  if (resumePointer) window.removeEventListener('pointerdown', resumePointer)
+  if (resumeKey) window.removeEventListener('keydown', resumeKey)
+  resumePointer = null
+  resumeKey = null
+}
+
+function stopMedia() {
+  videoEl.value?.pause()
+  audioEl.value?.pause()
+  clearResumeListeners()
+}
+
+function startMedia() {
+  if (!hasMedia.value) return
+  const v = videoEl.value
+  const a = audioEl.value
+  if (v) v.play().catch(() => {})
+  const tryAudio = () => {
+    if (a) a.play().catch(() => {})
+  }
+  tryAudio() // 若进入时有手势激活则立即起播
+  // 兜底：若仍暂停，等首次交互再起播（保证与视频「同时出场」）
+  // 注意：pointerdown 与 keydown 是两个独立 listener，任一触发后必须把
+  // 两个都摘掉，否则残留的 keydown 会在后续（如输密码按 Enter）把已停的
+  // 开场音乐重新 play 起来。
+  const resume = () => {
+    if (a && a.paused) a.play().catch(() => {})
+    clearResumeListeners()
+  }
+  resumePointer = resume
+  resumeKey = resume
+  window.addEventListener('pointerdown', resume, { once: true })
+  window.addEventListener('keydown', resume, { once: true })
+}
+
+const frozen = computed(() => props.frozen ?? null)
+
+// 离开视频/进入冻结帧后立即停掉音乐：把 <audio> 移出 DOM 并不会自动停止
+// 已播放的元素，必须显式 pause，否则「Aira」会一直循环到后续章节/退出试玩后。
+watch(
+  () => Boolean(props.scene.video && props.scene.music && !frozen.value),
+  (shouldPlay) => {
+    if (!shouldPlay) stopMedia()
+  },
+)
+let captureTimer: number | undefined
+let captureCanvas: HTMLCanvasElement | null = null
+const CAPTURE_W = 960
+
+function captureVideoFrame() {
+  const v = videoEl.value
+  if (!v || v.readyState < 2 || v.videoWidth === 0) return
+  const ratio = v.videoWidth / v.videoHeight
+  const w = CAPTURE_W
+  const h = Math.round(CAPTURE_W / ratio)
+  captureCanvas = captureCanvas ?? document.createElement('canvas')
+  captureCanvas.width = w
+  captureCanvas.height = h
+  const c = captureCanvas.getContext('2d')
+  if (!c) return
+  c.drawImage(v, 0, 0, w, h)
+  try {
+    setFrozenFrame(captureCanvas.toDataURL('image/jpeg', 0.82))
+  } catch {
+    // 画布被污染则跳过，靠海报/静态背景兜底
+  }
+}
+
+function startCapture() {
+  if (!hasMedia.value) return
+  captureVideoFrame()
+  captureTimer = window.setInterval(captureVideoFrame, 260)
+}
+
+onMounted(() => {
+  startMedia()
+  startCapture()
+})
+
+onBeforeUnmount(() => {
+  if (captureTimer) {
+    window.clearInterval(captureTimer)
+    captureTimer = undefined
+  }
+  // 捕获最后一帧作为碎裂源（docs/27 §7.1 异常冻结帧）
+  if (hasMedia.value) captureVideoFrame()
+  stopMedia()
+})
 </script>
 
 <template>
-  <div class="trial-snapshot" :style="{ backgroundImage: `url(${scene.background})` }">
+  <div class="trial-snapshot" :class="{ 'has-video': scene.video }" :style="scene.video ? undefined : { backgroundImage: `url(${scene.background})` }">
+    <video
+      v-if="scene.video && !frozen"
+      ref="videoEl"
+      class="trial-snapshot__video"
+      :src="scene.video"
+      :poster="scene.poster"
+      autoplay
+      muted
+      loop
+      playsinline
+      @loadeddata="captureVideoFrame"
+    ></video>
+    <img
+      v-else-if="scene.video && frozen"
+      class="trial-snapshot__video"
+      :src="frozen"
+      alt=""
+    />
+    <audio v-if="scene.video && scene.music && !frozen" ref="audioEl" :src="scene.music" loop preload="auto"></audio>
     <div class="trial-snapshot__shade" aria-hidden="true"></div>
     <div class="trial-snapshot__scan" aria-hidden="true"></div>
 
-    <div class="trial-snapshot__stage" aria-hidden="true">
+    <div v-if="!scene.video" class="trial-snapshot__stage" aria-hidden="true">
       <template v-for="character in characters" :key="character.character_id">
         <img
           v-if="character.src"
@@ -53,13 +173,6 @@ const characters = computed(() =>
           <span></span><i></i><b></b>
         </div>
       </template>
-    </div>
-
-    <div v-if="node" class="trial-snapshot__dialogue">
-      <div class="trial-snapshot__speaker" :class="{ redacted: node.speaker_id === 'origin_ai' }">
-        {{ node.speaker_label }}
-      </div>
-      <p>{{ node.text }}</p>
     </div>
 
     <div class="trial-snapshot__frame" aria-hidden="true">
@@ -80,6 +193,18 @@ const characters = computed(() =>
   background-position: center;
   background-size: cover;
   color: #eefaff;
+}
+
+.trial-snapshot__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trial-snapshot.has-video .trial-snapshot__shade {
+  opacity: 0.55;
 }
 
 .trial-snapshot__shade {
@@ -159,47 +284,6 @@ const characters = computed(() =>
   transform: skewX(-8deg);
 }
 
-.trial-snapshot__dialogue {
-  position: absolute;
-  right: clamp(1rem, 7vw, 7rem);
-  bottom: clamp(1rem, 4vh, 3rem);
-  left: clamp(1rem, 7vw, 7rem);
-  min-height: 8.5rem;
-  padding: 1.25rem 1.6rem 1.35rem;
-  border: 1px solid rgba(137, 225, 255, 0.44);
-  border-radius: 0.5rem;
-  background: linear-gradient(135deg, rgba(2, 10, 18, 0.9), rgba(8, 23, 35, 0.74));
-  box-shadow:
-    0 1.25rem 3.5rem rgba(0, 0, 0, 0.45),
-    inset 0 0 28px rgba(79, 200, 255, 0.06);
-  backdrop-filter: blur(12px);
-}
-
-.trial-snapshot__speaker {
-  width: fit-content;
-  margin-bottom: 0.55rem;
-  color: #9be7ff;
-  font-size: clamp(1rem, 1.7vw, 1.35rem);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-}
-
-.trial-snapshot__speaker.redacted {
-  color: transparent;
-  text-shadow: 0 0 7px rgba(177, 240, 255, 0.95);
-  background: repeating-linear-gradient(90deg, #b8f2ff 0 7px, #07131f 7px 13px);
-  background-clip: text;
-  filter: blur(1.2px);
-}
-
-.trial-snapshot__dialogue p {
-  margin: 0;
-  font-size: clamp(1rem, 1.55vw, 1.3rem);
-  font-weight: 650;
-  line-height: 1.8;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
-}
-
 .trial-snapshot__frame {
   position: absolute;
   inset: clamp(0.55rem, 1vw, 1rem);
@@ -221,6 +305,5 @@ const characters = computed(() =>
 @media (max-aspect-ratio: 4/5) {
   .trial-snapshot__character { max-width: 48vw; height: 70%; }
   .trial-snapshot__redacted-presence { width: 48vw; height: 58vh; }
-  .trial-snapshot__dialogue { min-height: 10rem; }
 }
 </style>
