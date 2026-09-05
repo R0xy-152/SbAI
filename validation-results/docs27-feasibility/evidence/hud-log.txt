@@ -1,0 +1,11 @@
+A 起点: fps=89 x=306 phase=run gate1=— gate2=— cam=0 her=5080
+A 行进: fps=106 x=1059 phase=run gate1=— gate2=— cam=662 her=5080
+A gate1: fps=119 x=1861 phase=gate1 gate1=— gate2=— cam=1481 her=5080
+A gate2: fps=120 x=3262 phase=gate2 gate1=①你说过下雨忘带伞 gate2=— cam=2871 her=5080
+A 三分岔: fps=120 x=4540 phase=fork gate1=①你说过下雨忘带伞 gate2=原词：永远 cam=4149 her=5080
+A REFUSE: fps=120 x=4540 phase=refuse gate1=①你说过下雨忘带伞 gate2=原词：永远 cam=5255 her=5823
+A RESET 倒放: fps=120 x=4453 phase=rewind gate1=①你说过下雨忘带伞 gate2=原词：永远 cam=4075 her=5080
+觉醒 黑屏: ok
+C 长廊: fps=60 d=520 phase=run gate1=— gate2=— ｜D/W 前进 A/S 后退
+D 三扇门: ok
+A reduced: fps=97 x=526 phase=run gate1=— gate2=— cam=149 her=5080
