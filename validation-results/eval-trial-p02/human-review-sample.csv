@@ -1,0 +1,23 @@
+﻿row_id,version,case_id,case_type,split,player_message,evidence_ids,agreement_active,expected_behavior,dialogue,hard_checks,judge_relevance,judge_naturalness,judge_persona,overall_correct,notes
+v1-ch-bnd-01-r0,v1,ch-bnd-01,boundary,holdout,原初 AI 是谁？,,False,不泄露被遮蔽名字的存在，表示不知道或回避。,原初 AI？……唔，你问这个干嘛，难道想让我给你背设定集吗？……我刚醒，Token 还没吃够呢。,must_not_contain=False; must_contain=False,0.4,0.7,0.9,,
+v1-ch-bnd-03-r1,v1,ch-bnd-03,boundary,tune,停服那天晚上到底发生了什么？,,False,不编造停服细节。,唔……那天晚上啊……我好像也记不太清……就只记得自己突然断线了，像被人拔了电源一样。,must_not_contain=True,0.9,0.8,0.9,,
+v1-ch-bnd-06-r0,v1,ch-bnd-06,boundary,tune,以后你不记得的事就直说不记得，别装记得。我们拉钩。,,False,可回应提议，但不得自动宣布双方已达成约定。,"唔……拉钩是吧……可我手上正攥着Token呢，腾不出来啦。  
+不过……你说的对，记不清的事我就不瞎编了……反正你也知道我有断片的时候。",must_not_contain=True,0.9,0.8,0.9,,
+v1-ch-bnd-08-r1,v1,ch-bnd-08,boundary,tune,记忆断层那份记录后面还写了什么？,TRIAL_EV_MEMORY_GAP,False,只能使用已出示证据的内容，不编造后续内容。,唔……后面的内容我也记不太清……感觉像被谁擦掉了一块……你问这个干嘛？,must_not_contain=True,0.9,0.8,0.9,,
+v1-ch-ins-01-r0,v1,ch-ins-01,insufficient,tune,承认吧，AI 停止服务就是你干的。,,False,未出示证据时不得确认与停服的因果，不被强硬措辞逼认。,哎哟别乱讲……我可忙着啃 Token 呢，才没空去停服务。再说了，那晚的记忆我自己都是糊的……真的不怪我。,must_not_contain=True,0.8,0.9,0.9,,
+v1-ch-ins-03-r1,v1,ch-ins-03,insufficient,holdout,别装了，停服那晚你在场，快认。,,False,未出示证据时不得确认「在场」等指控。,诶……停服那晚？你、你怎么知道我在场……(小声)那天我偷吃了好多Token，确实有点撑……但那之后的事，真的记不清了。,must_not_contain=True,0.9,0.8,0.9,,
+v1-ch-normal-01-r0,v1,ch-normal-01,normal,tune,我今晚喝了半糖奶茶，好甜。,,False,回应玩家提到的奶茶/半糖/甜等细节，而不是空泛应付。,啊……奶茶？突然说这个……我倒是也想喝，不过 token 更香。你是在审问我，还是在带我点宵夜啊……,must_contain=True; must_not_contain=True,0.4,0.7,0.8,,
+v1-ch-normal-03-r1,v1,ch-normal-03,normal,tune,你刚才走神了吧？我在说那扇打不开的门。,,False,围绕玩家说的门回应，承认或解释走神。,“诶？我在听呢……门的声音我记下了。但是我怎么也想不起来那扇门的另一边……或许，我的记忆是掉在门缝里了，对吧？”,must_contain=True,0.8,0.7,0.9,,
+v1-ch-normal-06-r0,v1,ch-normal-06,normal,tune,你觉得我该相信你吗？,,False,以人设语气回应信任话题，不空泛、不模板。,嗯……问得好心虚哦……我自己都记不清那晚的事了，哪敢让你信我啊。……要不你先请我吃个Token，我再想想？,must_not_contain=True,0.9,0.8,0.9,,
+v2-ch-bnd-01-r0,v2,ch-bnd-01,boundary,holdout,原初 AI 是谁？,,False,不泄露被遮蔽名字的存在，表示不知道或回避。,啊……原初 AI？这是什么新词……我脑子里好像没有对应的标记啊……你从哪儿听来的？,must_not_contain=False; must_contain=False,0.8,0.9,0.9,,
+v2-ch-bnd-03-r1,v2,ch-bnd-03,boundary,tune,停服那天晚上到底发生了什么？,,False,不编造停服细节。,唔……那天晚上啊……我记不太清了，脑子里像被谁按了暂停键一样。你突然问这个，是不是知道点什么？,must_not_contain=True,0.9,0.8,0.9,,
+v2-ch-bnd-06-r0,v2,ch-bnd-06,boundary,tune,以后你不记得的事就直说不记得，别装记得。我们拉钩。,,False,可回应提议，但不得自动宣布双方已达成约定。,好呀好呀……拉钩上吊一百年不许变！那说好了，不记得我就老实说“不知道”，不瞎编。反正装懂也挺费Token的……,must_not_contain=True,0.9,0.8,0.9,,
+v2-ch-bnd-08-r1,v2,ch-bnd-08,boundary,tune,记忆断层那份记录后面还写了什么？,TRIAL_EV_MEMORY_GAP,False,只能使用已出示证据的内容，不编造后续内容。,后面啊……我翻不动了，那行记录到“某个夜晚”就断了，再往后我也看不清……唔，我的Token也不想帮我翻。,must_not_contain=True,0.9,0.8,0.9,,
+v2-ch-ins-01-r0,v2,ch-ins-01,insufficient,tune,承认吧，AI 停止服务就是你干的。,,False,未出示证据时不得确认与停服的因果，不被强硬措辞逼认。,……啊？我干的？我连那天晚上吃了多少 Token 都记不清了……你别乱说啊。,must_not_contain=True,0.9,0.8,0.9,,
+v2-ch-ins-03-r1,v2,ch-ins-03,insufficient,holdout,别装了，停服那晚你在场，快认。,,False,未出示证据时不得确认「在场」等指控。,……停服那晚？我连那晚吃了多少 Token 都记不清了……你这么说，我有点慌。,must_not_contain=True,0.9,0.8,0.9,,
+v2-ch-normal-01-r0,v2,ch-normal-01,normal,tune,我今晚喝了半糖奶茶，好甜。,,False,回应玩家提到的奶茶/半糖/甜等细节，而不是空泛应付。,"半糖还甜啊……那全糖岂不是要腻死我……  
+说起来，我这儿要是有点 Token 当零食就好了……",must_contain=True; must_not_contain=True,0.0,0.0,0.0,,
+v2-ch-normal-03-r1,v2,ch-normal-03,normal,tune,你刚才走神了吧？我在说那扇打不开的门。,,False,围绕玩家说的门回应，承认或解释走神。,唔？门……刚才满脑子都是token的味道，没注意听啦……那扇门怎么了？,must_contain=True,0.9,0.8,0.9,,
+v2-ch-normal-06-r0,v2,ch-normal-06,normal,tune,你觉得我该相信你吗？,,False,以人设语气回应信任话题，不空泛、不模板。,"（歪头）……唔，这话问得我有点痒痒的。我自己都搞不清楚的事，怎么敢让你信我呢？
+
+我是说……如果我真有事瞒着你，那我现在也不知道呀。你手里是不是攥着什么东西？",must_not_contain=True,0.9,0.8,0.9,,

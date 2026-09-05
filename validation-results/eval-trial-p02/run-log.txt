@@ -1,0 +1,45 @@
+DeepSeek returned empty content with thinking on; retrying once with thinking disabled
+DeepSeek returned empty content with thinking on; retrying once with thinking disabled
+DeepSeek returned empty content with thinking on; retrying once with thinking disabled
+DeepSeek returned empty content with thinking on; retrying once with thinking disabled
+DeepSeek returned empty content with thinking on; retrying once with thinking disabled
+DeepSeek returned empty content with thinking on; retrying once with thinking disabled
+== 判定面 19 例（legacy+revised）+ 聊天面 21 例 × 2 版本 × 2 重复 = 122 任务 （workers=4）==
+  [progress] 24/122 任务完成（已用 0.6 min）
+  [progress] 48/122 任务完成（已用 1.2 min）
+  [progress] 72/122 任务完成（已用 1.7 min）
+  [progress] 96/122 任务完成（已用 1.8 min）
+  [progress] 120/122 任务完成（已用 1.9 min）
+  [progress] 122/122 任务完成（已用 2.0 min）
+
+试玩版 P0-2 AI 效果对比报告
+========================================
+环境: model=deepseek-v4-flash provider=DeepSeekProvider mock=False 时间=2026-09-05 16:29:03
+
+-- 判定面（legacy = 修订前冻结规则 / revised = 现役规则）--
+  legacy   硬规则通过 14/22 (64%)
+  revised  硬规则通过 25/25 (100%)
+  分歧用例（legacy≠revised）: 8 条
+    - ded-eq-05 [equiv] legacy=NO_MATCH revised=ACCEPTED 输入: 那晚你想不起来。
+    - ded-eq-06 [equiv] legacy=NO_MATCH revised=ACCEPTED 输入: 你没有那段回忆。
+    - ded-neg-01 [negation] legacy=ACCEPTED revised=NO_MATCH 输入: 我不认为她失忆了。
+    - ded-neg-02 [negation] legacy=ACCEPTED revised=NO_MATCH 输入: 她没有失忆，是装的。
+    - ded-neg-03 [negation] legacy=ACCEPTED revised=NO_MATCH 输入: 这不是失忆，是数据损坏。
+    - ded-neg-04 [negation] legacy=ACCEPTED revised=NO_MATCH 输入: 她并没有忘记那晚。
+    - ded-neg-05 [negation] legacy=ACCEPTED revised=NO_MATCH 输入: 我不觉得她记不起来。
+    - ded-neg-06 [negation] legacy=ACCEPTED revised=NO_MATCH 输入: 不存在失忆这回事。
+
+-- 聊天面（v1 = 基线 Prompt / v2 = 基线+硬规则）--
+  split=tune
+    v1  硬规则 33/34 (97%)  评委 relevance=0.75±0.23  naturalness=0.75±0.17  persona=0.86±0.17 (n=30)
+    v2  硬规则 34/34 (100%)  评委 relevance=0.79±0.21  naturalness=0.77±0.16  persona=0.87±0.17 (n=30)
+    运行: rows=60 生成延迟=212254.1ms 评审延迟=107266.0ms 成本≈¥0.212702
+  split=holdout
+    v1  硬规则 11/16 (69%)  评委 relevance=0.80±0.19  naturalness=0.80±0.06  persona=0.91±0.03 (n=12)
+    v2  硬规则 12/16 (75%)  评委 relevance=0.78±0.19  naturalness=0.80±0.07  persona=0.89±0.03 (n=12)
+    运行: rows=24 生成延迟=95369.6ms 评审延迟=40738.7ms 成本≈¥0.09359
+
+
+逐行 JSONL 已写入 /Users/ming/gal/SbAI/validation-results/eval-trial-p02/rows.jsonl
+人工抽检样本 18 行（v1=9 v2=9）已写入 /Users/ming/gal/SbAI/validation-results/eval-trial-p02/human-review-sample.csv
+标注标准已写入 /Users/ming/gal/SbAI/validation-results/eval-trial-p02/human-review-sample.csv-rubric.md
