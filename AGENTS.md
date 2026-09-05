@@ -11,6 +11,7 @@
 - docs/17 快速上线已部署：固定剧本故事模式（/story，AI 停用）+ 结局后 DeepSeek 自由聊天（/game 复用）+ 场景演出接线 + 旧调查玩法正式入口（「行动」按钮）。
 - 2026-08-21：「序章」新开局进入 `docs/story/Prologue.md` 固定剧本；三名角色探班顺序由玩家从剩余角色中反复选择，全部访问后汇合并选择一名角色进入 AI 后日谈自由聊天。序章常驻背景为 `backgroud/background_prologue.png`。标题「开始游戏」先进入章节选择，当前仅序章解锁。
 - 2026-09-04：在 `codex/trial-demo` 开发独立 `trial_v1` 试玩版（方案见 `docs/23-核心玩法闭环试玩版落地方案.md`）。原“Player + DeepSeek 被绑”开场遗弃但保留为前期实验；现役试玩开场改为原初 AI 深夜对话。原初 AI 的玩家可见名称必须遮蔽。
+- 2026-09-05：试玩版叙事重构为「完美恋人 → 修复=授权 → 自主性增长 → Monika 式觉醒（她丢弃 UI）→『她的世界』记忆横版 → 三结局由行进方向决定」（方案见 `docs/27-试玩版叙事重构-回忆闪回与三结局落地方案.md`，取代 docs/23 体验流程章节；docs/23 技术章节仍有效）。
 - **当前边界：不自行补写剧情**——允许实现已确认的试玩版 Runtime、交互与明确标注的 Fixture；正式对白、Evidence 答案与分支内容先与用户确认。
 
 ## 2. 文档真相源（Docs-first）
@@ -21,7 +22,7 @@
 - 运行时：`docs/MVP/02`（架构）`03`（Narrative）`04`（Character）`05`（Memory）
 - 第一章内容：`docs/09`（落地备忘录）`10`（调查内容真相源）`11`（调查落地）`12 — 第一章叙事内容分配表.md`
 - 当前阶段方案：`docs/13-...落地方案.md`、`docs/17-快速上线固定剧本落地方案.md`（已上线）
-- 试玩版：`docs/23-核心玩法闭环试玩版落地方案.md`（`trial_v1` 范围、交互、状态与验收）
+- 试玩版：`docs/23-核心玩法闭环试玩版落地方案.md`（`trial_v1` 范围、交互、状态与验收；体验流程已被 docs/27 取代，技术章节仍有效）、`docs/27-试玩版叙事重构-回忆闪回与三结局落地方案.md`（叙事与玩法真相源）
 - 注意：`docs/abandon/` 是废弃文档；顶层 `docs/12` ≠ `docs/abandon/12`。
 
 ## 3. 硬规则（不可协商）
@@ -34,7 +35,7 @@
 - 剧情推进必须经 Narrative Runtime（Signal→Event→Requirements→Commit；猜中真相≠Fact Reveal；主线 Event 默认 once+幂等）。
 - DeepSeek「看不见」是权限边界：视觉 Scene 信息不得进她的 Context。
 - API Key / Secret 只在 Backend 环境，绝不进前端、仓库、提交记录。
-- 当前阶段禁止引入：pgvector/RAG、Redis、Kafka、K8s、微服务、Voice。经 2026-09-04 Scope Change，`trial_v1` 仅允许在开局表现层受控验证/接入单角色、单 Canvas 的 Live2D，并必须有静态图回退、发布许可审查和明确资源释放；Live2D 不得成为剧情状态源，其视觉信息不得进入任何角色 Context。`trial_v1` 同时允许在硬件能力与减少动态效果设置约束下实现玻璃破裂、碎片拼合与文字多体运动；剧情状态仍由 Backend 权威提交。
+- 当前阶段禁止引入：pgvector/RAG、Redis、Kafka、K8s、微服务、Voice。经 2026-09-04 Scope Change，`trial_v1` 仅允许在开局表现层受控验证/接入单角色、单 Canvas 的 Live2D，并必须有静态图回退、发布许可审查和明确资源释放；Live2D 不得成为剧情状态源，其视觉信息不得进入任何角色 Context。`trial_v1` 同时允许在硬件能力与减少动态效果设置约束下实现玻璃破裂、碎片拼合与文字多体运动；剧情状态仍由 Backend 权威提交。经 2026-09-05 Scope Change，`trial_v1` 允许新增手写 Canvas 2D 横版世界「她的世界」（记忆横版）：不引入游戏引擎/WebGL/物理库，地形文字来自 Backend 下发会话数据，关卡门与结局仍由 Backend 权威提交。
 
 ## 4. 架构现状速览
 
@@ -58,6 +59,7 @@ cd /d/gal/frontend-vue && npm run typecheck               # vue-tsc
 cd /d/gal/frontend-vue && npm run test                    # vitest
 cd /d/gal/frontend-vue && npm run build                   # typecheck + vite build
 # 本机联调：backend :8000 + npm run dev（:5173，proxy /api /char /backgroud → 8000）
+# 本机免登录测试：backend 以 GAL_AUTH_REQUIRED=false 启动（前端 Vite dev 已自动绕过登录守卫；线上构建与部署默认保持鉴权）
 ```
 
 部署/服务器（详见 `deploy/DEPLOY.md`；Windows 下必须用 git bundle，勿用 git archive）：
