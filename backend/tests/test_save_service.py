@@ -625,7 +625,7 @@ def test_load_rejects_tampered_snapshot(tmp_path):
     data["snapshot"]["narrative"]["chapter1"]["available_characters"] = []
     data["snapshot"]["story_cursor"] = {"node_index": 1}
     data["snapshot"]["trial_state"] = {
-        "experience_id": "trial_v1",
+        "experience_id": "trial_v2",
         "phase_id": "opening_warm_chat",
     }
     path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")

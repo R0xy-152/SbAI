@@ -1,4 +1,4 @@
-"""trial_v1 content table: fail-closed validation (docs/24 §5.1)."""
+"""trial_v2 content table: fail-closed validation (docs/24 §5.1)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,11 @@ from copy import deepcopy
 import pytest
 
 from app.trial.content import (
-    TRIAL_CONTENT,
+    ENDING_IDS,
     EVIDENCE_IDS,
+    JUDGMENTS_BY_ID,
     PHASE_IDS,
-    ROUTE_IDS,
+    TRIAL_CONTENT,
     validate_trial_content,
 )
 
@@ -22,10 +23,14 @@ def _content() -> dict:
 def test_shipped_content_is_valid_and_indexes_are_consistent():
     validate_trial_content(TRIAL_CONTENT)
     assert "not_started" in PHASE_IDS
-    assert "fragment_02_a" in ROUTE_IDS and "fragment_02_b" in ROUTE_IDS
     assert "TRIAL_EV_MEMORY_GAP" in EVIDENCE_IDS
-    # every orbit / terminal phase is covered and the walk ends at handoffs
-    assert {"fragment_02_handoff_a", "fragment_02_handoff_b"} <= set(PHASE_IDS)
+    # three endings are exhaustive terminal phases
+    assert {"ending_reset", "ending_release", "ending_refuse"} <= set(PHASE_IDS)
+    assert set(ENDING_IDS) == {"reset", "release", "refuse"}
+    # judgment buckets are complete and carry valid fallbacks
+    for judgment in JUDGMENTS_BY_ID.values():
+        bucket_ids = [bucket["bucket_id"] for bucket in judgment["buckets"]]
+        assert judgment["fallback_bucket"] in bucket_ids
 
 
 @pytest.mark.parametrize(
@@ -69,20 +74,56 @@ def test_shipped_content_is_valid_and_indexes_are_consistent():
             ),
             "unreachable phase",
         ),
-        # deduction / route references
+        # deduction / judgment references
         (
-            lambda c: next(d for d in c["deductions"] if d["deduction_id"] == "TRIAL_DEDUCTION_GROUP_TRUTH")[
-                "route"
-            ].update({"default": "nope_route"}),
-            "unknown route",
+            lambda c: next(d for d in c["deductions"] if d["deduction_id"] == "TRIAL_DEDUCTION_GROUP_TRUTH").update(
+                {"next_phase": "nope_phase"}
+            ),
+            "valid next_phase",
         ),
         (
-            lambda c: c["routes"][0].update({"phase_id": "opening_shatter"}),
-            "must target a terminal phase",
+            lambda c: next(
+                j for j in c["judgments"] if j["judgment_id"] == "intent_response"
+            ).update({"fallback_bucket": "nope_bucket"}),
+            "fallback_bucket must be one of the buckets",
         ),
         (
-            lambda c: c["routes"][1].update({"phase_id": "fragment_02_handoff_a"}),
-            "matching handoff phase",
+            lambda c: next(
+                j for j in c["judgments"] if j["judgment_id"] == "gate_2_word"
+            )["buckets"][0].update({"bucket_id": "edited"}),
+            "duplicate bucket id",
+        ),
+        (
+            lambda c: next(p for p in c["phases"] if p["phase_id"] == "memory_tamper_judgment")[
+                "interaction"
+            ].update({"judgment_id": "no_such_judgment"}),
+            "unknown judgment_id",
+        ),
+        # choice validation
+        (
+            lambda c: next(p for p in c["phases"] if p["phase_id"] == "world_gate_1")[
+                "interaction"
+            ]["options"][1].update({"option_id": "q1_weather"}),
+            "duplicate choice option id",
+        ),
+        (
+            lambda c: next(p for p in c["phases"] if p["phase_id"] == "world_end")[
+                "interaction"
+            ]["option_targets"].pop("end_refuse"),
+            "option_targets must cover",
+        ),
+        (
+            lambda c: next(p for p in c["phases"] if p["phase_id"] == "ending_reset").update(
+                {"advance_to": "ending_release"}
+            ),
+            "terminal phase must not define command targets",
+        ),
+        # permission_request
+        (
+            lambda c: next(p for p in c["phases"] if p["phase_id"] == "permission_wake_1")[
+                "interaction"
+            ].pop("permission_id"),
+            "requires a permission_id",
         ),
         # text_keywords_none（docs/25 §3）：可选字段，给出则必须合法
         (

@@ -74,7 +74,11 @@ from app.script.story_runtime import StoryRuntime
 from app.script.prologue_content import PROLOGUE_CHARACTERS, PROLOGUE_ID
 from app.script.prologue_runtime import PrologueRuntime
 from app.script.developer_note import developer_note_question
-from app.trial.runtime import NOT_STARTED as TRIAL_NOT_STARTED, TrialRuntime
+from app.trial.runtime import (
+    NOT_STARTED as TRIAL_NOT_STARTED,
+    TRIAL_ID,
+    TrialRuntime,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1933,7 +1937,7 @@ class GameOrchestrator:
             else None
         )
         return {
-            "experience_id": "trial_v1" if snapshot is not None else None,
+            "experience_id": TRIAL_ID if snapshot is not None else None,
             "trial_finished": bool(
                 self._trial_runtime and self._trial_runtime.finished(session_id)
             ),
@@ -2057,7 +2061,7 @@ class GameOrchestrator:
         会话但不动游标，前端用 started 判断是否需要 advance。"""
         session = self._resolve_session(session_id)
         if self._trial_runtime is not None and self._trial_runtime.snapshot(session.session_id):
-            raise ValueError("this session belongs to trial_v1")
+            raise ValueError("this session belongs to trial_v2")
         runtime = self._story_runtime_for(story_id)
         started = runtime.started(session.session_id)
         node = runtime.current(session.session_id) if started else None
@@ -2084,7 +2088,7 @@ class GameOrchestrator:
         可用。"""
         session = self._resolve_session(session_id)
         if self._trial_runtime is not None and self._trial_runtime.snapshot(session.session_id):
-            raise ValueError("this session belongs to trial_v1")
+            raise ValueError("this session belongs to trial_v2")
         self._bind_player(session.session_id, player_id)
         runtime = self._story_runtime_for(story_id)
         before = runtime.snapshot(session.session_id)
@@ -2115,7 +2119,7 @@ class GameOrchestrator:
         """提交一个 A/B/C 选项：游标跳到该选项的第一句台词并返回。"""
         session = self._resolve_session(session_id)
         if self._trial_runtime is not None and self._trial_runtime.snapshot(session.session_id):
-            raise ValueError("this session belongs to trial_v1")
+            raise ValueError("this session belongs to trial_v2")
         self._bind_player(session.session_id, player_id)
         runtime = self._story_runtime_for(story_id)
         current = runtime.current(session.session_id)

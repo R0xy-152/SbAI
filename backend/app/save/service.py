@@ -249,7 +249,7 @@ class SaveSnapshotService:
             schema_version=SCHEMA_VERSION,
             snapshot=snapshot,
             chapter_id=(
-                "trial_v1" if is_trial else "prologue" if is_prologue else CHAPTER_ID
+                "trial_v2" if is_trial else "prologue" if is_prologue else CHAPTER_ID
             ),
             phase=(
                 trial_state.get("phase_id")

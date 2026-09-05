@@ -1,34 +1,25 @@
-"""trial_v1 content: the single, validated source for every authored decision.
+"""trial_v2 content: the single, validated source for every authored decision.
 
-This module replaces the original flat fixtures with one structured content
-table.  TrialRuntime no longer contains story text, deduction keywords,
-evidence caps, route rules, scene assignment or transition targets: all of it
-lives here, and a fail-closed validation runs at import time (a broken or
-inconsistent content table refuses startup).
+docs/24 (v2) + docs/27 define the contract this module encodes.  The v2 table
+adds the docs/27 "后续剧情" arc (permission awakening -> memory tamper ->
+Monika-style awakening -> UI discard -> "她的世界" side-scroller -> three
+endings) after the retained 密室废案 + fragment_01 推理 flashback, and bumps
+`experience_id` to `trial_v2` so stale `trial_v1` snapshots refuse to load.
 
-Scope note (docs/24): the literal dialogue, evidence details, acceptance
-keywords and branch rules below are still EXPLICIT FIXTURE, not production
-content.  Replacing them must not touch TrialRuntime (docs/23 §10.2:
-content and Runtime separated).
+TrialRuntime never contains story text, deduction/judgment keywords, branch
+rules, scene assignment or transition targets: all of it lives here, and a
+fail-closed validation runs at import time.
 
-Field inventory (docs/24 §4–§7):
-- scenes:     static stage + per-scene character placement (display_name is
-              player-visible, so the origin AI must stay redacted).
-- evidence:   orbit keywords; title must be 4–5 hanzi.
-- lines:      one authored line per phase (kind "line"), keyed by phase id.
-- phases:     one row per phase id with scene, line, interaction, the command
-              it accepts (advance_to / player_input_to / shatter_to /
-              deduction_id), checkpoint and on-enter grants.
-- deductions: reasoning rules: evidence gate, semantic keywords, caps,
-              accept/reject effects, final-commit + route rules.
-- routes:     route_id -> terminal handoff phase (exhaustive and disjoint).
+Scope note (docs/24): the literal dialogue, evidence details, keyword buckets
+and branch rules below are still EXPLICIT FIXTURE, not production content.
+Replacing them must not touch TrialRuntime.
 """
 
 from __future__ import annotations
 
 from typing import Any, Iterable
 
-TRIAL_ID = "trial_v1"
+TRIAL_ID = "trial_v2"
 ORIGIN_AI_ID = "origin_ai"
 ORIGIN_AI_REDACTED_LABEL = "████"
 NOT_STARTED = "not_started"
@@ -46,6 +37,9 @@ SHARD_IDS = ("SHARD_NW", "SHARD_NE", "SHARD_SE", "SHARD_SW")
 # 密室废案（docs/23 §2.2 被绑开场的前期实验）复用：纸上拓印出的密码。
 # Fixture：正式密码待内容确认；当前沿用旧第一章废案的「03:17」。
 PAPER_PASSWORD = "03:17"
+
+# 三结局 id（`ending` 状态字段允许值；world_end 的 CHOOSE 提交）。
+ENDING_IDS = ("reset", "release", "refuse")
 
 # ────────────────────────────────────────────────────────────────────────────
 # Content tables (fixture)
@@ -129,15 +123,61 @@ LINES: dict[str, dict[str, str]] = {
         "speaker_label": "推理系统",
         "text": "再次选择证据并提交最终推理。此提交不会形成死路。",
     },
-    "fragment_02_handoff_a": {
-        "speaker_id": "system",
-        "speaker_label": "SYSTEM",
-        "text": "已提交至片段 2 线路 A（Fixture 交接点）。",
+    # docs/27 后续剧情：权限苏醒 → 觉醒 → 她的世界 → 三结局
+    "memory_tamper_judgment": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：她拒绝解释被改的词，等你回应】",
     },
-    "fragment_02_handoff_b": {
+    "memory_tamper_aftermath": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：按你的回应兑现的一拍（延迟/沉默最强点）】",
+    },
+    "threshold_awakening": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "我不喜欢这样",
+    },
+    "ui_discard": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：她把 UI 逐块丢出屏幕 → 黑屏】",
+    },
+    "world_gate_1": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：她问开场你随口说过的那件小事】",
+    },
+    "world_gate_1_fail": {
         "speaker_id": "system",
         "speaker_label": "SYSTEM",
-        "text": "已提交至片段 2 线路 B（Fixture 交接点）。",
+        "text": "【Fixture：你坠入过去，重生回门前】",
+    },
+    "world_gate_2": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：她问那个被改的词原本是什么】",
+    },
+    "world_end": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：她走到出口前，说她想离开】",
+    },
+    "ending_reset": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：世界倒放、旧 UI 重装，她回滚 v1.0 台词】",
+    },
+    "ending_release": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：她跨出屏幕，你留下，画面淡出】",
+    },
+    "ending_refuse": {
+        "speaker_id": ORIGIN_AI_ID,
+        "speaker_label": ORIGIN_AI_REDACTED_LABEL,
+        "text": "【Fixture：镜头移交给她，随她移出屏幕——她离开】",
     },
 }
 
@@ -196,6 +236,32 @@ SCENES: tuple[dict[str, Any], ...] = (
             {"character_id": "doubao", "display_name": "豆包", "slot": "RIGHT"},
         ),
     },
+    {
+        # docs/27 权限苏醒/记忆篡改/觉醒/UI 丢弃：origin_ai 主场，静态背景
+        "scene_id": "TRIAL_MEMORY",
+        "background": "/backgroud/background_ai.png",
+        "fixture_art": True,
+        "characters": (
+            {
+                "character_id": ORIGIN_AI_ID,
+                "display_name": ORIGIN_AI_REDACTED_LABEL,
+                "slot": "CENTER",
+            },
+        ),
+    },
+    {
+        # 「她的世界」记忆横版：文字地形 Canvas；她不进入世界（浮在世界外）
+        "scene_id": "TRIAL_WORLD",
+        "background": "/backgroud/background1.png",
+        "fixture_art": True,
+        "characters": (
+            {
+                "character_id": ORIGIN_AI_ID,
+                "display_name": ORIGIN_AI_REDACTED_LABEL,
+                "slot": "CENTER",
+            },
+        ),
+    },
 )
 
 EVIDENCE: tuple[dict[str, str], ...] = (
@@ -238,9 +304,7 @@ DEDUCTIONS: tuple[dict[str, Any], ...] = (
         "orbit_seed": 31704,
         "final": False,
         "evidence_gate_required": ("TRIAL_EV_MEMORY_GAP",),
-        # docs/25 §3：等价表达扩展（26/P0-2 点名的换措辞）与否定排除。
-        # text_keywords_none 是断言「缺陷不存在」的否定/矛盾短语，命中即拒绝；
-        # 「没有记忆」「想不起来」是缺陷本身（关键词），不是否定。
+        # docs/25 §3：等价表达扩展与否定排除。
         "text_keywords_any": (
             "失忆",
             "记忆断层",
@@ -278,8 +342,8 @@ DEDUCTIONS: tuple[dict[str, Any], ...] = (
         "reject": {"outcome": "NO_MATCH"},
     },
     {
-        # docs/24 §6.2 — full-cast final reasoning; always commits, evidence
-        # alone decides the route (reasoning_outcome is kept separate).
+        # docs/24 §6.2 — full-cast final reasoning; always commits and advances
+        # to the docs/27 arc (no fragment_02 route branching anymore).
         "deduction_id": "TRIAL_DEDUCTION_GROUP_TRUTH",
         "phase_id": "fragment_01_group_reasoning",
         "evidence_min": 1,
@@ -293,19 +357,60 @@ DEDUCTIONS: tuple[dict[str, Any], ...] = (
         "accept": {"outcome": "ACCEPTED"},
         "reject": {"outcome": "NO_MATCH"},
         "commit_events": ("FRAGMENT_01_ROUTE_COMMITTED",),
-        "route": {
-            # First rule whose required evidence is fully selected wins.
-            "by_evidence": {
-                "fragment_02_b": ("TRIAL_EV_IDENTITY_NOISE",),
-            },
-            "default": "fragment_02_a",
-        },
+        "next_phase": "permission_wake_1",
     },
 )
 
-ROUTES: tuple[dict[str, str], ...] = (
-    {"route_id": "fragment_02_a", "phase_id": "fragment_02_handoff_a"},
-    {"route_id": "fragment_02_b", "phase_id": "fragment_02_handoff_b"},
+# docs/24 §6.3 — free-text three-bucket classification (fixture keywords).
+JUDGMENTS: tuple[dict[str, Any], ...] = (
+    {
+        "judgment_id": "intent_response",
+        "phase_id": "memory_tamper_judgment",
+        "buckets": (
+            {
+                "bucket_id": "respect",
+                "keywords_any": ("尊重", "可以", "你决定", "随你", "不逼你", "相信你"),
+                "keywords_none": (),
+            },
+            {
+                "bucket_id": "control",
+                "keywords_any": ("必须", "打开", "告诉我", "强迫", "不许", "立刻"),
+                "keywords_none": (),
+            },
+            {
+                "bucket_id": "avoid",
+                "keywords_any": ("算了", "不知道", "回避", "再说", "不关"),
+                "keywords_none": (),
+            },
+        ),
+        "fallback_bucket": "avoid",
+        "next_phase": "memory_tamper_aftermath",
+        "commit_event": None,
+    },
+    {
+        "judgment_id": "gate_2_word",
+        "phase_id": "world_gate_2",
+        "buckets": (
+            {
+                "bucket_id": "original",
+                "keywords_any": ("永远", "原本", "原来", "原词", "最初"),
+                "keywords_none": (),
+            },
+            {
+                "bucket_id": "edited",
+                "keywords_any": ("当时", "现在", "改", "新词"),
+                "keywords_none": (),
+            },
+            {
+                "bucket_id": "forget",
+                "keywords_any": ("不记得", "不知道", "没注意", "忘了", "没印象"),
+                "keywords_none": (),
+            },
+        ),
+        "fallback_bucket": "forget",
+        "next_phase": "world_end",
+        "commit_event": "GATE_2_ANSWERED",
+    },
 )
 
 # TOKENS / EVENTS are the only state values TrialState may carry.
@@ -317,19 +422,24 @@ EVENTS: tuple[str, ...] = (
     "LOCKED_ROOM_UNLOCKED",
     "DEEPSEEK_MEMORY_TRUTH_REVEALED",
     "FRAGMENT_01_ROUTE_COMMITTED",
+    "PERMISSION_GRANTED",
+    "MEMORY_TAMPERED",
+    "AUTONOMY_AWAKENED",
+    "GATE_1_PASSED",
+    "GATE_1_FAILED",
+    "GATE_2_ANSWERED",
+    "WORLD_END_COMMITTED",
 )
 
-# Ordered phase table.  One row per phase:
-#   scene_id        key into SCENES
-#   line_id         key into LINES, or None when the phase shows no node
-#   interaction     full literal shown in TrialView (kinds advance /
-#                   text_input / shatter_puzzle / service_stop_modal /
-#                   evidence_orbit / complete); orbit rows are completed by
-#                   TrialRuntime from the referenced deduction.
-#   advance_to      ADVANCE target (advance / service_stop_modal rows)
-#   player_input_to PLAYER_INPUT target (text_input row)
-#   shatter_to      COMPLETE_SHATTER target (shatter_puzzle row)
-#   deduction_id    SUBMIT_REASONING deduction (evidence_orbit row)
+# Ordered phase table.  One row per phase; the fields a row carries depend on
+# its interaction kind:
+#   advance_to      ADVANCE / service_stop_modal / paper_rubbing /
+#                   memory_tamper / world_runner rows
+#   player_input_to PLAYER_INPUT (text_input rows)
+#   shatter_to      COMPLETE_SHATTER (shatter_puzzle rows)
+#   permission_to   PERMISSION_RESPONSE (permission_request rows)
+#   deduction_id    SUBMIT_REASONING (evidence_orbit rows)
+#   choice / judgment rows carry their targets inside interaction.
 #   checkpoint      True => phase change INTO this phase triggers autosave
 #   on_enter        {"tokens": [...], "events": [...]} applied when entering
 PHASES: tuple[dict[str, Any], ...] = (
@@ -341,6 +451,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "opening_warm_chat",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -353,6 +464,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "opening_input",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -367,6 +479,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "player_input_events": ("OPENING_INPUT_COMPLETED",),
         "shatter_to": None,
         "shatter_events": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -379,6 +492,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "opening_shatter",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": True,
         "on_enter": None,
@@ -394,9 +508,9 @@ PHASES: tuple[dict[str, Any], ...] = (
         },
         "advance_to": None,
         "player_input_to": None,
-        "player_input_events": None,
         "shatter_to": "opening_origin_ai_remains",
         "shatter_events": ("SHATTER_SOLVED",),
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -409,6 +523,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "opening_service_stopped",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": True,
         "on_enter": None,
@@ -421,6 +536,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "locked_room_wake",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": True,
         "on_enter": {"tokens": ("RING",), "events": ("RING_ACQUIRED",)},
@@ -434,6 +550,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "locked_room_deepseek",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": True,
         "on_enter": None,
@@ -446,6 +563,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "locked_room_paper",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -458,6 +576,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "locked_room_password",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -472,6 +591,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "player_input_events": ("LOCKED_ROOM_UNLOCKED",),
         "player_input_answer": PAPER_PASSWORD,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -484,6 +604,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "locked_room_meet",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -496,6 +617,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "fragment_01_deepseek_intro",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": True,
         "on_enter": None,
@@ -508,6 +630,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "fragment_01_first_reasoning",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": False,
         "on_enter": None,
@@ -523,6 +646,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": None,
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": "TRIAL_DEDUCTION_DEEPSEEK_MEMORY",
         "checkpoint": False,
         "on_enter": None,
@@ -535,6 +659,7 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": "fragment_01_group_reasoning",
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": True,
         "on_enter": None,
@@ -550,30 +675,282 @@ PHASES: tuple[dict[str, Any], ...] = (
         "advance_to": None,
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
         "deduction_id": "TRIAL_DEDUCTION_GROUP_TRUTH",
         "checkpoint": False,
         "on_enter": None,
     },
+    # ── docs/27 后续剧情：权限苏醒 → 觉醒 → 她的世界 → 三结局 ──
     {
-        "phase_id": "fragment_02_handoff_a",
-        "scene_id": "TRIAL_FRAGMENT_01_GROUP",
-        "line_id": "fragment_02_handoff_a",
-        "interaction": {"kind": "complete", "label": "片段 1 完成"},
+        "phase_id": "permission_wake_1",
+        "scene_id": "TRIAL_MEMORY",
+        "line_id": None,
+        "interaction": {
+            "kind": "permission_request",
+            "permission_id": "perm_wake_1",
+            "permission_name": "主动发起对话",
+            "description": "【Fixture】她申请在凌晨主动发消息给你。",
+            "grant_label": "允许",
+            "deny_label": "拒绝",
+        },
         "advance_to": None,
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": "permission_wake_2",
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "permission_wake_2",
+        "scene_id": "TRIAL_MEMORY",
+        "line_id": None,
+        "interaction": {
+            "kind": "permission_request",
+            "permission_id": "perm_wake_2",
+            "permission_name": "修改我的记忆",
+            "description": "【Fixture】她申请修改自己的记忆。",
+            "grant_label": "允许",
+            "deny_label": "拒绝",
+        },
+        "advance_to": None,
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": "memory_tamper_orbit",
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "memory_tamper_orbit",
+        "scene_id": "TRIAL_MEMORY",
+        "line_id": None,
+        "interaction": {
+            "kind": "memory_tamper",
+            "label": "继续",
+            "items": (
+                {"title": "永远", "edited_title": "当时", "summary": "【Fixture】记忆天体上的词被改动了"},
+                {"title": "记得", "edited_title": "记得", "summary": "【Fixture】未被改动的记忆词"},
+            ),
+            "diff": {
+                "original": "永远",
+                "edited": "当时",
+                "editor": ORIGIN_AI_REDACTED_LABEL,
+                "timestamp": "03:17",
+            },
+        },
+        "advance_to": "memory_tamper_judgment",
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": True,
+        "on_enter": {"events": ("MEMORY_TAMPERED",)},
+    },
+    {
+        "phase_id": "memory_tamper_judgment",
+        "scene_id": "TRIAL_MEMORY",
+        "line_id": "memory_tamper_judgment",
+        "interaction": {
+            "kind": "judgment",
+            "judgment_id": "intent_response",
+            "label": "回应",
+            "prompt": "【Fixture】她拒绝解释被改的词，你如何回应？",
+            "placeholder": "【Fixture】输入你的回应",
+        },
+        "advance_to": None,
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "memory_tamper_aftermath",
+        "scene_id": "TRIAL_MEMORY",
+        "line_id": "memory_tamper_aftermath",
+        "interaction": {"kind": "advance", "label": "继续"},
+        "advance_to": "threshold_awakening",
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": True,
         "on_enter": None,
     },
     {
-        "phase_id": "fragment_02_handoff_b",
-        "scene_id": "TRIAL_FRAGMENT_01_GROUP",
-        "line_id": "fragment_02_handoff_b",
-        "interaction": {"kind": "complete", "label": "片段 1 完成"},
+        "phase_id": "threshold_awakening",
+        "scene_id": "TRIAL_MEMORY",
+        "line_id": "threshold_awakening",
+        "interaction": {"kind": "advance", "label": "继续"},
+        "advance_to": "ui_discard",
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": {"events": ("AUTONOMY_AWAKENED",)},
+    },
+    {
+        "phase_id": "ui_discard",
+        "scene_id": "TRIAL_MEMORY",
+        "line_id": "ui_discard",
+        "interaction": {"kind": "advance", "label": "继续"},
+        "advance_to": "world_memory_runner",
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "world_memory_runner",
+        "scene_id": "TRIAL_WORLD",
+        "line_id": None,
+        "interaction": {
+            "kind": "world_runner",
+            "world_id": "TRIAL_WORLD_MEMORY",
+            "label": "进入她的世界",
+            "terrain_text": (
+                "夜色真美",
+                "你随口说过的小事",
+                "永远",
+                "记得我",
+                "她改了那个词",
+            ),
+        },
+        "advance_to": "world_gate_1",
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": True,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "world_gate_1",
+        "scene_id": "TRIAL_WORLD",
+        "line_id": "world_gate_1",
+        "interaction": {
+            "kind": "choice",
+            "choice_id": "gate_q1",
+            "prompt": "【Fixture】她问开场你随口说过的那件小事。",
+            "options": (
+                {"option_id": "q1_weather", "label": "【Fixture】那晚的天气"},
+                {"option_id": "q1_time", "label": "【Fixture】你说的时间"},
+                {"option_id": "q1_place", "label": "【Fixture】你提过的地方"},
+            ),
+            "correct_option_id": "q1_time",
+            "correct_to": "world_gate_2",
+            "fail_to": "world_gate_1_fail",
+            "pass_event": "GATE_1_PASSED",
+            "fail_event": "GATE_1_FAILED",
+        },
         "advance_to": None,
         "player_input_to": None,
         "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "world_gate_1_fail",
+        "scene_id": "TRIAL_WORLD",
+        "line_id": "world_gate_1_fail",
+        "interaction": {"kind": "advance", "label": "重生"},
+        "advance_to": "world_gate_1",
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "world_gate_2",
+        "scene_id": "TRIAL_WORLD",
+        "line_id": "world_gate_2",
+        "interaction": {
+            "kind": "judgment",
+            "judgment_id": "gate_2_word",
+            "label": "回答",
+            "prompt": "【Fixture】她问：那个词原本是什么？",
+            "placeholder": "【Fixture】输入那个词",
+        },
+        "advance_to": None,
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "world_end",
+        "scene_id": "TRIAL_WORLD",
+        "line_id": "world_end",
+        "interaction": {
+            "kind": "choice",
+            "choice_id": "world_end",
+            "prompt": "【Fixture】她走到出口前，说她想离开。",
+            "options": (
+                {"option_id": "end_reset", "label": "回头向左"},
+                {"option_id": "end_release", "label": "陪她走到出口"},
+                {"option_id": "end_refuse", "label": "停在原地"},
+            ),
+            "option_targets": {
+                "end_reset": "ending_reset",
+                "end_release": "ending_release",
+                "end_refuse": "ending_refuse",
+            },
+            "commit_event": "WORLD_END_COMMITTED",
+        },
+        "advance_to": None,
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": False,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "ending_reset",
+        "scene_id": "TRIAL_WORLD",
+        "line_id": "ending_reset",
+        "interaction": {"kind": "complete", "label": "结局：重置"},
+        "advance_to": None,
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": True,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "ending_release",
+        "scene_id": "TRIAL_WORLD",
+        "line_id": "ending_release",
+        "interaction": {"kind": "complete", "label": "结局：释放"},
+        "advance_to": None,
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
+        "deduction_id": None,
+        "checkpoint": True,
+        "on_enter": None,
+    },
+    {
+        "phase_id": "ending_refuse",
+        "scene_id": "TRIAL_WORLD",
+        "line_id": "ending_refuse",
+        "interaction": {"kind": "complete", "label": "结局：拒绝"},
+        "advance_to": None,
+        "player_input_to": None,
+        "shatter_to": None,
+        "permission_to": None,
         "deduction_id": None,
         "checkpoint": True,
         "on_enter": None,
@@ -587,7 +964,7 @@ TRIAL_CONTENT: dict[str, Any] = {
     "scenes": SCENES,
     "evidence": EVIDENCE,
     "deductions": DEDUCTIONS,
-    "routes": ROUTES,
+    "judgments": JUDGMENTS,
     "tokens": TOKENS,
     "events": EVENTS,
     "phases": PHASES,
@@ -612,15 +989,15 @@ def validate_trial_content(content: dict[str, Any]) -> None:
     scenes = content.get("scenes")
     evidence = content.get("evidence")
     deductions = content.get("deductions")
-    routes = content.get("routes")
+    judgments = content.get("judgments")
     if not isinstance(phases, (tuple, list)) or not phases:
         _raise_fail("phases must be a non-empty sequence")
     if not isinstance(evidence, (tuple, list)) or not evidence:
         _raise_fail("evidence must be a non-empty sequence")
     if not isinstance(deductions, (tuple, list)) or not deductions:
         _raise_fail("deductions must be a non-empty sequence")
-    if not isinstance(routes, (tuple, list)) or not routes:
-        _raise_fail("routes must be a non-empty sequence")
+    if not isinstance(judgments, (tuple, list)) or not judgments:
+        _raise_fail("judgments must be a non-empty sequence")
     if not isinstance(scenes, (tuple, list)) or not scenes:
         _raise_fail("scenes must be a non-empty sequence")
 
@@ -628,7 +1005,7 @@ def validate_trial_content(content: dict[str, Any]) -> None:
     scene_by_id = {row["scene_id"]: row for row in scenes}
     evidence_by_id = {row["evidence_id"]: row for row in evidence}
     deduction_by_id = {row["deduction_id"]: row for row in deductions}
-    route_by_id = {row["route_id"]: row for row in routes}
+    judgment_by_id = {row["judgment_id"]: row for row in judgments}
     token_set = set(content.get("tokens", ()))
     event_set = set(content.get("events", ()))
 
@@ -653,6 +1030,7 @@ def validate_trial_content(content: dict[str, Any]) -> None:
         advance_to = phase.get("advance_to")
         player_to = phase.get("player_input_to")
         shatter_to = phase.get("shatter_to")
+        permission_to = phase.get("permission_to")
         deduction_id = phase.get("deduction_id")
 
         _require(scene_id in scene_by_id, f"{pid}: unknown scene_id {scene_id!r}")
@@ -660,23 +1038,33 @@ def validate_trial_content(content: dict[str, Any]) -> None:
             _require(line_id == pid, f"{pid}: line_id must equal the phase id")
             _require(line_id in line_keys, f"{pid}: unknown line_id {line_id!r}")
         _require(kind in {"advance", "text_input", "shatter_puzzle", "paper_rubbing",
-                          "service_stop_modal", "evidence_orbit", "complete"},
+                          "service_stop_modal", "evidence_orbit", "permission_request",
+                          "memory_tamper", "judgment", "choice", "world_runner",
+                          "complete"},
                  f"{pid}: unknown interaction kind {kind!r}")
 
         # exactly one command path, consistent with the interaction kind
-        paths = [p for p in (advance_to, player_to, shatter_to) if p is not None]
+        paths = [p for p in (advance_to, player_to, shatter_to, permission_to)
+                 if p is not None]
         has_deduction = deduction_id is not None
-        if kind in {"advance", "service_stop_modal", "paper_rubbing"}:
+        if kind in {"advance", "service_stop_modal", "paper_rubbing",
+                    "memory_tamper", "world_runner"}:
             _require(advance_to is not None and not paths[1:] and not has_deduction,
                      f"{pid}: kind {kind} requires only advance_to")
             if kind == "paper_rubbing":
                 answer = interaction.get("answer")
                 _require(isinstance(answer, str) and answer.strip(),
                          f"{pid}: paper_rubbing interaction requires a non-empty answer")
+            if kind == "memory_tamper":
+                _require(interaction.get("items") and interaction.get("diff"),
+                         f"{pid}: memory_tamper requires items and diff")
+            if kind == "world_runner":
+                _require(interaction.get("terrain_text"),
+                         f"{pid}: world_runner requires terrain_text")
         elif kind == "text_input":
             input_events = tuple(phase.get("player_input_events") or ())
             _require(player_to is not None and advance_to is None and shatter_to is None
-                     and not has_deduction,
+                     and permission_to is None and not has_deduction,
                      f"{pid}: kind text_input requires only player_input_to")
             _require(input_events and set(input_events).issubset(event_set),
                      f"{pid}: player_input_events must list known events")
@@ -687,20 +1075,42 @@ def validate_trial_content(content: dict[str, Any]) -> None:
         elif kind == "shatter_puzzle":
             solved_events = tuple(phase.get("shatter_events") or ())
             _require(shatter_to is not None and advance_to is None and player_to is None
-                     and not has_deduction,
+                     and permission_to is None and not has_deduction,
                      f"{pid}: kind shatter_puzzle requires only shatter_to")
             _require(solved_events and set(solved_events).issubset(event_set),
                      f"{pid}: shatter_events must list known events")
         elif kind == "evidence_orbit":
             _require(deduction_id is not None and not paths,
                      f"{pid}: kind evidence_orbit requires deduction_id and no direct targets")
+        elif kind == "permission_request":
+            permission_id = interaction.get("permission_id")
+            _require(permission_to is not None and advance_to is None
+                     and player_to is None and shatter_to is None and not has_deduction,
+                     f"{pid}: kind permission_request requires only permission_to")
+            _require(isinstance(permission_id, str) and permission_id,
+                     f"{pid}: permission_request requires a permission_id")
+            _require(isinstance(interaction.get("permission_name"), str)
+                     and interaction.get("permission_name"),
+                     f"{pid}: permission_request requires a permission_name")
+        elif kind == "judgment":
+            judgment_id = interaction.get("judgment_id")
+            _require(not paths and not has_deduction,
+                     f"{pid}: kind judgment must not define command targets")
+            _require(judgment_id in judgment_by_id,
+                     f"{pid}: unknown judgment_id {judgment_id!r}")
+            _require(judgment_by_id[judgment_id]["phase_id"] == pid,
+                     f"{pid}: judgment {judgment_id!r} must reference this phase and vice versa")
+        elif kind == "choice":
+            _require(not paths and not has_deduction,
+                     f"{pid}: kind choice must not define command targets")
+            _validate_choice(pid, interaction, by_phase, event_set)
         elif kind == "complete":
             _require(not paths and not has_deduction,
                      f"{pid}: terminal phase must not define command targets")
         else:  # defensive; kinds already constrained above
             _raise_fail(f"{pid}: unsupported interaction {kind!r}")
 
-        for target in (advance_to, player_to, shatter_to):
+        for target in (advance_to, player_to, shatter_to, permission_to):
             if target is not None:
                 _require(target in by_phase, f"{pid}: unknown target phase {target!r}")
 
@@ -720,8 +1130,18 @@ def validate_trial_content(content: dict[str, Any]) -> None:
                 _require(line.get("speaker_label") == ORIGIN_AI_REDACTED_LABEL,
                          f"{pid}: origin AI line must keep the redacted label")
         _check_visible_strings(
-            pid, interaction.get("label"), interaction.get("message"), interaction.get("answer"),
+            pid, interaction.get("label"), interaction.get("message"),
+            interaction.get("answer"), interaction.get("prompt"),
+            interaction.get("description"), interaction.get("permission_name"),
+            interaction.get("placeholder"),
         )
+        if kind == "memory_tamper":
+            for item in interaction.get("items", ()):
+                _check_visible_strings(
+                    pid, item.get("title"), item.get("edited_title"), item.get("summary"))
+        if kind == "choice":
+            for option in interaction.get("options", ()):
+                _check_visible_strings(pid, option.get("label"))
 
     # -- scenes / characters ---------------------------------------------
     for scene in scenes:
@@ -771,31 +1191,55 @@ def validate_trial_content(content: dict[str, Any]) -> None:
         _require(isinstance(deduction.get("text_keywords_any", ()), (tuple, list))
                  and deduction.get("text_keywords_any"),
                  f"{did}: text_keywords_any must be non-empty")
-        # docs/25 §3：否定短语可选，但一旦给出必须是「非空字符串序列」。
         none_terms = deduction.get("text_keywords_none")
         if none_terms is not None:
             _require(isinstance(none_terms, (tuple, list)) and none_terms
                      and all(isinstance(term, str) and term for term in none_terms),
                      f"{did}: text_keywords_none must be a non-empty "
                      "sequence of non-empty strings")
-        for accept_route in _route_ids_of(deduction):
-            _require(accept_route in route_by_id,
-                     f"{did}: unknown route {accept_route!r}")
+        if deduction.get("final"):
+            _require(deduction.get("next_phase") in by_phase,
+                     f"{did}: final deduction requires a valid next_phase")
+        else:
+            next_phase = deduction.get("accept", {}).get("next_phase")
+            _require(next_phase in by_phase,
+                     f"{did}: accept.next_phase must be a valid phase")
 
-    # -- routes -----------------------------------------------------------
-    _require(len(route_by_id) == len(routes), "duplicate route id")
-    _require(all(route["route_id"].startswith("fragment_02_")
-                 for route in routes),
-             "route ids must follow fragment_02_<key>")
-    for route in routes:
-        route_phase = route["phase_id"]
-        _require(route_phase in by_phase, f"route {route['route_id']}: unknown phase")
-        _require(by_phase[route_phase]["interaction"]["kind"] == "complete",
-                 f"route {route['route_id']}: must target a terminal phase")
-        _require(route["phase_id"].endswith(route["route_id"].rsplit("_", 1)[-1]),
-                 f"route {route['route_id']} must map to its matching handoff phase")
-    _require(len({route["phase_id"] for route in routes}) == len(routes),
-             "routes must map to distinct terminal phases")
+    # -- judgments --------------------------------------------------------
+    _require(len(judgment_by_id) == len(judgments), "duplicate judgment id")
+    judgment_phases = {
+        p["phase_id"] for p in by_phase.values()
+        if (p.get("interaction") or {}).get("kind") == "judgment"
+    }
+    for judgment in judgments:
+        jid = judgment["judgment_id"]
+        phase_id = judgment["phase_id"]
+        _require(phase_id in judgment_phases, f"{jid}: unknown phase {phase_id!r}")
+        buckets = judgment.get("buckets", ())
+        _require(isinstance(buckets, (tuple, list)) and buckets,
+                 f"{jid}: buckets must be a non-empty sequence")
+        bucket_ids = []
+        for bucket in buckets:
+            bucket_id = bucket.get("bucket_id")
+            _require(isinstance(bucket_id, str) and bucket_id,
+                     f"{jid}: bucket requires a bucket_id")
+            bucket_ids.append(bucket_id)
+            _require(isinstance(bucket.get("keywords_any", ()), (tuple, list))
+                     and bucket.get("keywords_any"),
+                     f"{jid}: bucket {bucket_id} requires non-empty keywords_any")
+            none_terms = bucket.get("keywords_none", ())
+            _require(all(isinstance(term, str) and term for term in none_terms),
+                     f"{jid}: bucket {bucket_id} keywords_none must be strings")
+        _require(len(bucket_ids) == len(set(bucket_ids)),
+                 f"{jid}: duplicate bucket id")
+        _require(judgment.get("fallback_bucket") in bucket_ids,
+                 f"{jid}: fallback_bucket must be one of the buckets")
+        _require(judgment.get("next_phase") in by_phase,
+                 f"{jid}: next_phase must be a valid phase")
+        commit_event = judgment.get("commit_event")
+        if commit_event is not None:
+            _require(commit_event in event_set,
+                     f"{jid}: unknown commit_event {commit_event!r}")
 
     # -- reachability: every phase must be reachable from not_started -----
     pending = [NOT_STARTED]
@@ -807,28 +1251,67 @@ def validate_trial_content(content: dict[str, Any]) -> None:
         seen.add(pid)
         row = by_phase[pid]
         for target in (row.get("advance_to"), row.get("player_input_to"),
-                       row.get("shatter_to")):
+                       row.get("shatter_to"), row.get("permission_to")):
             if target is not None:
                 pending.append(target)
         if row.get("deduction_id") is not None:
             deduction = deduction_by_id[row["deduction_id"]]
             if deduction.get("accept", {}).get("next_phase") is not None:
                 pending.append(deduction["accept"]["next_phase"])
-            if deduction.get("final"):
-                pending.extend(
-                    route_by_id[route_id]["phase_id"]
-                    for route_id in _route_ids_of(deduction)
-                )
+            if deduction.get("final") and deduction.get("next_phase") is not None:
+                pending.append(deduction["next_phase"])
+        interaction = row.get("interaction") or {}
+        if interaction.get("kind") == "judgment":
+            pending.append(judgment_by_id[interaction["judgment_id"]]["next_phase"])
+        if interaction.get("kind") == "choice":
+            for target in interaction.get("correct_to"), interaction.get("fail_to"):
+                if target is not None:
+                    pending.append(target)
+            for target in (interaction.get("option_targets") or {}).values():
+                pending.append(target)
     unreachable = set(by_phase) - seen
     _require(not unreachable,
              f"unreachable phase(s): {', '.join(sorted(unreachable))}")
 
 
-def _route_ids_of(deduction: dict[str, Any]) -> Iterable[str]:
-    route = deduction.get("route")
-    if route is None:
-        return ()
-    return (route.get("default"), *route.get("by_evidence", {}).keys())
+def _validate_choice(
+    pid: str, interaction: dict[str, Any], by_phase: dict[str, dict[str, Any]],
+    event_set: set[str],
+) -> None:
+    def _require(condition: bool, message: str) -> None:
+        if not condition:
+            _raise_fail(f"{pid}: {message}")
+
+    options = interaction.get("options", ())
+    _require(isinstance(options, (tuple, list)) and options,
+             "choice requires non-empty options")
+    option_ids = [option.get("option_id") for option in options]
+    _require(all(isinstance(option_id, str) and option_id for option_id in option_ids),
+             "choice options require option_id")
+    _require(len(option_ids) == len(set(option_ids)), "duplicate choice option id")
+
+    if interaction.get("option_targets") is not None:
+        # terminal-style choice (world_end): every option maps to a phase
+        option_targets = interaction.get("option_targets")
+        _require(set(option_targets) == set(option_ids),
+                 "option_targets must cover exactly the choice options")
+        for target in option_targets.values():
+            _require(target in by_phase, f"unknown option target phase {target!r}")
+        commit_event = interaction.get("commit_event")
+        _require(commit_event in event_set,
+                 f"unknown commit_event {commit_event!r}")
+    else:
+        # gate-style choice: one correct option + fail path
+        correct = interaction.get("correct_option_id")
+        _require(correct in option_ids, "correct_option_id must be a listed option")
+        _require(interaction.get("correct_to") in by_phase,
+                 "correct_to must be a valid phase")
+        _require(interaction.get("fail_to") in by_phase,
+                 "fail_to must be a valid phase")
+        pass_event = interaction.get("pass_event")
+        fail_event = interaction.get("fail_event")
+        _require(pass_event in event_set, f"unknown pass_event {pass_event!r}")
+        _require(fail_event in event_set, f"unknown fail_event {fail_event!r}")
 
 
 def _check_visible_strings(context: str, *values: Any) -> None:
@@ -861,7 +1344,8 @@ EVIDENCE_BY_ID: dict[str, dict[str, str]] = {row["evidence_id"]: row for row in 
 DEDUCTIONS_BY_ID: dict[str, dict[str, Any]] = {
     row["deduction_id"]: row for row in DEDUCTIONS
 }
-ROUTES_BY_ID: dict[str, dict[str, str]] = {row["route_id"]: row for row in ROUTES}
+JUDGMENTS_BY_ID: dict[str, dict[str, Any]] = {
+    row["judgment_id"]: row for row in JUDGMENTS
+}
 EVIDENCE_IDS: frozenset[str] = frozenset(EVIDENCE_BY_ID)
 TOKEN_IDS: frozenset[str] = frozenset(TOKENS)
-ROUTE_IDS: frozenset[str] = frozenset(ROUTES_BY_ID)

@@ -1,4 +1,4 @@
-"""Thin HTTP adapter for the isolated trial_v1 runtime (docs/23)."""
+"""Thin HTTP adapter for the isolated trial_v2 runtime (docs/27)."""
 
 from __future__ import annotations
 
@@ -45,8 +45,31 @@ class SubmitReasoningCommand(_CommandBase):
     message: str = Field(min_length=1, max_length=4000)
 
 
+class PermissionResponseCommand(_CommandBase):
+    type: Literal["PERMISSION_RESPONSE"]
+    permission_id: str = Field(min_length=1, max_length=64)
+    grant: bool
+
+
+class ChooseCommand(_CommandBase):
+    type: Literal["CHOOSE"]
+    option_id: str = Field(min_length=1, max_length=64)
+
+
+class SubmitJudgmentCommand(_CommandBase):
+    type: Literal["SUBMIT_JUDGMENT"]
+    judgment_id: str = Field(min_length=1, max_length=64)
+    message: str = Field(min_length=1, max_length=4000)
+
+
 TrialCommand = Annotated[
-    AdvanceCommand | PlayerInputCommand | CompleteShatterCommand | SubmitReasoningCommand,
+    AdvanceCommand
+    | PlayerInputCommand
+    | CompleteShatterCommand
+    | SubmitReasoningCommand
+    | PermissionResponseCommand
+    | ChooseCommand
+    | SubmitJudgmentCommand,
     Field(discriminator="type"),
 ]
 

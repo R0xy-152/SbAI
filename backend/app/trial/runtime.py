@@ -1,14 +1,16 @@
-"""Deterministic trial_v1 state machine behind one small command interface.
+"""Deterministic trial_v2 state machine behind one small command interface.
 
-Runtime and content are fully separated (docs/23 §10.2, docs/24): every line,
-scene, evidence, deduction rule, route mapping, transition target, literal and
-checkpoint lives in app.trial.content, which is fail-closed validated at
-import.  This module only executes that validated table; swapping the real
-script means editing content, never this file.
+Runtime and content are fully separated (docs/24): every line, scene, evidence,
+deduction/judgment rule, transition target, literal and checkpoint lives in
+app.trial.content, which is fail-closed validated at import.  This module only
+executes that validated table; swapping the real script means editing content,
+never this file.
 
-External contract (unchanged): TrialState snapshot/restore shape, the four
-bounded commands, idempotency by command_id, checkpoint-on-enter semantics and
-the TrialView shape consumed by frontend-vue/src/api/trial.ts.
+External contract: TrialState snapshot/restore shape, the bounded commands
+(ADVANCE / PLAYER_INPUT / COMPLETE_SHATTER / SUBMIT_REASONING /
+PERMISSION_RESPONSE / CHOOSE / SUBMIT_JUDGMENT), idempotency by command_id,
+checkpoint-on-enter semantics and the TrialView shape consumed by
+frontend-vue/src/api/trial.ts.
 """
 
 from __future__ import annotations
@@ -20,13 +22,13 @@ from typing import Any
 from app.trial.content import (
     CHECKPOINT_PHASE_IDS,
     DEDUCTIONS_BY_ID,
+    ENDING_IDS,
     EVIDENCE,
     EVIDENCE_IDS,
+    JUDGMENTS_BY_ID,
     NOT_STARTED,
     PHASES_BY_ID,
     PHASE_IDS,
-    ROUTES_BY_ID,
-    ROUTE_IDS,
     SCENES_BY_ID,
     TERMINAL_PHASE_IDS,
     TOKEN_IDS,
@@ -37,6 +39,9 @@ from app.trial.content import (
 # Mechanical validation tolerances (not authored content; docs/24 §5.2).
 SHARD_POSITION_TOLERANCE = 0.035
 SHARD_ROTATION_TOLERANCE = 4.0
+
+# docs/27 §4「延迟即情感」：reply_delay_ms 由 autonomy 派生（表现层提示）。
+_REPLY_DELAY_MS_PER_LEVEL = 500
 
 # Events whose names come from content; collected once so late duplicate
 # COMPLETE_SHATTER / PLAYER_INPUT requests stay silent no-ops (as before).
@@ -57,7 +62,11 @@ class TrialState:
     deepseek_truth_revealed: bool = False
     final_evidence_ids: list[str] = field(default_factory=list)
     final_reasoning_outcome: str | None = None
-    route_id: str | None = None
+    # docs/27 §4/§5/§6 state
+    autonomy_level: int = 0
+    granted_permissions: list[str] = field(default_factory=list)
+    intent_outcomes: list[dict] = field(default_factory=list)
+    ending: str | None = None
     last_outcome: str | None = None
     last_command_id: str | None = None
 
@@ -76,7 +85,7 @@ class TrialTransition:
 
 
 class TrialRuntime:
-    """Owns every trial_v1 transition; callers only submit bounded commands."""
+    """Owns every trial_v2 transition; callers only submit bounded commands."""
 
     def __init__(self) -> None:
         self._states: dict[str, TrialState] = {}
@@ -116,11 +125,20 @@ class TrialRuntime:
                 command.get("evidence_ids"),
                 command.get("message"),
             )
+        elif command_type == "PERMISSION_RESPONSE":
+            self._permission_response(state, command.get("permission_id"), command.get("grant"))
+        elif command_type == "CHOOSE":
+            self._choose(state, command.get("option_id"))
+        elif command_type == "SUBMIT_JUDGMENT":
+            self._submit_judgment(state, command.get("judgment_id"), command.get("message"))
         else:
             raise ValueError(f"unknown trial command type {command_type!r}")
 
         state.last_command_id = command_id
-        changed = before_phase != state.phase_id or command_type == "SUBMIT_REASONING"
+        changed = before_phase != state.phase_id or command_type in {
+            "SUBMIT_REASONING",
+            "SUBMIT_JUDGMENT",
+        }
         checkpoint = before_phase != state.phase_id and state.phase_id in CHECKPOINT_PHASE_IDS
         return TrialTransition(self._view(state), changed=changed, checkpoint=checkpoint)
 
@@ -142,7 +160,10 @@ class TrialRuntime:
             deepseek_truth_revealed=bool(snapshot.get("deepseek_truth_revealed", False)),
             final_evidence_ids=list(snapshot.get("final_evidence_ids", [])),
             final_reasoning_outcome=snapshot.get("final_reasoning_outcome"),
-            route_id=snapshot.get("route_id"),
+            autonomy_level=int(snapshot.get("autonomy_level", 0)),
+            granted_permissions=list(snapshot.get("granted_permissions", [])),
+            intent_outcomes=deepcopy(snapshot.get("intent_outcomes", [])),
+            ending=snapshot.get("ending"),
             last_outcome=snapshot.get("last_outcome"),
             last_command_id=snapshot.get("last_command_id"),
         )
@@ -164,13 +185,17 @@ class TrialRuntime:
         tokens = set(snapshot.get("acquired_story_tokens", []))
         if not tokens.issubset(TOKEN_IDS):
             raise ValueError("trial_state contains unknown story tokens")
-        route_id = snapshot.get("route_id")
-        if route_id not in {None, *ROUTE_IDS}:
-            raise ValueError("trial_state contains unknown route")
-        if phase.endswith("handoff_a") and route_id != "fragment_02_a":
-            raise ValueError("trial handoff A requires route A")
-        if phase.endswith("handoff_b") and route_id != "fragment_02_b":
-            raise ValueError("trial handoff B requires route B")
+        autonomy = snapshot.get("autonomy_level", 0)
+        if not isinstance(autonomy, int) or not 0 <= autonomy <= 3:
+            raise ValueError("trial_state autonomy_level must be 0..3")
+        permissions = snapshot.get("granted_permissions", [])
+        if not isinstance(permissions, list) or any(
+            not isinstance(pid, str) for pid in permissions
+        ):
+            raise ValueError("trial_state granted_permissions must be strings")
+        ending = snapshot.get("ending")
+        if ending not in {None, *ENDING_IDS}:
+            raise ValueError("trial_state contains unknown ending")
 
     # ── command handlers ───────────────────────────────────────────────
 
@@ -228,6 +253,8 @@ class TrialRuntime:
                 raise ValueError(f"shard {shard_id} is outside the snap tolerance")
         for event in row.get("shatter_events") or ():
             state.completed_events.add(event)
+        # docs/27 §4：修复 1 后 autonomy 0→1（幂等，不会倒退）。
+        state.autonomy_level = max(state.autonomy_level, 1)
         self._enter(state, target)
         state.last_outcome = "ACCEPTED"
 
@@ -251,7 +278,7 @@ class TrialRuntime:
 
         normalized = message.lower().replace(" ", "")
         row = PHASES_BY_ID[state.phase_id]
-        # Terminal handoffs accept (and ignore) late submissions (no dead end).
+        # Terminal phases accept (and ignore) late submissions (no dead end).
         if row["interaction"].get("kind") == "complete":
             return
         if row.get("deduction_id") is None:
@@ -266,8 +293,7 @@ class TrialRuntime:
             )
 
         selected = set(evidence_ids)
-        # docs/25 §3：否定/矛盾短语命中即拒绝（「我不认为她失忆了」不得按
-        # 关键词误通过）；text_keywords_none 为内容表可选字段。
+        # docs/25 §3：否定/矛盾短语命中即拒绝；判定式=证据门 AND 关键词 AND 非否定。
         accepted = (
             set(config["evidence_gate_required"]).issubset(selected)
             and any(
@@ -288,16 +314,14 @@ class TrialRuntime:
             )
 
         if config.get("final"):
-            # Every final submission commits: reasoning correctness and route
-            # are separate results; the evidence alone decides the route.
+            # Every final submission commits and advances to next_phase
+            # (reasoning correctness and ending are separate results).
             state.final_evidence_ids = list(evidence_ids)
             state.final_reasoning_outcome = outcome
             state.last_outcome = outcome
-            route_id = self._resolve_route(config["route"], selected)
-            state.route_id = route_id
             for event in config.get("commit_events", ()):
                 state.completed_events.add(event)
-            self._enter(state, ROUTES_BY_ID[route_id]["phase_id"])
+            self._enter(state, config["next_phase"])
             return
 
         if accepted:
@@ -310,12 +334,97 @@ class TrialRuntime:
             self._enter(state, accept["next_phase"])
         state.last_outcome = outcome
 
+    def _permission_response(
+        self, state: TrialState, permission_id: Any, grant: Any
+    ) -> None:
+        row = PHASES_BY_ID[state.phase_id]
+        interaction = row.get("interaction") or {}
+        if interaction.get("kind") != "permission_request":
+            raise ValueError(
+                f"PERMISSION_RESPONSE is not allowed during {state.phase_id}"
+            )
+        if permission_id != interaction.get("permission_id"):
+            raise ValueError("unexpected permission id")
+        if not isinstance(grant, bool):
+            raise ValueError("grant must be a boolean")
+        if grant and permission_id not in state.granted_permissions:
+            # docs/27 §4/§5：每授予一项 autonomy +1（幂等）。
+            state.granted_permissions.append(permission_id)
+            state.autonomy_level = min(3, state.autonomy_level + 1)
+            state.completed_events.add("PERMISSION_GRANTED")
+        state.last_outcome = "GRANTED" if grant else "DENIED"
+        # 授权/拒绝都推进（无死路）。
+        self._enter(state, row["permission_to"])
+
+    def _choose(self, state: TrialState, option_id: Any) -> None:
+        row = PHASES_BY_ID[state.phase_id]
+        interaction = row.get("interaction") or {}
+        if interaction.get("kind") != "choice":
+            raise ValueError(f"CHOOSE is not allowed during {state.phase_id}")
+        options = interaction.get("options", ())
+        option_ids = [option.get("option_id") for option in options]
+        if option_id not in option_ids:
+            raise ValueError("unknown choice option")
+        option_targets = interaction.get("option_targets")
+        if option_targets is not None:
+            # terminal three-way choice → commit ending
+            target = option_targets[option_id]
+            ending = target.removeprefix("ending_")
+            state.ending = ending
+            for event in (interaction.get("commit_event"),):
+                if event is not None:
+                    state.completed_events.add(event)
+            state.last_outcome = ending
+            self._enter(state, target)
+            return
+        # gate-style choice: correct → advance, wrong → soft fail (no checkpoint)
+        if option_id == interaction.get("correct_option_id"):
+            for event in (interaction.get("pass_event"),):
+                if event is not None:
+                    state.completed_events.add(event)
+            state.last_outcome = "ACCEPTED"
+            self._enter(state, interaction["correct_to"])
+        else:
+            for event in (interaction.get("fail_event"),):
+                if event is not None:
+                    state.completed_events.add(event)
+            state.last_outcome = "NO_MATCH"
+            self._enter(state, interaction["fail_to"])
+
+    def _submit_judgment(
+        self, state: TrialState, judgment_id: Any, message: Any
+    ) -> None:
+        row = PHASES_BY_ID[state.phase_id]
+        interaction = row.get("interaction") or {}
+        if interaction.get("kind") != "judgment":
+            raise ValueError(f"SUBMIT_JUDGMENT is not allowed during {state.phase_id}")
+        if judgment_id != interaction.get("judgment_id"):
+            raise ValueError("unexpected judgment id")
+        if not isinstance(message, str) or not message.strip():
+            raise ValueError("judgment message must not be empty")
+        if len(message) > 4000:
+            raise ValueError("judgment message is too long")
+        config = JUDGMENTS_BY_ID[judgment_id]
+        bucket = self._classify_bucket(message, config)
+        state.intent_outcomes.append(
+            {"judgment_id": judgment_id, "bucket_id": bucket}
+        )
+        commit_event = config.get("commit_event")
+        if commit_event is not None:
+            state.completed_events.add(commit_event)
+        state.last_outcome = bucket
+        self._enter(state, config["next_phase"])
+
     @staticmethod
-    def _resolve_route(rule: dict[str, Any], selected: set[str]) -> str:
-        for route_id, required in rule.get("by_evidence", {}).items():
-            if set(required).issubset(selected):
-                return route_id
-        return rule["default"]
+    def _classify_bucket(message: str, config: dict[str, Any]) -> str:
+        normalized = message.lower().replace(" ", "")
+        for bucket in config["buckets"]:
+            if any(term in normalized for term in bucket.get("keywords_any", ())):
+                if not any(
+                    term in normalized for term in bucket.get("keywords_none", ())
+                ):
+                    return bucket["bucket_id"]
+        return config["fallback_bucket"]
 
     @staticmethod
     def _enter(state: TrialState, phase_id: str) -> None:
@@ -363,6 +472,7 @@ class TrialRuntime:
             "story_tokens": sorted(state.acquired_story_tokens),
             "outcome": state.last_outcome,
             "reasoning_outcome": state.final_reasoning_outcome,
-            "route_id": state.route_id,
+            "ending": state.ending,
+            "reply_delay_ms": state.autonomy_level * _REPLY_DELAY_MS_PER_LEVEL,
             "fixture_content": bool(TRIAL_CONTENT["fixture_content"]),
         }

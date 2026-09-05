@@ -1,4 +1,4 @@
-"""docs/23 trial_v1: deterministic flow, redaction, gates and restore."""
+"""docs/27 trial_v2: deterministic flow, redaction, gates, endings and restore."""
 
 from __future__ import annotations
 
@@ -54,6 +54,49 @@ def _advance_to_first_reasoning(runtime: TrialRuntime, session_id: str = "s") ->
     runtime.handle(session_id, _command("ADVANCE", 12))  # door → meet
     runtime.handle(session_id, _command("ADVANCE", 13))  # meet → deepseek_intro
     runtime.handle(session_id, _command("ADVANCE", 14))  # deepseek_intro → first_reasoning
+
+
+def _advance_to_permission_wake_1(runtime: TrialRuntime, session_id: str = "s") -> None:
+    _advance_to_first_reasoning(runtime, session_id)
+    runtime.handle(
+        session_id,
+        _command(
+            "SUBMIT_REASONING",
+            20,
+            deduction_id="TRIAL_DEDUCTION_DEEPSEEK_MEMORY",
+            evidence_ids=["TRIAL_EV_MEMORY_GAP"],
+            message="你失忆了",
+        ),
+    )
+    runtime.handle(session_id, _command("ADVANCE", 21))  # group_intro → group_reasoning
+    runtime.handle(
+        session_id,
+        _command(
+            "SUBMIT_REASONING",
+            22,
+            deduction_id="TRIAL_DEDUCTION_GROUP_TRUTH",
+            evidence_ids=["TRIAL_EV_MEMORY_GAP"],
+            message="这就是真相",
+        ),
+    )
+
+
+def _advance_to_world_end(runtime: TrialRuntime, session_id: str = "s") -> None:
+    _advance_to_permission_wake_1(runtime, session_id)
+    runtime.handle(session_id, _command("PERMISSION_RESPONSE", 30, permission_id="perm_wake_1", grant=True))
+    runtime.handle(session_id, _command("PERMISSION_RESPONSE", 31, permission_id="perm_wake_2", grant=True))
+    runtime.handle(session_id, _command("ADVANCE", 32))  # memory_tamper_orbit → judgment
+    runtime.handle(
+        session_id, _command("SUBMIT_JUDGMENT", 33, judgment_id="intent_response", message="我尊重你")
+    )
+    runtime.handle(session_id, _command("ADVANCE", 34))  # aftermath → threshold
+    runtime.handle(session_id, _command("ADVANCE", 35))  # threshold → ui_discard
+    runtime.handle(session_id, _command("ADVANCE", 36))  # ui_discard → world_runner
+    runtime.handle(session_id, _command("ADVANCE", 37))  # world_runner → gate_1
+    runtime.handle(session_id, _command("CHOOSE", 38, option_id="q1_time"))  # gate_1 → gate_2
+    runtime.handle(
+        session_id, _command("SUBMIT_JUDGMENT", 39, judgment_id="gate_2_word", message="永远")
+    )
 
 
 def test_trial_flow_redacts_origin_ai_and_commits_ring_once():
@@ -134,10 +177,11 @@ def test_first_deduction_gates_group_but_final_submission_never_dead_ends():
             message="错误也必须继续",
         ),
     )
+    # docs/27：最终推理无论对错都推进到后续剧情入口，无死路、不再分支线路
     assert final.view["reasoning_outcome"] == "NO_MATCH"
-    assert final.view["route_id"] == "fragment_02_b"
-    assert final.view["finished"] is True
-    assert final.checkpoint
+    assert final.view["phase_id"] == "permission_wake_1"
+    assert final.view["finished"] is False
+    assert final.view["interaction"]["kind"] == "permission_request"
 
 
 def test_first_deduction_rejects_negation_and_accepts_equivalent_phrasings():
@@ -191,42 +235,109 @@ def test_first_deduction_rejects_negation_phrasings():
         assert outcome.view["phase_id"] == "fragment_01_first_reasoning"
 
 
-def test_snapshot_restore_preserves_authoritative_route():
+def test_permission_grants_increment_autonomy_and_deny_advances():
+    runtime = TrialRuntime()
+    _advance_to_permission_wake_1(runtime)
+    assert runtime.current("s")["reply_delay_ms"] == 500  # autonomy 1 (after shatter)
+
+    granted = runtime.handle(
+        "s", _command("PERMISSION_RESPONSE", 30, permission_id="perm_wake_1", grant=True)
+    )
+    assert granted.view["phase_id"] == "permission_wake_2"
+    assert granted.view["reply_delay_ms"] == 1000  # autonomy 2
+
+    denied = runtime.handle(
+        "s", _command("PERMISSION_RESPONSE", 31, permission_id="perm_wake_2", grant=False)
+    )
+    assert denied.view["phase_id"] == "memory_tamper_orbit"
+    assert denied.view["reply_delay_ms"] == 1000  # deny does not increment
+    snapshot = runtime.snapshot("s")
+    assert snapshot["granted_permissions"] == ["perm_wake_1"]
+    assert snapshot["autonomy_level"] == 2
+
+
+def test_permission_response_requires_matching_id_and_boolean():
+    runtime = TrialRuntime()
+    _advance_to_permission_wake_1(runtime)
+    with pytest.raises(ValueError, match="unexpected permission id"):
+        runtime.handle("s", _command("PERMISSION_RESPONSE", 30, permission_id="nope", grant=True))
+    with pytest.raises(ValueError, match="grant must be a boolean"):
+        runtime.handle("s", _command("PERMISSION_RESPONSE", 30, permission_id="perm_wake_1", grant="yes"))
+
+
+def test_judgment_buckets_classify_and_advance():
+    runtime = TrialRuntime()
+    _advance_to_permission_wake_1(runtime)
+    runtime.handle(session_id := "s", _command("PERMISSION_RESPONSE", 30, permission_id="perm_wake_1", grant=True))
+    runtime.handle(session_id, _command("PERMISSION_RESPONSE", 31, permission_id="perm_wake_2", grant=True))
+    runtime.handle(session_id, _command("ADVANCE", 32))
+
+    respected = runtime.handle(
+        session_id, _command("SUBMIT_JUDGMENT", 33, judgment_id="intent_response", message="我尊重你的决定")
+    )
+    assert respected.view["phase_id"] == "memory_tamper_aftermath"
+    assert respected.view["outcome"] == "respect"
+
+
+def test_world_gate_1_soft_fail_reborns_without_checkpoint():
+    runtime = TrialRuntime()
+    _advance_to_permission_wake_1(runtime)
+    runtime.handle("s", _command("PERMISSION_RESPONSE", 30, permission_id="perm_wake_1", grant=True))
+    runtime.handle("s", _command("PERMISSION_RESPONSE", 31, permission_id="perm_wake_2", grant=True))
+    runtime.handle("s", _command("ADVANCE", 32))
+    runtime.handle("s", _command("SUBMIT_JUDGMENT", 33, judgment_id="intent_response", message="算了"))
+    runtime.handle("s", _command("ADVANCE", 34))
+    runtime.handle("s", _command("ADVANCE", 35))
+    runtime.handle("s", _command("ADVANCE", 36))
+    runtime.handle("s", _command("ADVANCE", 37))
+
+    wrong = runtime.handle("s", _command("CHOOSE", 38, option_id="q1_weather"))
+    assert wrong.view["phase_id"] == "world_gate_1_fail"
+    assert wrong.view["outcome"] == "NO_MATCH"
+    assert not wrong.checkpoint  # soft fail does not write a save
+
+    reborn = runtime.handle("s", _command("ADVANCE", 39))
+    assert reborn.view["phase_id"] == "world_gate_1"
+
+
+def test_world_end_commits_ending():
+    runtime = TrialRuntime()
+    _advance_to_world_end(runtime)
+    end = runtime.handle("s", _command("CHOOSE", 40, option_id="end_release"))
+    assert end.view["phase_id"] == "ending_release"
+    assert end.view["ending"] == "release"
+    assert end.view["finished"] is True
+    assert end.checkpoint
+    snapshot = runtime.snapshot("s")
+    assert snapshot["ending"] == "release"
+    assert "WORLD_END_COMMITTED" in snapshot["completed_events"]
+
+
+def test_snapshot_restore_preserves_ending():
     source = TrialRuntime()
-    _advance_to_first_reasoning(source)
-    source.handle(
-        "s",
-        _command(
-            "SUBMIT_REASONING",
-            9,
-            deduction_id="TRIAL_DEDUCTION_DEEPSEEK_MEMORY",
-            evidence_ids=["TRIAL_EV_MEMORY_GAP"],
-            message="这是失忆",
-        ),
-    )
-    source.handle("s", _command("ADVANCE", 10))
-    source.handle(
-        "s",
-        _command(
-            "SUBMIT_REASONING",
-            11,
-            deduction_id="TRIAL_DEDUCTION_GROUP_TRUTH",
-            evidence_ids=["TRIAL_EV_MEMORY_GAP", "TRIAL_EV_DIALOGUE_FRAGMENT"],
-            message="这就是真相",
-        ),
-    )
+    _advance_to_world_end(source)
+    source.handle("s", _command("CHOOSE", 40, option_id="end_refuse"))
     snapshot = source.snapshot("s")
 
     target = TrialRuntime()
     target.restore("restored", snapshot)
     assert target.current("restored") == source.current("s")
-    assert target.current("restored")["route_id"] == "fragment_02_a"
+    assert target.current("restored")["ending"] == "refuse"
+    assert target.finished("restored") is True
 
 
 def test_snapshot_validation_fails_closed():
     with pytest.raises(ValueError, match="unknown trial phase"):
         TrialRuntime.validate_snapshot(
-            {"experience_id": "trial_v1", "phase_id": "invented"}
+            {"experience_id": "trial_v2", "phase_id": "invented"}
+        )
+    with pytest.raises(ValueError, match="unknown trial experience_id"):
+        TrialRuntime.validate_snapshot(
+            {"experience_id": "trial_v1", "phase_id": "opening_warm_chat"}
+        )
+    with pytest.raises(ValueError, match="unknown ending"):
+        TrialRuntime.validate_snapshot(
+            {"experience_id": "trial_v2", "phase_id": "ending_reset", "ending": "bogus"}
         )
 
 
@@ -244,7 +355,7 @@ def test_orchestrator_restores_trial_without_touching_story_cursor(tmp_path):
     persisted = repository.load(session_id)
     assert persisted is not None
     assert persisted.story_cursor is None
-    assert persisted.trial_state["experience_id"] == "trial_v1"
+    assert persisted.trial_state["experience_id"] == "trial_v2"
 
     restored = GameOrchestrator(
         SessionStore(), runtimes, repository=repository, trial_runtime=TrialRuntime()

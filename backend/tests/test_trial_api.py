@@ -57,13 +57,13 @@ def test_trial_checkpoint_auto_save_loads_back_into_trial(tmp_path, monkeypatch)
         saves = client.get("/api/saves")
         assert saves.status_code == 200
         auto = saves.json()["auto"]
-        assert auto["chapter_id"] == "trial_v1"
+        assert auto["chapter_id"] == "trial_v2"
         assert auto["phase"] == "opening_anomaly"
 
         loaded = client.post(f"/api/saves/{auto['id']}/load", json={})
         assert loaded.status_code == 200
         load_view = loaded.json()
-        assert load_view["experience_id"] == "trial_v1"
+        assert load_view["experience_id"] == "trial_v2"
         assert load_view["trial_finished"] is False
         assert load_view["story_cursor"] is None
 
