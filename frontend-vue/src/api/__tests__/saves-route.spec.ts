@@ -4,7 +4,7 @@ import { saveTargetRoute } from '../saves'
 
 describe('saveTargetRoute（故事存档 → /story；已完结/旧玩法 → /game）', () => {
   it('试玩版存档优先恢复到 /trial', () => {
-    expect(saveTargetRoute(null, false, 'trial_v1')).toBe('/trial')
+    expect(saveTargetRoute(null, false, 'trial_v2')).toBe('/trial')
   })
 
   it('故事中段存档（有游标、未完结）→ /story', () => {

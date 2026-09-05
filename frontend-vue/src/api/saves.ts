@@ -39,7 +39,7 @@ export interface SaveListResponse {
 export interface LoadResult {
   session_id: string
   /** 非章节故事体验的稳定标识；当前仅试玩版使用。 */
-  experience_id?: 'trial_v1' | null
+  experience_id?: 'trial_v2' | null
   /** 试玩版是否已抵达当前版本交接点。 */
   trial_finished?: boolean
   /** 故事游标快照；null = 该存档从未进入故事模式（旧玩法存档）。 */
@@ -81,7 +81,7 @@ export function saveTargetRoute(
   storyFinished: boolean,
   experienceId?: string | null,
 ): SaveTargetRoute {
-  if (experienceId === 'trial_v1') return '/trial'
+  if (experienceId === 'trial_v2') return '/trial'
   if (storyCursor && !storyFinished) {
     return storyCursor.story_id === 'prologue' ? '/story?story_id=prologue' : '/story'
   }

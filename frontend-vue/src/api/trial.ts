@@ -1,6 +1,6 @@
 import { http } from './http'
 
-export const TRIAL_ID = 'trial_v1' as const
+export const TRIAL_ID = 'trial_v2' as const
 
 export interface TrialLine {
   kind: 'line'
@@ -31,6 +31,17 @@ export interface TrialEvidence {
   summary: string
 }
 
+export interface TrialChoiceOption {
+  option_id: string
+  label: string
+}
+
+export interface TrialMemoryItem {
+  title: string
+  edited_title: string
+  summary: string
+}
+
 export type TrialInteraction =
   | { kind: 'advance'; label: string }
   | { kind: 'text_input'; label: string }
@@ -45,6 +56,34 @@ export type TrialInteraction =
       allow_retry: boolean
       seed: number
     }
+  | {
+      kind: 'permission_request'
+      permission_id: string
+      permission_name: string
+      description: string
+      grant_label: string
+      deny_label: string
+    }
+  | {
+      kind: 'memory_tamper'
+      label: string
+      items: TrialMemoryItem[]
+      diff: { original: string; edited: string; editor: string; timestamp: string }
+    }
+  | {
+      kind: 'judgment'
+      judgment_id: string
+      label: string
+      prompt: string
+      placeholder: string
+    }
+  | {
+      kind: 'choice'
+      choice_id: string
+      prompt: string
+      options: TrialChoiceOption[]
+    }
+  | { kind: 'world_runner'; world_id: string; label: string; terrain_text: string[] }
   | { kind: 'complete'; label: string }
 
 export interface TrialView {
@@ -60,7 +99,8 @@ export interface TrialView {
   story_tokens: string[]
   outcome: 'ACCEPTED' | 'NO_MATCH' | null
   reasoning_outcome: 'ACCEPTED' | 'NO_MATCH' | null
-  route_id: 'fragment_02_a' | 'fragment_02_b' | null
+  ending: 'reset' | 'release' | 'refuse' | null
+  reply_delay_ms: number
   fixture_content: boolean
 }
 
@@ -82,6 +122,9 @@ export type TrialCommand =
       evidence_ids: string[]
       message: string
     }
+  | { type: 'PERMISSION_RESPONSE'; command_id: string; permission_id: string; grant: boolean }
+  | { type: 'CHOOSE'; command_id: string; option_id: string }
+  | { type: 'SUBMIT_JUDGMENT'; command_id: string; judgment_id: string; message: string }
 
 export function newTrialCommandId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {

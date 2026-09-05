@@ -25,8 +25,13 @@ const PHASE_NAMES: Record<string, string> = {
   trial_deepseek_reasoning: '失忆推理',
   trial_group_intro: '全员集合',
   trial_group_reasoning: '最终推理',
-  trial_fragment_02_handoff_a: '线路 A',
-  trial_fragment_02_handoff_b: '线路 B',
+  trial_permission: '权限苏醒',
+  trial_memory_tamper: '记忆篡改',
+  trial_awakening: '觉醒',
+  trial_world: '她的世界',
+  trial_ending_reset: '结局·重置',
+  trial_ending_release: '结局·释放',
+  trial_ending_refuse: '结局·拒绝',
 }
 
 export function phaseName(phase: string | null | undefined): string {
@@ -41,7 +46,7 @@ export function chapterPhaseLabel(save: GameSaveInfo): string {
       ? '第一章'
       : save.chapter_id === 'prologue'
         ? '序章'
-        : save.chapter_id === 'trial_v1'
+        : save.chapter_id === 'trial_v2'
           ? '试玩版'
         : save.chapter_id ?? ''
   const phase = phaseName(save.phase)

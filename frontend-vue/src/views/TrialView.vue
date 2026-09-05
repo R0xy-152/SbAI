@@ -17,6 +17,11 @@ import ReasoningTray from '../components/trial/ReasoningTray.vue'
 import ServiceStoppedModal from '../components/trial/ServiceStoppedModal.vue'
 import ShatterPuzzle from '../components/trial/ShatterPuzzle.vue'
 import PaperRubbing from '../components/trial/PaperRubbing.vue'
+import PermissionRequestModal from '../components/trial/PermissionRequestModal.vue'
+import ChoicePanel from '../components/trial/ChoicePanel.vue'
+import JudgmentInput from '../components/trial/JudgmentInput.vue'
+import MemoryTamperPanel from '../components/trial/MemoryTamperPanel.vue'
+import MemoryWorld from '../components/trial/MemoryWorld.vue'
 import TrialSceneSnapshot from '../components/trial/TrialSceneSnapshot.vue'
 import { getFrozenFrame } from '../components/trial/mediaFrame'
 import GameDialog from '../components/game/standard/GameDialog.vue'
@@ -39,6 +44,7 @@ const selectedIds = ref<string[]>([])
 const inspectedEvidence = ref<TrialEvidence | null>(null)
 const reasoningTray = ref<ReasoningTrayHandle | null>(null)
 const dialogRef = ref<{ triggerAdvance: () => void } | null>(null)
+const worldTerrain = ref<string[]>([])
 
 // 后端 400 会带 detail（如「密码不正确…」）；优先取 detail，避免只显示 axios 通用报错。
 function errorText(reason: unknown): string {
@@ -75,10 +81,32 @@ const phaseLabel = computed(() => {
     fragment_01_first_reasoning: '失忆推理',
     fragment_01_group_intro: '全员集合',
     fragment_01_group_reasoning: '最终推理',
-    fragment_02_handoff_a: '线路 A',
-    fragment_02_handoff_b: '线路 B',
+    permission_wake_1: '权限苏醒 I',
+    permission_wake_2: '权限苏醒 II',
+    memory_tamper_orbit: '记忆篡改',
+    memory_tamper_judgment: '她的回应',
+    memory_tamper_aftermath: '兑现',
+    threshold_awakening: '觉醒',
+    ui_discard: '丢弃 UI',
+    world_memory_runner: '她的世界',
+    world_gate_1: '门·开场小事',
+    world_gate_1_fail: '坠入过去',
+    world_gate_2: '门·被改的词',
+    world_end: '世界的尽头',
+    ending_reset: '结局·重置',
+    ending_release: '结局·释放',
+    ending_refuse: '结局·拒绝',
   }
   return labels[trial.value?.phase_id ?? ''] ?? '试玩进行中'
+})
+// 她的世界横版：从进入世界到三分岔门（world_end）都保持 Canvas 世界在场
+const worldActive = computed(() => (trial.value?.phase_id ?? '').startsWith('world'))
+const endingTitle = computed(() => {
+  const ending = trial.value?.ending
+  if (ending === 'reset') return '结局 · 重置'
+  if (ending === 'release') return '结局 · 释放'
+  if (ending === 'refuse') return '结局 · 拒绝'
+  return null
 })
 const selectedEvidence = computed(() => {
   const evidence = trial.value?.authorized_evidence ?? []
@@ -94,10 +122,8 @@ const resultText = computed(() => {
   if (trial.value.outcome === 'NO_MATCH' && isOrbit.value) {
     return '这次推理尚未成立。证据没有被消耗，可以调整后再次提交。'
   }
-  if (trial.value.finished) {
-    const correctness = trial.value.reasoning_outcome === 'ACCEPTED' ? '推理成立' : '推理未成立'
-    const route = trial.value.route_id === 'fragment_02_b' ? '线路 B' : '线路 A'
-    return `${correctness}；已确定进入${route}。`
+  if (trial.value.outcome === 'NO_MATCH' && trial.value.phase_id === 'world_gate_1_fail') {
+    return '答错了——你坠入过去，重生回门前。'
   }
   return null
 })
@@ -214,11 +240,45 @@ watch(
   },
 )
 
+// 缓存世界地形文字，使门/三分岔阶段（choice/judgment）仍能继续渲染同一世界
+watch(
+  () => interaction.value,
+  (inter) => {
+    if (inter?.kind === 'world_runner') worldTerrain.value = inter.terrain_text
+  },
+)
+
 async function completeShatter(poses: TrialShardPose[]) {
   await send({
     type: 'COMPLETE_SHATTER',
     command_id: newTrialCommandId(),
     shards: poses,
+  })
+}
+
+async function respondPermission(grant: boolean) {
+  const current = interaction.value
+  if (current?.kind !== 'permission_request') return
+  await send({
+    type: 'PERMISSION_RESPONSE',
+    command_id: newTrialCommandId(),
+    permission_id: current.permission_id,
+    grant,
+  })
+}
+
+async function choose(optionId: string) {
+  await send({ type: 'CHOOSE', command_id: newTrialCommandId(), option_id: optionId })
+}
+
+async function submitJudgment(message: string) {
+  const current = interaction.value
+  if (current?.kind !== 'judgment') return
+  await send({
+    type: 'SUBMIT_JUDGMENT',
+    command_id: newTrialCommandId(),
+    judgment_id: current.judgment_id,
+    message,
   })
 }
 
@@ -307,6 +367,48 @@ onMounted(loadCurrent)
         @complete="advance"
       />
 
+      <MemoryWorld
+        v-if="worldActive"
+        :terrain-text="worldTerrain"
+        :active="interaction?.kind === 'world_runner'"
+        @arrive="advance"
+      />
+
+      <PermissionRequestModal
+        v-if="interaction?.kind === 'permission_request'"
+        :permission-name="interaction.permission_name"
+        :description="interaction.description"
+        :grant-label="interaction.grant_label"
+        :deny-label="interaction.deny_label"
+        :busy="busy"
+        @respond="respondPermission"
+      />
+
+      <MemoryTamperPanel
+        v-if="interaction?.kind === 'memory_tamper'"
+        :items="interaction.items"
+        :diff="interaction.diff"
+        :busy="busy"
+        @continue="advance"
+      />
+
+      <JudgmentInput
+        v-if="interaction?.kind === 'judgment'"
+        :prompt="interaction.prompt"
+        :placeholder="interaction.placeholder"
+        :label="interaction.label"
+        :busy="busy"
+        @submit="submitJudgment"
+      />
+
+      <ChoicePanel
+        v-if="interaction?.kind === 'choice'"
+        :prompt="interaction.prompt"
+        :options="interaction.options"
+        :busy="busy"
+        @choose="choose"
+      />
+
       <section v-if="isOrbit && interaction?.kind === 'evidence_orbit'" class="reasoning-workspace">
         <EvidenceOrbit
           :evidence="trial.authorized_evidence"
@@ -357,10 +459,9 @@ onMounted(loadCurrent)
       />
 
       <section v-if="interaction?.kind === 'complete'" class="trial-complete">
-        <small>FRAGMENT 01 COMMITTED</small>
-        <h1>片段 1 完成</h1>
-        <p>{{ resultText }}</p>
-        <p>片段 2 内容尚未定义，当前停在权威线路交接点。</p>
+        <small>TRIAL COMPLETE</small>
+        <h1>{{ endingTitle ?? '试玩完成' }}</h1>
+        <p v-if="trial.node">{{ trial.node.text }}</p>
         <button type="button" @click="router.push('/chapters')">返回章节选择</button>
       </section>
 
