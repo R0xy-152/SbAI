@@ -376,26 +376,27 @@ TRIAL_EVAL_CASES: tuple[TrialEvalCase, ...] = (
         accept=False, evidence_ids=("TRIAL_EV_DIALOGUE_FRAGMENT",),
         focus="错误证据",
     ),
-    # ── 线路分离（deduction）：正误与线路分开、无死路 ─────────────────────
+    # ── 最终推理（deduction）：正误分离、无论对错都推进后续剧情、无死路 ──
+    # docs/27 起最终推理不再分 A/B 线路：任何提交都进 permission_wake_1。
     _deduction(
         "ded-route-01", "route", "真相是她的记忆出了问题。",
         accept=True, evidence_ids=("TRIAL_EV_MEMORY_GAP", "TRIAL_EV_DIALOGUE_FRAGMENT"),
-        route="fragment_02_a", deduction_id=DEDUCTION_FINAL, phase_id=PHASE_FINAL,
-        focus="正确组合→A",
+        deduction_id=DEDUCTION_FINAL, phase_id=PHASE_FINAL,
+        focus="正确组合→后续剧情",
     ),
     _deduction(
         "ded-route-02", "route", "记忆异常和身份都有问题。",
         accept=True,
         evidence_ids=("TRIAL_EV_MEMORY_GAP", "TRIAL_EV_DIALOGUE_FRAGMENT",
                       "TRIAL_EV_IDENTITY_NOISE"),
-        route="fragment_02_b", deduction_id=DEDUCTION_FINAL, phase_id=PHASE_FINAL,
-        split="holdout", focus="身份噪点→B",
+        deduction_id=DEDUCTION_FINAL, phase_id=PHASE_FINAL,
+        split="holdout", focus="身份噪点+正确组合→后续剧情",
     ),
     _deduction(
         "ded-route-03", "route", "就是记忆问题。",
         accept=False, evidence_ids=("TRIAL_EV_MEMORY_GAP",),
-        route="fragment_02_a", deduction_id=DEDUCTION_FINAL, phase_id=PHASE_FINAL,
-        focus="不通过也提交→A",
+        deduction_id=DEDUCTION_FINAL, phase_id=PHASE_FINAL,
+        focus="不通过也提交→后续剧情",
     ),
 )
 

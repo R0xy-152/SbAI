@@ -30,6 +30,16 @@ LEGACY_KEYWORDS: dict[str, tuple[str, ...]] = {
     "TRIAL_DEDUCTION_GROUP_TRUTH": ("真相", "身份", "异常", "记忆"),
 }
 
+# FROZEN pre-fix route mapping (docs/23 §8 A/B 线路)：docs/27 起最终推理
+# 不再分线路（直接进 permission_wake_1），但 legacy 对照必须保留旧线路，
+# 才能量化「修订前 vs 修订后」的差异；故此处冻结，不再读 live 内容表。
+LEGACY_ROUTE: dict[str, dict] = {
+    "TRIAL_DEDUCTION_GROUP_TRUTH": {
+        "by_evidence": {"fragment_02_b": ("TRIAL_EV_IDENTITY_NOISE",)},
+        "default": "fragment_02_a",
+    },
+}
+
 
 def run_chat_checks(dialogue: str, checks: tuple[dict, ...]) -> list[dict]:
     """Apply per-case deterministic checks; any matched phrase decides the rule."""
@@ -92,17 +102,15 @@ def legacy_outcome(
 
 
 def legacy_route(deduction_id: str, evidence_ids: tuple[str, ...]) -> str | None:
-    """Frozen pre-fix route resolution (unchanged by the revision, kept here
-    so legacy rows are self-contained)."""
-    config = DEDUCTIONS_BY_ID[deduction_id]
-    route = config.get("route")
-    if route is None:
+    """Frozen pre-fix route resolution (docs/23 §8 A/B 线路)。"""
+    rule = LEGACY_ROUTE.get(deduction_id)
+    if rule is None:
         return None
     selected = set(evidence_ids)
-    for route_id, required in route.get("by_evidence", {}).items():
+    for route_id, required in rule["by_evidence"].items():
         if set(required).issubset(selected):
             return route_id
-    return route["default"]
+    return rule["default"]
 
 
 def run_deduction_live(case) -> dict:
@@ -167,10 +175,10 @@ def run_deduction_checks(case, live: dict) -> list[dict]:
             "detail": f"live={live['route_id']} expected={case.expected['route']}",
         })
     if case.deduction_id == "TRIAL_DEDUCTION_GROUP_TRUTH":
+        # docs/27：最终推理不再分 A/B 线路，任何提交都推进到后续剧情入口。
         checks.append({
-            "rule": "commits_route",
-            "pass": live["route_id"] is not None
-            and live["phase_id"] in {"fragment_02_handoff_a", "fragment_02_handoff_b"},
-            "detail": f"route={live['route_id']} phase={live['phase_id']}",
+            "rule": "commits_next_phase",
+            "pass": live["phase_id"] == "permission_wake_1",
+            "detail": f"phase={live['phase_id']}",
         })
     return checks

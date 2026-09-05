@@ -91,15 +91,15 @@ def test_final_submission_never_dead_ends_even_when_rejected():
     case = _case("ded-route-03")
     live = run_deduction_live(case)
     assert live["accepted"] is False
-    assert live["route_id"] == "fragment_02_a"
-    assert live["phase_id"] == "fragment_02_handoff_a"
+    # docs/27：最终推理不再分线路，任何提交都推进到后续剧情入口
+    assert live["phase_id"] == "permission_wake_1"
 
 
-def test_route_b_requires_identity_noise_evidence():
+def test_final_submission_accepts_and_commits_next_phase():
     case = _case("ded-route-02")
     live = run_deduction_live(case)
     assert live["accepted"] is True
-    assert live["route_id"] == "fragment_02_b"
+    assert live["phase_id"] == "permission_wake_1"
 
 
 def test_legacy_route_mirrors_the_frozen_mapping():
